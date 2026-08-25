@@ -58,9 +58,6 @@
 <p>
   <img src="docs/brand/compliance/gdpr-dsgvo.png" alt="DSGVO & GDPR compliant" height="34">
   <img src="docs/brand/compliance/eu-ai-act.png" alt="EU AI Act compliant" height="34">
-  <img src="docs/brand/compliance/esign.png" alt="ESIGN compliant" height="34">
-  <img src="docs/brand/compliance/eidas.png" alt="eIDAS" height="34">
-  <img src="docs/brand/compliance/aes-256.png" alt="AES 256 verified" height="34">
 </p>
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
