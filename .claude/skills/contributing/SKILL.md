@@ -25,6 +25,64 @@ time and the contributor's:
 3. **Never commit a secret** — no key, token, password, or real phone number. If one is
    needed to run something, it goes in `.env`, which is ignored.
 
+## Translation — the first contribution, and the one that never runs out
+
+Do not send somebody new to a code issue. Send them here.
+
+The whole task is one loop, and it is the same loop every time:
+
+```
+run the script  →  pick what is missing  →  translate it  →  open a pull request
+       ↑                                                              │
+       └──────────────────────────────────────────────────────────────┘
+```
+
+```bash
+node scripts/check-locales.mjs               # every language, and where each stands
+node scripts/check-locales.mjs --locale fr   # one language: what is left, smallest first
+```
+
+The script measures everything against English, which is the source language. It prints
+the remaining files **smallest first**, and the smallest are 16 to 26 strings — about
+twenty minutes.
+
+```bash
+mkdir -p locales/fr
+cp locales/en/code.json locales/fr/
+# translate the values, leave the keys alone
+node scripts/check-locales.mjs --locale fr   # confirm the number moved
+```
+
+Then the normal flow from step 2: claim, branch, pull request. **One file per pull
+request.** A translator who has finished one runs the script again, takes the next file
+— or a different language entirely — and repeats. Nothing needs to be assigned again
+after the first time.
+
+This is why it never runs out: every language is 2,972 strings across 33 files, and any
+language anybody speaks is welcome. There is more of this work than there will ever be
+people to do it.
+
+**Four things that get a translation pull request sent back**, all easy to avoid:
+
+- **Copying all 33 files and translating one.** An untranslated copy of English looks
+  finished and ships English to somebody who asked for their own language. One file.
+- **Translating the keys.** Only the values on the right-hand side change.
+- **Translating `{placeholders}`.** `{count}` and `{name}` are filled at runtime, and a
+  translated placeholder breaks only on that language — so nobody catches it.
+- **Machine translation nobody read.** Translate the meaning. If it reads oddly to a
+  native speaker it is wrong, whatever the dictionary says. Only take a language you
+  actually speak.
+
+`locales/README.md` has the rest: the two tiers, why a partial language breaks nothing,
+and when a language gets registered.
+
+**After the first one is merged, anything on the board is open to them.** The
+translation is not a test to be passed — it is the smallest real thing in the project,
+and it is where the workflow gets learned on something that does not matter if it takes
+two attempts.
+
+---
+
 ## Step 1 — Find something to work on
 
 Work comes from the public board and nowhere else. Do not invent a task, and do not
