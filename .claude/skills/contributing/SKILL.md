@@ -69,36 +69,118 @@ so on the issue rather than starting anyway.
 
 ## Step 3 — Set up, once
 
+If the person you are helping has never worked on this repository, walk them through
+this in order and **confirm each command actually worked** before moving on. Do not
+paste all of it at once and hope. Budget about half an hour the first time, and roughly
+nothing every time after.
+
+### 3.1 — What has to be installed
+
+```bash
+git --version      # any recent version
+node --version     # v20 or newer. Next.js 16 and React 19 will not run on v18
+npm --version
+gh --version       # GitHub CLI - https://cli.github.com
+python --version   # 3.12+, only needed for backend issues
+```
+
+`gh` is not optional here. Claiming an issue, opening the pull request and reading the
+board all go through it. If it is missing, install it before anything else.
+
+Python is only needed if the issue touches `api/` or `agent/`. A documentation or
+frontend issue needs Node and nothing more.
+
+### 3.2 — Log in to GitHub
+
+```bash
+gh auth status
+```
+
+If that says you are not logged in:
+
+```bash
+gh auth login
+```
+
+Choose **GitHub.com** → **HTTPS** → **Yes** to authenticate git → **Login with a web
+browser**, then paste the one-time code it prints.
+
+**This step is skipped more often than any other**, and it fails late rather than early:
+everything looks fine until the first `gh` command, which then prints *"To get started
+with GitHub CLI, please run: gh auth login"* instead of doing the thing. If any `gh`
+command produces that message, this is why.
+
+Reading the project board needs one extra scope, which the default login does not grant:
+
+```bash
+gh auth refresh -s read:project
+```
+
+### 3.3 — Fork and clone
+
 Everyone contributes through a fork. Nobody gets write access to the repository, and
 that is the same rule for everyone.
 
 ```bash
 gh repo fork Dpro-at/Tel-Agent --clone
 cd Tel-Agent
+git remote -v          # expect: origin = your fork, upstream = Dpro-at
+```
+
+`gh repo fork --clone` sets `upstream` for you. If `git remote -v` does not show it:
+
+```bash
 git remote add upstream https://github.com/Dpro-at/Tel-Agent.git
 ```
 
-**Check the email on your commits before the first one:**
+### 3.4 — Check the email on your commits
 
 ```bash
 git config user.email
 ```
 
-If that address is not on your GitHub account (or your `@users.noreply.github.com`
-one), your commits land *unlinked*: the work is merged and your name is on nothing.
-This is the single most common way a contributor does real work and does not appear in
-the contributors list.
+If that address is not on your GitHub account — or your `@users.noreply.github.com` one
+— your commits land **unlinked**: the work gets merged and your name is on nothing.
 
-**Running the project.** The frontend runs today:
+This is the single most common way somebody does real work here and does not appear in
+the contributors list, and it is awkward to correct afterwards. Fix it now:
+
+```bash
+git config user.email "you@example.com"
+```
+
+### 3.5 — Run what exists
+
+The frontend runs today:
 
 ```bash
 npm --prefix web install
 npm --prefix web run dev
 ```
 
-The backend does not run yet — `agent/` and `api/` are empty, and building them is what
-most of the open issues are. If an issue asks you to run something that does not exist,
-re-read it: the task is probably to create it.
+Open `http://localhost:3000`. It redirects to a locale — `/en`, `/de` or `/ar` — and you
+should land on the sign-in screen. **If you see that, the setup worked.** Every screen
+has a state switcher pinned to the top in development; it is stripped from a production
+build.
+
+The screens read from static fixture modules, so they render without a server. Nothing
+is wired to anything yet.
+
+**The backend does not run, because it does not exist.** `agent/` and `api/` hold six
+`.gitkeep` files and two READMEs, and building them is what most of the open issues are.
+If an issue asks you to run something that is not there, re-read it — the task is
+almost certainly to create it.
+
+### 3.6 — Confirm the tooling before you touch code
+
+```bash
+npx --prefix web tsc --noEmit    # expect: no output
+npm --prefix web run lint
+```
+
+Run these **before** your first edit, not after. If something is already red on a clean
+clone, that is worth reporting as its own issue — and it is not yours to fix inside an
+unrelated pull request.
 
 ## Step 4 — Do the work
 
