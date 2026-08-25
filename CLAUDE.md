@@ -289,7 +289,8 @@ Competitive notes belong in , which is gitignored and never published.
 | `IDEAS.md` | Parking lot for everything not in v1 |
 | `CLA.md` | Contributor License Agreement |
 | `.env.example` | Every environment variable, documented |
-| `internal/` | **Gitignored, never published.** Progress tracking, decision log, PBX runbook, commercial strategy. Read `internal/README.md` before putting anything there — and never a credential. |
+| `.claude/skills/contributing/` | The contributor workflow as a skill — clone to fork to merged pull request. It ships with the repository, so an agent working inside a clone already has it. |
+| `internal/` | **Gitignored here, and does not exist in this repository.** The working notes live in a private repository instead; the ignore entry is kept as a guard so the folder cannot reappear here by accident. Never put a credential anywhere, in either repository. |
 
 When `docs/SPEC.md` and this file disagree, the specification wins — and this
 file should be corrected.

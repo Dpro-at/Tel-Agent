@@ -30,6 +30,48 @@ specification, and anything that helps Milestone 0 work.
 
 ---
 
+## What to work on
+
+Work comes from the public board and nowhere else:
+
+**https://github.com/orgs/Dpro-at/projects/6**
+
+```bash
+gh issue list --repo Dpro-at/Tel-Agent --label "good first issue" --state open
+```
+
+**Take from the `Ready` column only.** `Backlog` means the issue is blocked on another
+one — it looks available and is not. Every issue carries a `level:` label, from
+`level: first-issue` (small, finishable in one sitting) to `level: maintainer` (decides
+architecture — please leave those).
+
+Every issue is written the same way: **Why** it exists, **Do** what to build, **Done
+when** the acceptance test, and **Verify** the exact commands a reviewer will run. If it
+lists **Needs**, those issues must be closed first.
+
+**Comment on the issue and wait to be assigned** before you write code. One person per
+issue. If you have to stop, say so — that returns it to the pool the same day instead of
+after the fourteen-day inactivity sweep, and nobody thinks less of you for it.
+
+**The scope rule:** stay inside the issue. Something else that needs fixing goes in a
+new issue, not in your branch. A pull request that does two things gets reviewed as
+slowly as its harder half.
+
+### If you work with an AI coding agent
+
+The repository ships the whole workflow as a skill at
+[`.claude/skills/contributing/`](.claude/skills/contributing/SKILL.md). An agent working
+inside your clone picks it up automatically, so it already knows the branch naming, the
+verification gate, and the rules below — you do not have to explain them.
+
+Most issues also carry a ready-to-paste prompt and a rough time estimate in a comment.
+
+Two things to hold your agent to, whichever one you use: **run the Verify commands and
+look at the real output** before opening anything, and **do not let it widen the scope**
+past the issue. Both are on you, not on the reviewer.
+
+---
+
 ## The Contributor License Agreement
 
 **Every contributor must accept the [CLA](CLA.md) before their first pull request is
