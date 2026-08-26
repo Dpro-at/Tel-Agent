@@ -2,7 +2,7 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import ar from "../../../locales/ar/shell.json";
 import de from "../../../locales/de/shell.json";
@@ -12,6 +12,29 @@ import { NavIcon } from "@/components/shell/icons";
 import { IncomingCall } from "@/components/shell/incoming-call";
 import { interpolate, pickDictionary } from "@/lib/i18n";
 import type { Locale } from "@/lib/locales";
+
+/**
+ * The theme lives on `<html data-od-theme>`, written by the inline script in the
+ * locale layout before first paint so the page never flashes the wrong palette.
+ * This subscription reads that attribute instead of keeping a second copy in
+ * React state: the server always renders the dark icon, and the client swaps to
+ * whatever the document already says once it hydrates.
+ */
+const THEME_EVENT = "od-theme-change";
+
+function subscribeTheme(onChange: () => void) {
+  addEventListener(THEME_EVENT, onChange);
+  return () => removeEventListener(THEME_EVENT, onChange);
+}
+
+function readTheme(): "dark" | "light" {
+  return document.documentElement.getAttribute("data-od-theme") === "light" ? "light" : "dark";
+}
+
+/** What the server renders, and what hydration matches against. */
+function darkTheme(): "dark" {
+  return "dark";
+}
 
 /**
  * The shell appears on every screen, so it carries its own dictionary rather than
@@ -107,20 +130,10 @@ export function Sidebar({
   incomingCall?: boolean;
 }) {
   const t = pickDictionary<ShellDictionary>(locale, DICTIONARIES);
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const theme = useSyncExternalStore(subscribeTheme, readTheme, darkTheme);
   const [open, setOpen] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [workspace, setWorkspace] = useState(0);
-
-  useEffect(() => {
-    let saved: string | null = null;
-    try {
-      saved = localStorage.getItem("od-theme");
-    } catch {
-      saved = null;
-    }
-    setTheme(saved === "light" ? "light" : "dark");
-  }, []);
 
   function toggleTheme() {
     const next = theme === "dark" ? "light" : "dark";
@@ -132,7 +145,7 @@ export function Sidebar({
     } catch {
       // A browser with storage disabled still switches, it just does not remember.
     }
-    setTheme(next);
+    dispatchEvent(new Event(THEME_EVENT));
   }
 
   /**
