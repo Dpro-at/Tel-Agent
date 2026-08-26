@@ -131,6 +131,39 @@ single biggest source of "the call connects but there is no audio".
 Docker is not required and is not assumed anywhere in the code. All configuration
 comes from environment variables.
 
+### Running the checks locally
+
+The same four checks that run on your pull request. Run them before you open one and
+you will not be waiting on CI to tell you about a missing type hint.
+
+```bash
+pip install -e ".[dev]"
+
+ruff format --check .        # formatting
+ruff check .                 # linting, type-hint coverage, async discipline
+lint-imports                 # agent/ must never import from api/
+pytest                       # the test suite
+
+cd web && npm ci && npm run lint && npm run typecheck
+node scripts/check-locales.mjs   # en / de / ar must be complete
+```
+
+**Both database dialects.** `pytest` alone runs the suite against SQLite. Point
+`TEST_POSTGRES_URL` at a PostgreSQL server and it runs against both — which is what CI
+does, because D-029 supports two dialects and full-text search is implemented
+differently on each.
+
+```bash
+TEST_POSTGRES_URL=postgresql+asyncpg://user:pass@localhost:5432/telagent_test pytest
+```
+
+Without it you get the SQLite half and no failure. With it you get both.
+
+**On Windows:** `lint-imports` crashes with a `UnicodeEncodeError` when its output is
+redirected, because the console falls back to cp1252 and the progress spinner is not
+ASCII. Set `PYTHONIOENCODING=utf-8` and it behaves. CI runs on Linux and never sees
+this.
+
 ---
 
 ## Code conventions

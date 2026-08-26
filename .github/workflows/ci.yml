@@ -1,0 +1,90 @@
+name: CI
+
+# Every rule in CLAUDE.md is a note until it is a step in this file.
+#
+# Pull requests from forks run these jobs without access to secrets, which is the
+# behaviour we want: everybody contributes through a fork (D-021), and a stranger's
+# pull request must not be able to read anything.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: web — lint and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run lint
+        working-directory: web
+      - run: npm run typecheck
+        working-directory: web
+
+  locales:
+    name: locales — de and ar are complete
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Two tiers, per locales/README.md: this exits 1 when `de` or `ar` is missing a
+      # key, and 0 when a community language is behind. Falling behind is exactly what
+      # a community locale is allowed to do.
+      - run: node scripts/check-locales.mjs
+
+  api:
+    name: api and agent — format, lint, imports, tests
+    runs-on: ubuntu-latest
+
+    # D-029 supports two dialects, so the suite runs against both. Without a real
+    # server here, "PostgreSQL is supported" is a claim nothing checks — and the two
+    # differ in more than syntax: full-text search uses entirely different mechanisms.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: telagent
+          POSTGRES_PASSWORD: telagent
+          POSTGRES_DB: telagent_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      TEST_POSTGRES_URL: postgresql+asyncpg://telagent:telagent@localhost:5432/telagent_test
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: ruff format --check .
+      - run: ruff check .
+      # docs/ARCHITECTURE.md rule 3: agent/ never imports from api/.
+      - run: lint-imports
+      # pytest exits 5 on an empty suite and CI reads that as a failure, so the
+      # repository always carries at least one real test.
+      - run: pytest

@@ -1,0 +1,87 @@
+[project]
+name = "tel-agent"
+version = "0.1.0"
+description = "An AI agent that answers the phone and every messaging channel a customer reaches you on."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "Dpro GmbH" }]
+
+dependencies = [
+    "fastapi>=0.118",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "alembic>=1.14",
+    # Both dialects ship by default (D-029): the file-based one is what the install
+    # wizard offers first, and Postgres is what an existing server already runs.
+    "aiosqlite>=0.20",
+    "asyncpg>=0.30",
+    # Argon2id. `argon2-cffi` directly rather than through passlib: passlib has not had
+    # a release since 2020, and this is the one choice that cannot be corrected later
+    # without every user resetting their password.
+    "argon2-cffi>=23.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.14",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "import-linter>=2.1",
+    "httpx>=0.28",
+]
+
+[project.urls]
+Homepage = "https://tel-agent.com"
+Source = "https://github.com/Dpro-at/Tel-Agent"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["agent", "api"]
+
+# --- Ruff --------------------------------------------------------------------
+# Formatting and linting live here rather than in a separate file, so there is one
+# place to look. CLAUDE.md mandates `ruff format` and `ruff check`; B0 is what turns
+# that from a sentence into a gate.
+
+[tool.ruff]
+line-length = 96
+target-version = "py311"
+extend-exclude = [".next", "node_modules", "web"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # import sorting
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "ASYNC",# Rule 3: nothing on the audio path blocks
+    "S",    # bandit — a secret or a shell call slipping in is the expensive kind
+    "ANN",  # type hints on every public function, per the code conventions
+    "RUF",
+]
+ignore = [
+    "ANN401",  # an explicit `Any` is sometimes the honest annotation
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert; they do not need `assert` flagged, and fixtures are not public API.
+"tests/**" = ["S101", "ANN"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+# --- Pytest ------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q --strict-markers"
+# Note: pytest exits 5 on an empty suite, which CI reads as a failure. There is
+# therefore always at least one real test - see tests/test_packages.py.
