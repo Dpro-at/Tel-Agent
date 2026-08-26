@@ -22,7 +22,7 @@ For the human contributor path (fork → claim → branch → PR), follow
 5. **Milestone 0 first:** web chat streams and cancels; conversation is stored. Messaging
    channels next. **Phone is last (Milestone 11).** Write the conversation layer to voice
    constraints from day one (streaming, cancel, latency).
-6. **Everything streams.** Target &lt;800 ms end-of-speech → first audio. Never wait for a
+6. **Everything streams.** Target <800 ms end-of-speech → first audio. Never wait for a
    full LLM reply before starting TTS. `cancel()` on TTS is mandatory.
 
 ---

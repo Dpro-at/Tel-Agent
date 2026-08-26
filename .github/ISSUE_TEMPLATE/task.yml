@@ -71,11 +71,11 @@ body:
       label: Level
       description: How hard is this for a contributor who does not know the codebase yet?
       options:
-        - level: first-issue
-        - level: easy
-        - level: medium
-        - level: hard
-        - level: maintainer
+        - "level: first-issue"
+        - "level: easy"
+        - "level: medium"
+        - "level: hard"
+        - "level: maintainer"
     validations:
       required: true
 
