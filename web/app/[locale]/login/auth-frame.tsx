@@ -161,3 +161,26 @@ export function AuthAction<RouteType>({
     </Link>
   );
 }
+
+/**
+ * The flow's primary action as a real submit button.
+ *
+ * `AuthAction` above navigates - it existed so the flow was walkable before `api/`
+ * did. Screens that actually submit use this instead, inside a `<form>`, so Enter in
+ * any field submits and the browser's own form semantics apply.
+ */
+export function AuthSubmit({
+  disabled,
+  className = "",
+  children,
+}: {
+  disabled: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button type="submit" disabled={disabled} className={`${authButtonClass(disabled)} ${className}`}>
+      {children}
+    </button>
+  );
+}
