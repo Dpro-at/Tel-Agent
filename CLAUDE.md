@@ -33,6 +33,16 @@ Milestone 0 is now:
 
 Then the messaging and social channels. **The phone is built last.**
 
+**Revised again 2026-08-26 by D-027.** The foundations — authentication, users,
+workspaces and the extension contract — are built *before* the web chat loop, not after
+it. Milestone 0 as originally written ("the page and a script, no database, no
+dashboard, no login") no longer describes what is built first. The cost of that
+reordering, and the mitigations that are not optional, are in `internal/DECISIONS.md`.
+
+**The mitigation that limits the damage:** web chat is built as the first official
+application on top of the extension contract, so the contract is proven by use. It is
+not deferred to the end.
+
 The phone remains the hard case — sub-second latency, barge-in, and no interface to
 show what was understood — so the conversation layer is written to its constraints from
 the first line even though web chat does not need them. See Rule 3; none of it is
@@ -138,6 +148,15 @@ runs. Tel-Agent owns channels and reaches integrations through the HTTP tool. Wi
 this line, "add one more connector" has no end, which is the failure Rule 5 exists to
 prevent.
 
+**A channel is an extension — D-032.** The core defines what a channel *is*; each
+actual channel is an extension, official or community. Tel-Agent commits to the ten
+named above: supported, tested, shipped as official applications. Anything beyond them
+is a community extension carrying no commitment from this project.
+
+This does not loosen Rule 5, it relocates the protection. The line between a channel
+and an integration above is what still has to hold — an extension contract does not
+license calling an integration a channel.
+
 **Channel build order — reversed 2026-08-22 by D-017.** Web chat first, then the
 messaging and social channels, then the phone. This paragraph previously said the
 opposite; the superseded text and the reasoning are in `internal/DECISIONS.md`.
@@ -164,7 +183,7 @@ Settled. Do not reopen without a concrete reason.
 | Separate from | Agent-Player and Flowxtra — own repo, no shared code without a written arrangement |
 | Backend | Python (agent + FastAPI) |
 | Frontend | Next.js |
-| Database | PostgreSQL |
+| Database | PostgreSQL **and SQLite**, both from the first migration, behind SQLAlchemy (D-029) |
 | Voice framework | LiveKit Agents |
 | Packaging | Docker Compose (manual dev run also documented) |
 | Runs as | Locally installed web app on the LAN — not a desktop app, not SaaS-only |
@@ -175,7 +194,7 @@ Settled. Do not reopen without a concrete reason.
 | Languages | en / de / ar from day one, RTL supported |
 | Analog lines | Out of scope — users bridge with an ATA; we only ever speak SIP |
 | Workflow automation | Out of scope — webhooks + generic HTTP tool; n8n does the rest |
-| Messaging channels | In scope. **Web chat is the first channel built (D-017).** Ten including the phone: web chat, SMS, email, WhatsApp, Telegram, Messenger, Instagram, Discord, Slack. Closed list. The customer connects their own app credentials; Tel-Agent never holds a shared platform app |
+| Messaging channels | In scope. **Web chat is the first channel built (D-017).** Tel-Agent commits to ten including the phone: web chat, SMS, email, WhatsApp, Telegram, Messenger, Instagram, Discord, Slack — supported, tested, shipped as official applications. **A channel is an extension, so the list is no longer closed (D-032):** anything beyond the ten is a community extension carrying no commitment from this project. The customer connects their own app credentials; Tel-Agent never holds a shared platform app |
 
 ---
 
@@ -258,7 +277,12 @@ Competitive notes belong in , which is gitignored and never published.
   be aware, and the requirement still applies once a human joins the call
 
 **Data model** — six decisions that are painful to add later, so they are made now:
-1. `user_id` on every table from day one, even while it is always `1`
+1. **`workspace_id` on every table from day one — D-028 replaced `user_id` as the
+   isolation key.** `workspaces` and `memberships` (`user_id`, `workspace_id`, `role`)
+   land in the first migration with the five roles the interface names: `owner`,
+   `admin`, `reception`, `viewer`, `invited`. Every query is scoped by `workspace_id`,
+   enforced in one place that queries cannot bypass — a single path that forgets it
+   leaks one customer's transcripts into another customer's screen
 2. A full-text index on `messages.text` in the first migration
 3. `numbers.owner` — customer or platform holds the number. Separates a self-hoster's
    own number from one resold by Tel-Agent Cloud, and governs who may release or port it
@@ -270,7 +294,8 @@ Competitive notes belong in , which is gitignored and never published.
 6. **`conversations` is the core table, not `calls`.** A phone call is a conversation
    on a `phone` channel, plus a `calls` row for what only a call has — caller number,
    recording, billable seconds, provider cost. `channels` exists from the first
-   migration holding one row of kind `phone`. Same discipline as `user_id` being
+   migration holding one row of kind `web` — `phone` since D-017 reversed the build
+   order, and `docs/SPEC.md` §B5 already said `web`. Same discipline as `user_id` being
    permanently `1`: the structure is what makes Milestone 11 a write, not a redesign
 
 **Git**
