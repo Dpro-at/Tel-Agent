@@ -1,0 +1,81 @@
+name: Feature request
+description: Propose something Tel-Agent does not do yet
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tel-Agent is at **Milestone 0** — web chat answered end to end, streaming,
+        cancellable. The phone is Milestone 11. Work outside that order is parked
+        in [IDEAS.md](https://github.com/Dpro-at/Tel-Agent/blob/main/IDEAS.md)
+        rather than built.
+
+        Use this form to describe the idea clearly. If it is beyond the current
+        milestone, expect it to be recorded in `IDEAS.md` instead of scheduled.
+
+        **Never include an API key, a SIP password, a real recording, or a real
+        transcript.** Security problem? See [SECURITY.md](https://github.com/Dpro-at/Tel-Agent/blob/main/SECURITY.md).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Who hits this, and what goes wrong today without it?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should Tel-Agent do?
+      description: The behaviour you want. Prefer outcomes over implementation.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: channel
+    attributes:
+      label: Which channel or area?
+      options:
+        - web chat
+        - phone / SIP
+        - messaging (SMS, email, WhatsApp, Telegram, …)
+        - dashboard (web/)
+        - api
+        - agent tooling
+        - documentation
+        - not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: milestone_fit
+    attributes:
+      label: Does this help Milestone 0?
+      description: >-
+        Milestone 0 is a visitor typing in web chat, an LLM replying token by
+        token, cancel mid-sentence, conversation stored and searchable.
+      options:
+        - Yes — it is required for Milestone 0
+        - No — park it in IDEAS.md
+        - Unsure
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches, or why a webhook / HTTP tool is not enough.
+
+  - type: checkboxes
+    id: reminders
+    attributes:
+      label: Before filing
+      options:
+        - label: I checked IDEAS.md and docs/SPEC.md so this is not already recorded
+          required: true
+        - label: Everything in this issue is written in English
+          required: true
+        - label: No competitor is named anywhere in this issue
+          required: true

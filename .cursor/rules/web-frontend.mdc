@@ -1,0 +1,15 @@
+---
+description: Next.js dashboard conventions under web/
+globs: web/**/*.{ts,tsx,css}
+alwaysApply: false
+---
+
+# web/ — dashboard
+
+- Talk **only** to `api/`. No direct agent calls.
+- No business rule that the API does not also enforce.
+- Layouts must survive ~1.4× string growth (German). No fixed-width labels that clip.
+- Arabic: full RTL for chrome; keep phone numbers, timestamps, IDs, logs, code LTR.
+- Dark theme designed first; light is a real second pass, not a naive invert.
+- Every screen needs empty, loading (skeletons), error, success, and offline states.
+- User-facing copy comes from `locales/`, not hardcoded English in components.

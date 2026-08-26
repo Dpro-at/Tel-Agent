@@ -1,0 +1,24 @@
+---
+description: Python conventions for agent/ and api/
+globs: "{agent,api}/**/*.py"
+alwaysApply: false
+---
+
+# Python — agent/ and api/
+
+- Python 3.11+, type hints on every public function.
+- Format: `ruff format`. Lint: `ruff check`. Prefer `async`/`await` on any path that can sit near media or live sessions.
+- Config from environment variables only. Document new vars in `.env.example` with safe placeholders.
+- Never log API keys or return them in full to a client (mask; last four chars only in UI).
+
+## agent/
+
+- Soft real-time: blocking calls on the media / session path are bugs.
+- Stream: start TTS (or token output) before the full LLM reply exists.
+- TTS `cancel()` is required for barge-in; discard queued speech.
+- If latency is bad, fix streaming before adding features.
+
+## api/
+
+- No media, codecs, or RTP. Read transcripts the agent wrote.
+- Enforce authz here; the browser is not the security boundary.

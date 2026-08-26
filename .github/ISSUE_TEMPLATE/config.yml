@@ -5,11 +5,11 @@ contact_links:
     about: >-
       Never report a security problem in a public issue. Use private vulnerability
       reporting, or email info@dpro.at with SECURITY in the subject.
-  - name: Feature idea
+  - name: Park an idea in IDEAS.md
     url: https://github.com/Dpro-at/Tel-Agent/blob/main/IDEAS.md
     about: >-
-      The project is at Milestone 0 and nothing beyond it is being built yet. Ideas are
-      parked in IDEAS.md until the first call works. Open a discussion to suggest one.
+      Beyond Milestone 0? Open a discussion or a Feature request issue — maintainers
+      park out-of-order work in IDEAS.md until the current milestone is done.
   - name: Read the specification first
     url: https://github.com/Dpro-at/Tel-Agent/blob/main/docs/SPEC.md
     about: Most questions about what Tel-Agent does and does not do are answered there.

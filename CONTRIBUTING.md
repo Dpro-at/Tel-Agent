@@ -64,9 +64,10 @@ slowly as its harder half.
 
 ### If you work with an AI coding agent
 
-The repository ships the whole workflow as a skill at
+The repository ships [`AGENTS.md`](AGENTS.md) for any coding agent, Cursor rules under
+[`.cursor/rules/`](.cursor/rules/), and the whole workflow as a skill at
 [`.claude/skills/contributing/`](.claude/skills/contributing/SKILL.md). An agent working
-inside your clone picks it up automatically, so it already knows the branch naming, the
+inside your clone picks these up automatically, so it already knows the branch naming, the
 verification gate, and the rules below — you do not have to explain them.
 
 Most issues also carry a ready-to-paste prompt and a rough time estimate in a comment.
@@ -184,6 +185,7 @@ English, imperative mood. Explain *why* in the body when the change is not obvio
 | [`docs/SPEC.md`](docs/SPEC.md) | The complete specification — the single source of truth |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | How `agent/`, `api/` and `web/` are separated, and which may talk to which |
 | [`CLAUDE.md`](CLAUDE.md) | The development rules, including the build order |
+| [`AGENTS.md`](AGENTS.md) | Short entry for AI coding agents (points at `CLAUDE.md`) |
 | [`IDEAS.md`](IDEAS.md) | Everything deferred, and why |
 
 When the specification and any other document disagree, the specification wins — and

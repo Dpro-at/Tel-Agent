@@ -1,0 +1,107 @@
+name: Task
+description: A scoped piece of work with Why / Do / Done when / Verify
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for board work. Every field below is what reviewers and
+        contributors expect. Leave **Needs** empty if nothing blocks this task.
+
+        **Never include an API key, a SIP password, a real recording, or a real
+        transcript.**
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: Why this task exists. The reason, not the solution.
+      placeholder: A boundary is cheap now and a refactor later.
+    validations:
+      required: true
+
+  - type: textarea
+    id: do
+    attributes:
+      label: Do
+      description: What to build or change. Concrete and bounded.
+      placeholder: |
+        - Write the rule in docs/ARCHITECTURE.md
+        - Enforce it with an import-linter contract
+    validations:
+      required: true
+
+  - type: textarea
+    id: done_when
+    attributes:
+      label: Done when
+      description: The acceptance test. Someone who never saw the branch can check this.
+      placeholder: An import that crosses the line fails CI.
+    validations:
+      required: true
+
+  - type: textarea
+    id: verify
+    attributes:
+      label: Verify
+      description: Exact commands a reviewer will run. Paste real commands, not "run the tests".
+      placeholder: |
+        ruff check .
+        npm --prefix web run lint
+    validations:
+      required: true
+
+  - type: textarea
+    id: needs
+    attributes:
+      label: Needs
+      description: Issues that must be closed before this one is Ready. Leave blank if none.
+      placeholder: Needs #16 (CI must exist before the contract can fail in CI)
+
+  - type: textarea
+    id: files
+    attributes:
+      label: Files
+      description: Paths that are expected to change, if known.
+      placeholder: docs/ARCHITECTURE.md, .importlinter
+
+  - type: dropdown
+    id: level
+    attributes:
+      label: Level
+      description: How hard is this for a contributor who does not know the codebase yet?
+      options:
+        - level: first-issue
+        - level: easy
+        - level: medium
+        - level: hard
+        - level: maintainer
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - agent
+        - api
+        - web
+        - locales
+        - documentation
+        - tooling / CI
+        - cross-cutting
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: reminders
+    attributes:
+      label: Before filing
+      options:
+        - label: Everything in this issue is written in English
+          required: true
+        - label: No competitor is named anywhere in this issue
+          required: true
+        - label: This is one task, not a bundle of unrelated work
+          required: true

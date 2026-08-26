@@ -1,0 +1,17 @@
+---
+description: Translation and locale file rules
+globs: locales/**/*.json
+alwaysApply: false
+---
+
+# locales/
+
+- English (`locales/en/`) is the source of truth. Measure coverage with:
+  `node scripts/check-locales.mjs` or `--locale <code>`.
+- **One file per pull request.** Do not copy all 33 files and translate one.
+- Translate **values only**. Never change keys.
+- Leave `{placeholders}` unchanged (`{count}`, `{name}`, …).
+- Only translate languages you speak. Unreviewed machine translation is worse than missing.
+- Product names stay as-is (Tel-Agent, WhatsApp, SMS, …).
+- Partial community locales are fine; only `en` / `de` / `ar` block releases.
+- First-time contributors: follow `docs/ONBOARDING.md`.

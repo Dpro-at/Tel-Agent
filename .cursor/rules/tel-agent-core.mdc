@@ -1,0 +1,21 @@
+---
+description: Core Tel-Agent rules for every Cursor session
+alwaysApply: true
+---
+
+# Tel-Agent — always
+
+- Read `CLAUDE.md` and `AGENTS.md` before substantive edits. Spec wins on conflict: `docs/SPEC.md`.
+- **English only** in code, comments, commits, PRs, issues.
+- **Never name a competitor** in any public artefact. Check before commit.
+- **Never commit secrets**, real recordings, or real transcripts.
+- Work comes from a claimed GitHub issue. Stay inside it; park extras in `IDEAS.md`.
+- Milestone 0 = web chat stream + cancel + stored conversation. Phone is last.
+- Conversation layer must satisfy voice constraints (stream, barge-in/cancel, latency) even on text channels.
+- Do not invent features outside the issue or current milestone.
+
+## Architecture at a glance
+
+- `web/` → `api/` only. Never call `agent/` from the browser.
+- `api/` never touches audio. `agent/` never serves the dashboard.
+- `agent/` ↔ `api/` communicate via DB / Redis, not HTTP to each other.
