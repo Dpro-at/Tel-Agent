@@ -1,0 +1,136 @@
+"""Structured logging, and the request id that makes it answerable.
+
+"It was slow for one user" cannot be investigated without a correlation id, and adding
+one afterwards means touching every handler again. So it exists from the first
+endpoint, not from the first outage.
+
+One line of JSON per record. Any log line written while a request is being served
+carries that request's id, without the caller passing it down — that is what the
+context variable below is for, and it is why a helper function three layers deep does
+not need to know a request exists.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import sys
+from contextvars import ContextVar
+from typing import Any
+
+# Identifies the handler this module installs, so that reconfiguring replaces it rather
+# than removing every handler anybody else attached.
+_HANDLER_NAME = "telagent.json"
+
+# Set by the request-id middleware, read by the log filter. A ContextVar rather than a
+# global because concurrent requests share the process: a global would let one request's
+# id leak into another's log line, which is worse than having no id at all.
+request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
+
+# Attributes `logging` puts on every record. Anything outside this set was passed by the
+# caller through `extra=` and belongs in the output.
+_STANDARD_ATTRIBUTES = frozenset(
+    {
+        "args",
+        "asctime",
+        "created",
+        "exc_info",
+        "exc_text",
+        "filename",
+        "funcName",
+        "levelname",
+        "levelno",
+        "lineno",
+        "module",
+        "msecs",
+        "message",
+        "msg",
+        "name",
+        "pathname",
+        "process",
+        "processName",
+        "relativeCreated",
+        "stack_info",
+        "taskName",
+        "thread",
+        "threadName",
+    }
+)
+
+
+class RequestIdFilter(logging.Filter):
+    """Attach the current request id to every record, if there is one.
+
+    An id passed explicitly through `extra=` wins. The access line is written after the
+    context variable has been reset - the id is no longer in context by then - so
+    overwriting it here would stamp `null` onto the one line that most needs an id.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if getattr(record, "request_id", None) is None:
+            record.request_id = request_id_var.get()
+        return True
+
+
+class JsonFormatter(logging.Formatter):
+    """One line of JSON per record.
+
+    Machine-readable from the first line rather than after the first time somebody
+    tries to grep a multi-line traceback out of a text log.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload: dict[str, Any] = {
+            "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S%z"),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+
+        request_id = getattr(record, "request_id", None)
+        if request_id:
+            payload["request_id"] = request_id
+
+        # Whatever the call site passed through `extra=` - method, path, status,
+        # duration_ms and anything a later task adds.
+        for key, value in record.__dict__.items():
+            if key not in _STANDARD_ATTRIBUTES and key != "request_id":
+                payload[key] = value
+
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+
+        return json.dumps(payload, default=str, ensure_ascii=False)
+
+
+def configure_logging(level: str = "INFO") -> None:
+    """Install the JSON handler on the root logger.
+
+    Replaces existing handlers rather than adding to them: uvicorn installs its own,
+    and leaving both attached prints every line twice — once as JSON and once not,
+    which makes the JSON useless to anything parsing it.
+    """
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(JsonFormatter())
+    handler.addFilter(RequestIdFilter())
+    handler.set_name(_HANDLER_NAME)
+
+    root = logging.getLogger()
+    # Replace only *our* handler, never the whole list.
+    #
+    # Wiping `root.handlers` is the obvious way to stop uvicorn printing every line
+    # twice, and it silently removes anything else that attached one - an error
+    # reporter, a journal handler, or the test framework's capture. Building an
+    # application would then disable logging for whatever set it up first.
+    for existing in [h for h in root.handlers if h.get_name() == _HANDLER_NAME]:
+        root.removeHandler(existing)
+    root.addHandler(handler)
+    root.setLevel(level)
+
+    # uvicorn's access log duplicates the access line the middleware writes, without a
+    # request id. Silence it and keep the one that can be correlated.
+    logging.getLogger("uvicorn.access").handlers = []
+    logging.getLogger("uvicorn.access").propagate = False
+    for name in ("uvicorn", "uvicorn.error"):
+        logging.getLogger(name).handlers = []
+        logging.getLogger(name).propagate = True
