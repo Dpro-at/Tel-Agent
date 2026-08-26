@@ -1,0 +1,18 @@
+{
+  "title": "Inserisci il codice",
+  "sent_to": "Un codice di sei cifre è stato inviato a {address}. È valido per dieci minuti.",
+  "digit_label": "Cifra {position} di {total}",
+  "submit": "Continua",
+  "submit_offline": "Server irraggiungibile",
+  "wrong_code": "Il codice non corrisponde. Rimangono {attempts} tentativi prima che sia necessario richiedere un nuovo codice.",
+  "expired_title": "Questo codice è scaduto",
+  "expired_body": "I codici sono validi per dieci minuti. Richiedine uno nuovo: quello vecchio non funzionerà, anche se riesci a trovarlo.",
+  "expires_in": "Scade tra {time}",
+  "resend": "Invia un nuovo codice",
+  "resend_prompt_expired": "Non c'è più nulla da aspettare",
+  "back": "Torna all'accesso",
+  "self_hosted": "Ospitato autonomamente · nulla lascia questa macchina",
+  "offline_title": "Questo browser non riesce a raggiungere il tuo server Tel-Agent",
+  "offline_body": "Nessuna risposta da {host}. Le tue chiamate non sono interessate se la macchina è ancora in esecuzione: si tratta di un problema di rete tra te e la macchina. Verifica di essere connesso alla rete aziendale o alla VPN.",
+  "offline_retry": "Riprova connessione"
+}
