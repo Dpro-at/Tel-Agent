@@ -22,6 +22,9 @@ dependencies = [
     # a release since 2020, and this is the one choice that cannot be corrected later
     # without every user resetting their password.
     "argon2-cffi>=23.1",
+    # AES-GCM for credentials at rest (B9.2). The `cryptography` wheel carries the
+    # audited primitives; nothing in this repository implements a cipher.
+    "cryptography>=43.0",
 ]
 
 [project.optional-dependencies]

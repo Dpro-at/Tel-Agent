@@ -30,6 +30,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.db import Base
 from api.models.common import enum_column, utc_now_column, workspace_fk
+from api.models.encrypted import EncryptedStr
 
 # The ten channels Tel-Agent commits to. The list is no longer closed (D-032) — a
 # channel is an extension — but these are the kinds the core ships support for, and
@@ -69,9 +70,9 @@ class Channel(Base):
     )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     # §B9.2: user-entered credentials live in the database, encrypted, never in `.env`.
-    # The encryption itself arrives with E2; the column is here so that nothing is
-    # tempted to store them in plaintext in the meantime.
-    credentials_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # `EncryptedStr` encrypts on write and decrypts on read, so no call site can
+    # forget - the model attribute holds the plaintext, the stored column never does.
+    credentials_encrypted: Mapped[str | None] = mapped_column(EncryptedStr, nullable=True)
     webhook_secret: Mapped[str | None] = mapped_column(String(128), nullable=True)
     webhook_path: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
     default_language: Mapped[str | None] = mapped_column(String(12), nullable=True)

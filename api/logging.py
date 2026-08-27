@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sys
 from contextvars import ContextVar
 from typing import Any
@@ -56,6 +57,78 @@ _STANDARD_ATTRIBUTES = frozenset(
         "threadName",
     }
 )
+
+
+# Field names whose values are secrets wherever they appear. The most common leak is
+# not an attack - it is a debug line or a traceback that helpfully includes a request
+# body. Matching is by field name because the values themselves are unknowable.
+SECRET_FIELD_NAMES = frozenset(
+    {
+        "password",
+        "current_password",
+        "new_password",
+        "password_hash",
+        "token",
+        "token_hash",
+        "code",
+        "signature",
+        "credentials",
+        "credentials_encrypted",
+        "api_key",
+        "secret",
+        "encryption_key",
+        "smtp_password",
+    }
+)
+
+_REDACTED = "[redacted]"
+
+
+def _scrub(value: object) -> object:
+    """Replace secret-named fields wherever they occur in a structure."""
+    if isinstance(value, dict):
+        return {
+            key: _REDACTED if str(key).lower() in SECRET_FIELD_NAMES else _scrub(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_scrub(item) for item in value]
+    return value
+
+
+class SecretRedactionFilter(logging.Filter):
+    """Strip secret-named fields from every record before it is formatted.
+
+    Covers three routes a secret takes into a log line: an `extra=` field named like
+    one, a dict payload carrying one nested inside, and a message string that had one
+    interpolated as `password='...'`. It cannot catch a secret pasted raw into a
+    message with no field name beside it - the test that posts a credential and greps
+    the captured output is what keeps that path honest.
+    """
+
+    _INLINE: re.Pattern[str] | None = None
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        for key in list(record.__dict__):
+            if key.lower() in SECRET_FIELD_NAMES:
+                setattr(record, key, _REDACTED)
+            else:
+                value = record.__dict__[key]
+                if isinstance(value, (dict, list)):
+                    setattr(record, key, _scrub(value))
+
+        if isinstance(record.msg, str) and record.msg:
+            record.msg = self._redact_inline(record.msg)
+        return True
+
+    @classmethod
+    def _redact_inline(cls, text: str) -> str:
+        if cls._INLINE is None:
+            names = "|".join(sorted(SECRET_FIELD_NAMES))
+            # `password='x'`, `token: abc`, `"api_key": "sk-..."` - the value after a
+            # secret-named field is replaced, whatever quoting surrounds it.
+            cls._INLINE = re.compile(r"(?i)\b(" + names + r")\b(\s*[=:]\s*[\"']?)([^\"'\s,}]+)")
+        return cls._INLINE.sub(r"\g<1>\g<2>" + _REDACTED, text)
 
 
 class RequestIdFilter(logging.Filter):
@@ -113,6 +186,9 @@ def configure_logging(level: str = "INFO") -> None:
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JsonFormatter())
     handler.addFilter(RequestIdFilter())
+    # Redaction runs on the handler, after every logger and before any output, so a
+    # module that builds its own logger still cannot write a secret through it.
+    handler.addFilter(SecretRedactionFilter())
     handler.set_name(_HANDLER_NAME)
 
     root = logging.getLogger()
