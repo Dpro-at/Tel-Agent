@@ -82,7 +82,9 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 # Tests assert; they do not need `assert` flagged, and fixtures are not public API.
-"tests/**" = ["S101", "ANN"]
+# ASYNC240: an async test checking a file it just wrote is doing exactly the right
+# thing. The rule guards a request loop; a test has no other traffic to block.
+"tests/**" = ["S101", "ANN", "ASYNC240"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"

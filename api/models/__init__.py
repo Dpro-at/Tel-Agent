@@ -8,6 +8,7 @@ migration that drops the table instead. So this module imports all of them, and
 
 from api.models.attempt import SCOPES, AuthAttempt
 from api.models.audit import EVENTS, AuthEvent
+from api.models.backup import BACKUP_KINDS, BACKUP_STATUSES, Backup
 from api.models.common import enum_column, utc_now_column, workspace_fk
 from api.models.conversation import (
     CHANNEL_KINDS,
@@ -32,6 +33,8 @@ from api.models.session import Session
 from api.models.setting import Setting
 
 __all__ = [
+    "BACKUP_KINDS",
+    "BACKUP_STATUSES",
     "CATEGORIES",
     "CHANNEL_KINDS",
     "CODE_PURPOSES",
@@ -46,6 +49,7 @@ __all__ = [
     "AuthCode",
     "AuthEvent",
     "BackgroundJob",
+    "Backup",
     "Call",
     "Channel",
     "Conversation",
