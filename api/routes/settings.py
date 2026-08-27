@@ -1,0 +1,121 @@
+"""The settings endpoints the eleven-tab screen consumes.
+
+Two scopes, two guards. Installation settings — the mail server, the hostname — are an
+**admin** decision: they affect every workspace on the machine. A workspace's own
+settings are also admin, but only within that workspace, which `require_admin` already
+scopes through the membership row.
+
+**A secret is never returned in full.** Reads come back masked, and a write that sends
+the mask back is ignored rather than saved: the settings screen renders `••••3ab1` in
+the field, and a user who edits an unrelated tab and presses save must not overwrite
+their live credential with four bullets. That is E4's acceptance condition, arriving
+here with the store that makes it possible.
+"""
+
+from __future__ import annotations
+
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Request, status
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession as DbSession
+
+from api.errors import envelope_response
+from api.security.permissions import WorkspaceContext, require_admin
+from api.settings import store
+from api.settings.registry import REGISTRY, UnknownSetting, definition
+
+router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+# What a masked value looks like coming back from the client.
+#
+# `mask()` keeps the last four characters — `••••3ab1` — so "is it all bullets" is the
+# wrong question and was the first version of this check: it never matched, and the
+# mask would have been saved straight over the live credential. The right question is
+# whether the value *starts* with the bullets a mask begins with; a real secret cannot,
+# because nobody types them.
+_MASK_PREFIX_CHARACTERS = "•*"
+
+
+def _is_echoed_mask(value: Any) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    return value[0] in _MASK_PREFIX_CHARACTERS
+
+
+class SettingEntry(BaseModel):
+    key: str
+    value: Any
+    scope: str
+    kind: str
+    secret: bool
+    description: str
+
+
+class SettingsWrite(BaseModel):
+    values: dict[str, Any] = Field(
+        description="Declared keys only. A secret sent back as its mask is ignored, "
+        "so saving an unrelated tab cannot overwrite a stored credential."
+    )
+
+
+@router.get("", summary="Every declared setting, secrets masked")
+async def read_settings(
+    request: Request, context: Annotated[WorkspaceContext, require_admin]
+) -> list[SettingEntry]:
+    db: DbSession = request.state.db
+    values = await store.all_for(db, workspace_id=context.id)
+    return [
+        SettingEntry(
+            key=key,
+            value=values[key],
+            scope=spec.scope,
+            kind=spec.kind,
+            secret=spec.secret,
+            description=spec.description,
+        )
+        for key, spec in REGISTRY.items()
+    ]
+
+
+@router.patch("", summary="Write settings")
+async def write_settings(
+    request: Request,
+    payload: SettingsWrite,
+    context: Annotated[WorkspaceContext, require_admin],
+) -> object:
+    db: DbSession = request.state.db
+    written: list[str] = []
+    ignored: list[str] = []
+
+    for key, value in payload.values.items():
+        try:
+            spec = definition(key)
+        except UnknownSetting as error:
+            return envelope_response(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                code="unknown_setting",
+                message=str(error),
+            )
+
+        if spec.secret and _is_echoed_mask(value):
+            ignored.append(key)
+            continue
+
+        if value is None or value == "":
+            # An emptied field means "use the default", which is the absence of a row
+            # rather than a stored empty string.
+            await store.clear(
+                db, key, workspace_id=None if spec.scope == "installation" else context.id
+            )
+        else:
+            await store.set_value(
+                db,
+                key,
+                value,
+                workspace_id=None if spec.scope == "installation" else context.id,
+            )
+        written.append(key)
+
+    await db.commit()
+    return {"written": written, "ignored_masked": ignored}

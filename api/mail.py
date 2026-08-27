@@ -14,19 +14,65 @@ from __future__ import annotations
 
 import logging
 import smtplib
+from dataclasses import dataclass
 from email.message import EmailMessage
+from typing import TYPE_CHECKING
 
 from api.config import Settings
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
 logger = logging.getLogger("api.mail")
 
 
 def is_configured(settings: Settings) -> bool:
-    """Can this installation send at all?"""
+    """Can this installation send at all? (environment only — see `resolve`.)"""
     return bool(settings.smtp_host and settings.smtp_from)
 
 
-def send(settings: Settings, *, to: str, subject: str, body: str) -> bool:
+@dataclass(frozen=True)
+class MailConfig:
+    """The mail server this installation will actually use."""
+
+    host: str | None
+    port: int
+    username: str | None
+    password: str | None
+    sender: str | None
+    use_tls: bool
+    use_ssl: bool
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.host and self.sender)
+
+
+async def resolve(db: DbSession, settings: Settings) -> MailConfig:
+    """The store first, the environment second.
+
+    The order matters and it is the point of P3: `.env` is what an installer wrote
+    once, the store is what the owner changed from the settings screen afterwards. A
+    value set in the screen that lost to a stale environment variable would be a
+    setting that appears to save and does nothing.
+    """
+    from api.settings import store
+
+    host = await store.get(db, "smtp.host") or settings.smtp_host
+    sender = await store.get(db, "smtp.from") or settings.smtp_from
+    password = await store.get(db, "smtp.password") or settings.smtp_password
+    return MailConfig(
+        host=host,
+        port=await store.get(db, "smtp.port") or settings.smtp_port,
+        username=await store.get(db, "smtp.username") or settings.smtp_username,
+        password=password,
+        sender=sender,
+        use_tls=await store.get(db, "smtp.use_tls"),
+        use_ssl=await store.get(db, "smtp.use_ssl"),
+    )
+
+
+def send(config: MailConfig, *, to: str, subject: str, body: str) -> bool:
     """Send one message. Returns whether it went.
 
     Failures are logged and reported, never raised into the request: a mail server that
@@ -39,24 +85,22 @@ def send(settings: Settings, *, to: str, subject: str, body: str) -> bool:
     `api/` are split apart to prevent.
     """
     message = EmailMessage()
-    message["From"] = settings.smtp_from
+    message["From"] = config.sender
     message["To"] = to
     message["Subject"] = subject
     message.set_content(body)
 
     try:
-        if settings.smtp_use_ssl:
-            server: smtplib.SMTP = smtplib.SMTP_SSL(
-                settings.smtp_host, settings.smtp_port, timeout=10
-            )
+        if config.use_ssl:
+            server: smtplib.SMTP = smtplib.SMTP_SSL(config.host, config.port, timeout=10)
         else:
-            server = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10)
-            if settings.smtp_use_tls:
+            server = smtplib.SMTP(config.host, config.port, timeout=10)
+            if config.use_tls:
                 server.starttls()
 
         with server:
-            if settings.smtp_username:
-                server.login(settings.smtp_username, settings.smtp_password or "")
+            if config.username:
+                server.login(config.username, config.password or "")
             server.send_message(message)
     except Exception:
         # The address is not logged: it is personal data, and a log line naming who was

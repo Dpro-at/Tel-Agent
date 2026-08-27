@@ -36,6 +36,7 @@ from api.security.crypto import DecryptionFailed, decrypt, encrypt, load_key
 # the test suite asserts the list matches the models.
 ENCRYPTED_COLUMNS: list[tuple[str, str, str]] = [
     ("channels", "id", "credentials_encrypted"),
+    ("settings", "id", "secret_value"),
 ]
 
 
