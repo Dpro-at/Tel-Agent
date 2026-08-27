@@ -12,12 +12,21 @@ written there first and every other locale is measured against it.
 node scripts/check-locales.mjs                     # where every language stands
 node scripts/check-locales.mjs --locale fr         # one language, file by file
 node scripts/check-locales.mjs --locale fr --list  # every missing key in it
+
+node scripts/check-placeholders.mjs                # every {placeholder} matches English
+node scripts/check-placeholders.mjs --locale fr    # one language
 ```
 
 Only the committed locales gate anything: the script exits 1 when `de` or `ar` is
 missing a key and 0 when a community language is behind. Use `--list` with `--locale`
 — on its own it prints every missing key in every language, which is tens of thousands
 of lines once the wanted languages are sitting there empty.
+
+**`check-placeholders.mjs` gates every locale, community ones included.** Being
+unfinished is allowed; a `{host}` that was dropped or misspelled in a string that
+already shipped is a bug, and it is invisible to a coverage count and to a reviewer who
+does not read the language. Translate the words around the braces and copy the braces
+across untouched.
 
 ---
 
