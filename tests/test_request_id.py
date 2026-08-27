@@ -19,6 +19,7 @@ from httpx import ASGITransport, AsyncClient
 
 from api import dependencies
 from api.config import Settings
+from api.dependencies import served_paths
 from api.logging import request_id_var
 from api.main import create_app
 from api.middleware.request_id import HEADER
@@ -185,4 +186,7 @@ def test_the_app_builds_without_leaving_the_probe_route(settings: Settings) -> N
     """A guard on the fixture above: the probe is added to its own app, not the shared one."""
     app: FastAPI = create_app(settings)
 
-    assert not any(route.path == "/concurrency-probe" for route in app.routes)  # type: ignore[attr-defined]
+    # `served_paths` rather than a bare walk of `app.routes`: since FastAPI 0.14x the
+    # top level holds `_IncludedRouter` entries with no `.path` at all, and touching
+    # it raises before the condition is ever evaluated.
+    assert "/concurrency-probe" not in served_paths(app)
