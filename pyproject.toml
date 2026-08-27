@@ -8,7 +8,14 @@ license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "Dpro GmbH" }]
 
 dependencies = [
-    "fastapi>=0.118",
+    # Upper bounds because FastAPI is pre-1.0: the minor position is the breaking one.
+    # Starlette 1.6 put `_IncludedRouter` objects in `app.routes` and turned main red
+    # with nothing in this repository having changed. Starlette is listed in its own
+    # right, not left to arrive through FastAPI: api/errors.py and four middlewares
+    # import it directly, and FastAPI asks only for `starlette>=0.46.0`, so capping
+    # FastAPI alone would leave the same door open.
+    "fastapi>=0.118,<0.142",
+    "starlette>=0.46,<2",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
     "uvicorn[standard]>=0.32",
