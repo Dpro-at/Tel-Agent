@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { ApiError, OfflineError, forgetResetUsername, resetPassword } from "@/lib/api";
 import { StatePreview, type ScreenState } from "@/components/state-preview";
 import { interpolate } from "@/lib/i18n";
 import type { Locale } from "@/lib/locales";
@@ -10,6 +11,7 @@ import type { Locale } from "@/lib/locales";
 import {
   AuthCard,
   AuthFrame,
+  AuthSubmit,
   OfflineBanner,
   AuthAction,
   authInputClass,
@@ -49,15 +51,52 @@ export function NewPassword({ locale, t }: { locale: Locale; t: NewPasswordDicti
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
 
-  const offline = state === "offline";
-  const rejected = state === "error";
-  const done = state === "done";
+  const [busy, setBusy] = useState(false);
+  const [unreachable, setUnreachable] = useState(false);
+  const [reused, setReused] = useState(false);
+  const [noTicket, setNoTicket] = useState(false);
+  const [changed, setChanged] = useState(false);
+
+  // The preview toolbar still drives the drawn states; a real response overrides it.
+  const offline = state === "offline" || unreachable;
+  const rejected = state === "error" || reused;
+  const done = state === "done" || changed;
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!ready || busy) return;
+
+    setBusy(true);
+    setUnreachable(false);
+    setReused(false);
+    setNoTicket(false);
+    try {
+      await resetPassword(password);
+      // The account name kept for the code step is no longer needed by anything.
+      forgetResetUsername();
+      setChanged(true);
+    } catch (error) {
+      if (error instanceof OfflineError) {
+        setUnreachable(true);
+      } else if (error instanceof ApiError && error.code === "password_reused") {
+        setReused(true);
+      } else if (error instanceof ApiError && error.code === "unauthenticated") {
+        // The reset ticket expired or was already spent. The honest way forward is
+        // the start of the flow, not a mysterious refusal on this screen.
+        setNoTicket(true);
+      } else {
+        setReused(true);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const strength = score(password);
   const longEnough = password.length >= MIN_LENGTH;
   const matches = repeat !== "" && repeat === password;
   const mismatch = repeat !== "" && repeat !== password;
-  const ready = longEnough && matches && !offline;
+  const ready = longEnough && matches && !offline && !busy;
 
   const STRENGTH_LABEL = [t.strength_none, t.strength_weak, t.strength_fair, t.strength_good, t.strength_strong];
   const STRENGTH_COLOR = [
@@ -126,6 +165,7 @@ export function NewPassword({ locale, t }: { locale: Locale; t: NewPasswordDicti
 
       {state !== "loading" && !done ? (
         <AuthCard>
+          <form onSubmit={submit}>
           <h1 className="m-0 text-[21px] font-semibold tracking-[-0.01em] text-pretty">{t.title}</h1>
           <p className="text-od-muted-4 mt-2 text-pretty">{t.body}</p>
 
@@ -199,12 +239,27 @@ export function NewPassword({ locale, t }: { locale: Locale; t: NewPasswordDicti
               </div>
             ) : null}
 
-            <AuthAction href={`/${locale}/login`} disabled={!ready}>
+            {noTicket ? (
+              <div className="border-od-amber-border bg-od-amber-bg rounded-[10px] border p-[13px]">
+                <div className="text-od-amber-text-2 text-[13px] text-pretty">
+                  {t.expired_note}{" "}
+                  <Link
+                    href={`/${locale}/login/forgot`}
+                    className="text-od-violet hover:underline"
+                  >
+                    {t.back_to_forgot}
+                  </Link>
+                </div>
+              </div>
+            ) : null}
+
+            <AuthSubmit disabled={!ready || busy}>
               {offline ? t.submit_offline : t.submit}
-            </AuthAction>
+            </AuthSubmit>
           </div>
 
           <p className="text-od-muted-5 mt-4 text-[13px] text-pretty">{t.sessions_note}</p>
+          </form>
         </AuthCard>
       ) : null}
     </AuthFrame>

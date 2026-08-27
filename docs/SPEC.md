@@ -189,7 +189,7 @@ These are settled. Do not reopen them without a concrete reason.
 | Separate from | Agent-Player and Flowxtra — own repo, own identity, no shared code without a written arrangement |
 | Backend | Python (agent + FastAPI) |
 | Frontend | Next.js |
-| Database | PostgreSQL |
+| Database | PostgreSQL **and SQLite**, both from the first migration (D-029) |
 | Voice framework | LiveKit Agents |
 | Packaging | Docker Compose (manual dev run also documented) |
 | Runs as | Locally installed web app on the LAN — not a desktop app, not SaaS-only |
@@ -200,7 +200,7 @@ These are settled. Do not reopen them without a concrete reason.
 | Languages | Multi-language from day one: en / de / ar, RTL supported |
 | Analog phone lines | Out of scope. Users bridge with an ATA; we only ever speak SIP. |
 | Workflow automation | Out of scope. Webhooks + generic HTTP tool; n8n does the rest. |
-| Messaging channels | In scope at Milestone 3 — web chat, SMS, email, WhatsApp, Telegram, Messenger, Instagram, Discord, Slack. Ten with the phone. Closed list. Customer connects their own app credentials (§B13). |
+| Messaging channels | In scope at Milestone 3 — web chat, SMS, email, WhatsApp, Telegram, Messenger, Instagram, Discord, Slack. Ten with the phone, and Tel-Agent commits to those ten. **A channel is an extension, so the list is open (D-032);** anything beyond the ten is community-owned and unsupported. Customer connects their own app credentials (§B13). |
 
 ---
 
@@ -504,7 +504,7 @@ Do not design all screens up front.
 | Voice agent | **Python** | `livekit-agents`, and every STT/LLM/TTS SDK ships Python first |
 | API | **Python + FastAPI** | Same runtime as the agent; auto-generated OpenAPI docs |
 | Frontend | **Next.js + React** | Known stack; SSR not required but harmless |
-| Database | **PostgreSQL** | Transcripts need real full-text search; Postgres gives it natively |
+| Database | **PostgreSQL or SQLite** | Transcripts need real full-text search. Postgres gives it through `tsvector`, SQLite through FTS5; one interface, two implementations, both in CI (D-029) |
 | Cache / queue | **Redis** | Session state, rate limiting |
 | Reverse proxy | **Caddy** | Automatic Let's Encrypt; also solves the mic-over-HTTPS problem |
 | Packaging | **Docker Compose** | Multiple services + heavy audio dependencies |
@@ -643,17 +643,22 @@ a dropped call.
 ## B5. Data model (core tables)
 
 ```
-users            id, email, password_hash, locale, theme, created_at
-channels         id, user_id, kind(phone|whatsapp|telegram|discord|messenger|instagram),
+users            id, username, email, password_hash, locale, theme, created_at
+workspaces       id, name, created_at
+memberships      id, user_id, workspace_id, role(owner|admin|reception|viewer|invited)
+apps             id, slug, origin(official|community|planned|mcp), version, manifest
+app_installs     id, workspace_id, app_id, enabled, settings_json
+
+channels         id, workspace_id, kind, app_id,
                  name, credentials_encrypted, webhook_secret, webhook_path,
                  default_language, agent_id, status
-numbers          id, user_id, channel_id, provider, provider_account_ref,
+numbers          id, workspace_id, channel_id, provider, provider_account_ref,
                  owner(customer|platform), e164, sip_config, agent_id, status
-agents           id, user_id, name, persona_prompt, language, voice_id, settings
-contacts         id, user_id, e164, name, tags, notes
-rules            id, user_id, e164_or_pattern, action(pass|block|ai), note
+agents           id, workspace_id, name, persona_prompt, language, voice_id, settings
+contacts         id, workspace_id, e164, name, tags, notes
+rules            id, workspace_id, e164_or_pattern, action(pass|block|ai), note
 
-conversations    id, user_id, channel_id, contact_id, external_id, direction,
+conversations    id, workspace_id, channel_id, contact_id, external_id, direction,
                  started_at, ended_at, handling, intent, summary, state_json, status
 calls            conversation_id, number_id, from_e164, recording_path,
                  billable_seconds, provider_cost_micros
@@ -661,8 +666,8 @@ messages         id, conversation_id, ts_ms, speaker(caller|agent|human), text,
                  is_whisper, stt_confidence, language
 
 tool_invocations id, conversation_id, tool_name, args, result, status, latency_ms
-knowledge        id, user_id, agent_id, title, content, embedding
-webhooks         id, user_id, url, events[], secret
+knowledge        id, workspace_id, agent_id, title, content, embedding
+webhooks         id, workspace_id, url, events[], secret
 ```
 
 **`conversations` is the core table, not `calls`.** A phone call is a conversation
@@ -677,7 +682,11 @@ live view. That is the entire reason for the split.
 
 **Six decisions that are painful to add later — make them now:**
 
-1. **`user_id` on every table from day one**, even while it is always `1`. Adding
+1. **`workspace_id` on every table from day one — D-028.** This decision originally
+   read "`user_id` on every table, even while it is always `1`"; the reasoning below is
+   unchanged, only the key is. The interface is built on workspaces and says so in its
+   own copy — *"A workspace is a separate installation: its own numbers, assistants,
+   catalogue and call history. Nothing crosses between them."* Superseded text: adding
    multi-tenancy to a live database later is real pain, and the hosted edition needs it.
 2. **Full-text index on `messages.text`** from the first migration. §A6.3 calls
    transcript search the headline feature of the calls list; an index added later means
@@ -716,6 +725,31 @@ so it exists anyway; just make it public and documented.
 
 ```
 GET    /health                        # deep check: SIP reg, providers, DB
+
+# Authentication — D-030. No public signup: the install wizard creates the
+# administrator, and further users are invited by an administrator.
+POST   /api/auth/login                # username + password -> cookie session
+POST   /api/auth/logout               # this session
+POST   /api/auth/logout-all           # every session on the account
+GET    /api/auth/me                   # current user, memberships, active workspace
+POST   /api/auth/code/verify          # the six-digit code: reset and second factor
+POST   /api/auth/forgot               # username in; answer never reveals existence
+POST   /api/auth/password             # change; invalidates every other session
+GET    /api/auth/key/challenge        # SSH challenge, two minutes, single use
+POST   /api/auth/key/verify           # signature in, no key ever leaves the client
+POST   /api/setup                     # first run only: create the administrator
+
+# Workspaces — D-028. Every route below is scoped by the active workspace.
+GET    /api/workspaces                # the ones this user is a member of
+POST   /api/workspaces                # create, optionally seeded from another
+GET    /api/workspaces/{id}/members
+POST   /api/workspaces/{id}/invites
+
+# Extensions — D-031
+GET    /api/apps                      # the catalogue, with install state
+POST   /api/apps/{slug}/install
+POST   /api/apps/{slug}/enable        # and /disable
+
 GET    /api/conversations             # list + filter, every channel
 GET    /api/conversations/{id}        # detail + messages
 GET    /api/conversations/search?q=   # full-text across every channel

@@ -63,8 +63,21 @@ The cost is real, and is written here so nobody rediscovers it as a surprise:
 A visitor types on a web page, the agent answers, the thread holds, and a transcript is
 printed. One process, one page, one model.
 
-**No database. No routing rules. No provider abstraction beyond the model. No
-dashboard.** The page and a script.
+**Revised 2026-08-26 by D-027.** This milestone was written as "the page and a script" —
+no database, no dashboard, no login. That is no longer what is built first. The
+foundations below come before it, because twenty-nine screens already exist and none of
+them can be reached by a real user without them.
+
+Milestone 0 keeps its six checks and its meaning: **the conversation loop is the
+product.** What changed is only what is standing underneath it when it arrives.
+
+**Foundations, before the six checks:** the tooling gate that makes the working rules
+enforceable, the backend skeleton, the first migration, the authentication model
+(D-030), workspaces (D-028) and the extension contract (D-031). Web chat is then built
+as the **first official application on that contract** — which is the mitigation D-027
+records, and the reason the contract does not go unproven.
+
+**No routing rules. No provider abstraction beyond the model.** Those still wait.
 
 Six checks, in order:
 

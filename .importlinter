@@ -1,0 +1,23 @@
+; The boundary from docs/ARCHITECTURE.md, made enforceable.
+;
+; `agent/` is a soft real-time system with a sub-second budget per turn. `api/` is an
+; ordinary web service. They are separate processes and the database is the boundary
+; between them: the agent writes, the API reads. Neither calls the other.
+;
+; Without this contract the rule is a paragraph. With it, an import that crosses the
+; line fails CI.
+
+[importlinter]
+root_packages =
+    agent
+    api
+
+[importlinter:contract:agent-does-not-import-api]
+name = agent/ never imports from api/
+type = forbidden
+source_modules =
+    agent
+forbidden_modules =
+    api
+; The agent must keep running when the dashboard is down. An import here would make
+; the call path depend on HTTP concerns it has no business knowing about.

@@ -1,8 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { ApiError, OfflineError, lockedUntil, signIn } from "@/lib/api";
+
+import { DevCredentials } from "@/components/dev-credentials";
 import { StatePreview, type ScreenState } from "@/components/state-preview";
 import type { Dictionary } from "@/lib/i18n";
 import { interpolate } from "@/lib/i18n";
@@ -30,9 +34,16 @@ function withMachineValue(template: string, token: string, value: React.ReactNod
 export function SignIn({ locale, dictionary }: { locale: Locale; dictionary: Dictionary }) {
   const t = dictionary.auth;
   const [state, setState] = useState<ScreenState>("default");
+  /** Set by the card below from a `rate_limited` response; drives the blocked panel. */
+  const [serverLock, setServerLock] = useState<Date | null>(null);
 
   const offline = state === "offline";
-  const blocked = state === "error";
+  // The panel is shown by the preview toolbar *or* by a real lock from the server.
+  // Without the second half, a genuine lockout renders only an inline message and the
+  // whole blocked state - the one that says when it lifts - stays unreachable in
+  // production while looking finished in the preview.
+  const serverLocked = serverLock !== null && serverLock > new Date();
+  const blocked = state === "error" || serverLocked;
   const showForm = state === "default" || blocked || offline;
 
   return (
@@ -93,8 +104,14 @@ export function SignIn({ locale, dictionary }: { locale: Locale; dictionary: Dic
               <div className="text-od-red-text-6 mt-[5px] text-[13.5px] text-pretty">
                 {t.blocked_body}
               </div>
+              {/* Formatted in the browser: the server sends an instant, and only
+                  the browser knows the reader locale and timezone. */}
               <div className="mono ltr-data text-od-red-text-7 mt-[10px] text-[12px]">
-                {interpolate(t.blocked_unlocks, { time: UNLOCKS_AT })}
+                {interpolate(t.blocked_unlocks, {
+                  time: serverLock
+                    ? serverLock.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })
+                    : UNLOCKS_AT,
+                })}
               </div>
             </div>
           ) : null}
@@ -118,10 +135,14 @@ export function SignIn({ locale, dictionary }: { locale: Locale; dictionary: Dic
               dictionary={dictionary}
               blocked={blocked}
               offline={offline}
+              onLocked={setServerLock}
             />
           ) : null}
 
           {state === "loading" ? <LoadingCard /> : null}
+
+          {/* Development only - renders nothing in a production build. */}
+          <DevCredentials />
 
           <div className="text-od-faint-2 mt-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-[12.5px]">
             <span className="text-od-muted-5">{t.self_hosted}</span>
@@ -140,22 +161,85 @@ function SignInCard({
   dictionary,
   blocked,
   offline,
+  onLocked,
 }: {
   locale: Locale;
   dictionary: Dictionary;
   blocked: boolean;
   offline: boolean;
+  onLocked: (when: Date | null) => void;
 }) {
   const t = dictionary.auth;
-  const disabled = blocked || offline;
+  const router = useRouter();
+
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  /** Set from a real refusal by the server, not from the state-preview toolbar. */
+  const [refused, setRefused] = useState(false);
+  const [unreachable, setUnreachable] = useState(false);
+  const [unlocksAt, setUnlocksAt] = useState<Date | null>(null);
+
+  // The preview toolbar still drives the drawn states, so a designer can look at each
+  // one without a server running. A real response overrides it.
+  const showRefused = blocked || refused;
+  const showOffline = offline || unreachable;
+  const locked = unlocksAt !== null && unlocksAt > new Date();
+  const disabled = busy || showOffline || locked;
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (disabled) return;
+
+    setBusy(true);
+    setRefused(false);
+    setUnreachable(false);
+    try {
+      await signIn(username, password);
+      // Land where the visitor was going when the middleware turned them away.
+      // Absolute URLs are refused: `next` comes from the address bar, and an open
+      // redirect on a sign-in page is a phishing primitive.
+      // Read at submit time from the address bar rather than through
+      // useSearchParams: the hook drags a Suspense boundary into a statically
+      // prerendered page for a value only needed on click.
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.push(
+        next && next.startsWith("/") && !next.startsWith("//")
+          ? (next as Parameters<typeof router.push>[0])
+          : `/${locale}/home`,
+      );
+    } catch (error) {
+      if (error instanceof OfflineError) {
+        // A network failure is not a wrong password, and the screen draws them very
+        // differently. Telling somebody their password is wrong when their connection
+        // is down sends them to reset a password that was fine.
+        setUnreachable(true);
+      } else if (error instanceof ApiError) {
+        // Branching on `code`, never on `message`: the message is English prose from
+        // the server, and the strings rendered here are the translated ones.
+        setRefused(true);
+        const when = error.code === "rate_limited" ? lockedUntil(error) : null;
+        setUnlocksAt(when);
+        onLocked(when);
+      } else {
+        setRefused(true);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const inputClass = [
     "mt-2 w-full rounded-lg border px-[13px] py-[11px] text-[15px] outline-none ltr-data",
     "bg-od-canvas-2 text-od-text-2 focus:border-od-violet",
-    blocked ? "border-od-red-border-2" : "border-od-border-6",
+    showRefused ? "border-od-red-border-2" : "border-od-border-6",
   ].join(" ");
 
   return (
-    <div className="border-od-line bg-od-panel-deep-3 mt-[26px] rounded-xl border p-[26px]">
+    <form
+      onSubmit={submit}
+      className="border-od-line bg-od-panel-deep-3 mt-[26px] rounded-xl border p-[26px]"
+    >
       <h1 className="m-0 text-[21px] font-semibold tracking-[-0.01em] text-pretty">{t.title}</h1>
       <p className="text-od-muted-4 mt-2 text-pretty">{t.subtitle}</p>
 
@@ -165,7 +249,16 @@ function SignInCard({
             {t.username}
           </label>
           {/* A username is Latin-script data and stays LTR even in Arabic. */}
-          <input id="username" autoComplete="username" dir="ltr" className={inputClass} />
+          <input
+            id="username"
+            name="username"
+            autoComplete="username"
+            dir="ltr"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            disabled={busy}
+            className={inputClass}
+          />
         </div>
 
         <div>
@@ -182,18 +275,24 @@ function SignInCard({
           </div>
           <input
             id="password"
+            name="password"
             type="password"
             autoComplete="current-password"
             dir="ltr"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            disabled={busy}
             className={inputClass}
           />
-          {blocked ? (
-            <div className="text-od-red-text-4 mt-2 text-[13px] text-pretty">{t.wrong_password}</div>
+          {showRefused ? (
+            <div className="text-od-red-text-4 mt-2 text-[13px] text-pretty" role="alert">
+              {t.wrong_password}
+            </div>
           ) : null}
         </div>
 
         <button
-          type="button"
+          type="submit"
           disabled={disabled}
           className={[
             "mt-1 w-full rounded-lg border p-3 text-[15px] font-semibold whitespace-normal",
@@ -202,7 +301,7 @@ function SignInCard({
               : "border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer",
           ].join(" ")}
         >
-          {offline ? t.submit_offline : blocked ? t.submit_locked : t.submit}
+          {showOffline ? t.submit_offline : locked ? t.submit_locked : t.submit}
         </button>
       </div>
 
@@ -215,7 +314,7 @@ function SignInCard({
           {t.key_link}
         </Link>
       </div>
-    </div>
+    </form>
   );
 }
 

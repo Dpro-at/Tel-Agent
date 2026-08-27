@@ -1,0 +1,87 @@
+"""The current user, and the rule that a route is protected unless it says otherwise.
+
+Every protected route needs the same check, and a check written twice is a check that
+will eventually differ. So it is written once, here.
+
+**Closed by default.** `PUBLIC_PATHS` is the whole list of routes reachable without a
+session; anything not on it requires one. A new endpoint added carelessly is therefore
+unreachable rather than open, and `tests/test_auth.py` walks the route table to prove
+no route escaped. The opposite arrangement — a decorator that marks routes protected —
+fails silently the first time somebody forgets it, and nothing reports the omission.
+"""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession as DbSession
+
+from api.models import Session, User
+from api.security.session import resolve_session, token_from_request
+
+# Reachable without a session, and this is the complete list.
+#
+# `/api/setup` is here because there is nobody to authenticate as before it runs; it
+# defends itself by refusing to run twice (`api/setup.py`).
+PUBLIC_PATHS: frozenset[str] = frozenset(
+    {
+        "/health",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+        "/api/setup",
+        "/api/auth/login",
+        "/api/auth/forgot",
+        "/api/auth/code/verify",
+        "/api/auth/key/challenge",
+        "/api/auth/key/verify",
+        # Guarded by the reset ticket rather than a session: the whole point is that
+        # the caller has no session yet.
+        "/api/auth/password/reset",
+    }
+)
+
+
+def is_public(path: str) -> bool:
+    return path in PUBLIC_PATHS
+
+
+class Unauthenticated(HTTPException):
+    """401, in the one error envelope every failure uses.
+
+    The message never distinguishes "no cookie" from "expired" from "revoked". A
+    caller learning which one applies learns something about the state of an account
+    they have not proved they own.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sign in to continue.",
+        )
+
+
+async def get_current_session(request: Request) -> Session:
+    """Resolve the cookie to a live session, or refuse."""
+    db: DbSession = request.state.db
+    session = await resolve_session(db, token_from_request(request))
+    if session is None:
+        raise Unauthenticated
+    return session
+
+
+async def get_current_user(
+    request: Request, session: Annotated[Session, Depends(get_current_session)]
+) -> User:
+    db: DbSession = request.state.db
+    user = await db.get(User, session.user_id)
+    if user is None:
+        # The row is gone but the session survived — only possible if a delete skipped
+        # the cascade. Refuse rather than serve a request for a user who is not there.
+        raise Unauthenticated
+    return user
+
+
+CurrentSession = Annotated[Session, Depends(get_current_session)]
+CurrentUser = Annotated[User, Depends(get_current_user)]

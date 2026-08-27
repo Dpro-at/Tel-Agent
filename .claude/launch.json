@@ -4,8 +4,29 @@
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "web", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "web",
+        "run",
+        "dev"
+      ],
       "port": 3000
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "py",
+      "runtimeArgs": [
+        "-3.12",
+        "-m",
+        "uvicorn",
+        "api.main:app",
+        "--reload",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000"
+      ],
+      "port": 8000
     }
   ]
 }
