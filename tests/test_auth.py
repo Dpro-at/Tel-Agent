@@ -19,7 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import Settings
-from api.dependencies import PUBLIC_PATHS, is_public
+from api.dependencies import PUBLIC_PATHS, served_paths
 from api.main import create_app
 from api.models import Session
 from api.security.session import COOKIE_NAME, SESSION_LIFETIME, hash_token
@@ -159,23 +159,39 @@ async def test_a_session_reaches_the_protected_route(signed_up: AsyncClient) -> 
 
 
 async def test_every_route_is_protected_unless_it_is_on_the_public_list(
-    settings: Settings,
+    signed_up: AsyncClient, settings: Settings
 ) -> None:
     """D5's acceptance condition: walk the route table, prove nothing escaped.
 
-    This is the test that catches an endpoint somebody adds next year without thinking
-    about authentication. It fails on the new route rather than on the incident.
+    The proof is a request per route, not a set comparison. The previous version of
+    this test built its candidate set with `if is_public(path)` and then asserted that
+    set was a subset of `PUBLIC_PATHS` - which `is_public` guarantees by definition.
+    It was a tautology, it passed on an empty route list, and it went on passing when
+    a FastAPI change hid every real route behind `_IncludedRouter`. Asking the running
+    application what it answers cannot be satisfied that way.
     """
     app = create_app(settings)
+    served = served_paths(app)
 
-    paths = {
-        route.path
-        for route in app.routes
-        if hasattr(route, "path") and not route.path.startswith("/docs/")
+    # The walk sees the real API, not just the four routes registered on the app
+    # itself. If this fails, the walk is broken and everything below is vacuous.
+    assert "/api/auth/login" in served
+    assert "/api/auth/me" in served
+    assert len(served) > 10
+
+    protected = {
+        path for path in served if path not in PUBLIC_PATHS and not path.startswith("/docs/")
     }
-    unprotected = {path for path in paths if is_public(path)}
+    assert protected, "no protected routes found - the walk is lying"
 
-    assert unprotected <= PUBLIC_PATHS
+    # Signed out. The gate runs before routing, so the method does not matter: every
+    # non-public path answers 401 whatever verb it was declared with.
+    signed_up.cookies.clear()
+    for path in sorted(protected):
+        response = await signed_up.get(path)
+        assert response.status_code == 401, f"{path} answered {response.status_code}"
+        assert response.json()["error"]["code"] == "unauthenticated"
+
     # And the list itself is short enough to read in one go. If it is growing, that is
     # the thing to notice.
     assert len(PUBLIC_PATHS) <= 12
