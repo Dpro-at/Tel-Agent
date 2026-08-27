@@ -11,6 +11,9 @@ Run it:
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated, Literal
@@ -25,6 +28,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.config import Settings, get_settings
 from api.db import check_database, create_engine, create_sessionmaker
 from api.errors import ErrorResponse, install_error_handlers
+from api.jobs import builtin as builtin_jobs
+from api.jobs.runner import ensure_schedule
+from api.jobs.runner import loop as job_loop
 from api.logging import configure_logging
 from api.middleware.auth import AuthenticationMiddleware
 from api.middleware.csrf import CsrfMiddleware
@@ -63,6 +69,11 @@ class Checks(BaseModel):
     """
 
     database: bool
+    # What the scheduler last saw, per task. A silently dead service is worse than an
+    # obviously dead one (SPEC B8), and a clock that stopped ticking an hour ago is
+    # exactly that kind of quiet failure - `/health` returning ok while the housekeeping
+    # has not run since Tuesday would be a lie of omission.
+    scheduler: dict[str, dict[str, object]] | None = None
 
 
 class Health(BaseModel):
@@ -96,9 +107,30 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_engine(settings)
     app.state.engine = engine
     app.state.sessionmaker = create_sessionmaker(engine)
+
+    # The installation's own clock. One loop in this process rather than a worker to
+    # deploy: the smallest installation is one machine and somebody who does not run a
+    # process manager. Without it the housekeeping tasks have no caller at all, which
+    # is the state this codebase was in until P2.
+    worker: asyncio.Task | None = None
+    if settings.jobs_enabled:
+        try:
+            async with app.state.sessionmaker() as db:
+                for name, interval in builtin_jobs.CORE_SCHEDULE.items():
+                    await ensure_schedule(db, name, interval)
+        except Exception:
+            # A database that is not migrated yet must not stop the app from starting
+            # and answering /health with the reason.
+            logging.getLogger("api.jobs").exception("could not seed the core schedule")
+        worker = asyncio.create_task(job_loop(app.state.sessionmaker))
+
     try:
         yield
     finally:
+        if worker is not None:
+            worker.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await worker
         await engine.dispose()
 
 
@@ -209,11 +241,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine = getattr(request.app.state, "engine", None)
         database_ok = await check_database(engine) if engine is not None else False
 
+        scheduler: dict[str, dict[str, object]] | None = None
+        if database_ok:
+            try:
+                from api.jobs.builtin import last_task_status
+
+                async with request.app.state.sessionmaker() as db:
+                    scheduler = await last_task_status(db)
+            except Exception:
+                # A database that is reachable but not yet migrated. The database check
+                # already said what matters; an unreadable schedule is not a second
+                # failure to report.
+                scheduler = None
+
         report = Health(
             status="ok" if database_ok else "degraded",
             version=settings.version,
             environment=settings.environment,
-            checks=Checks(database=database_ok),
+            checks=Checks(database=database_ok, scheduler=scheduler),
         )
         return JSONResponse(
             status_code=200 if database_ok else 503,

@@ -19,7 +19,6 @@ an unknown username still gets a challenge.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import secrets
 
@@ -31,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 from api import mail
 from api.config import Settings
 from api.errors import envelope_response
+from api.jobs.runner import enqueue
 from api.models import User
 from api.security import audit, codes, lockout, ssh_keys
 from api.security.password import PasswordTooShort
@@ -154,15 +154,23 @@ async def forgot(request: Request, payload: ForgotRequest) -> object:
             username=user.username,
         )
         code = await codes.issue(db, user, "reset")
-        # `smtplib` blocks. On the event loop it would stall every other request while
-        # a slow mail server thinks about it.
-        await asyncio.to_thread(
-            mail.send,
-            settings,
-            to=user.email,
-            subject="Your Tel-Agent sign-in code",
-            body=mail.reset_code_body(code, int(codes.CODE_LIFETIME.total_seconds() // 60)),
+        # Queued, not sent here. Delivery is somebody else's server: it can be slow,
+        # briefly down, or rate limiting us, and none of that should decide how long
+        # this request takes or whether it succeeds. The runner's backoff turns a mail
+        # server that is down for a minute into a code that arrives a minute late
+        # rather than one that is silently lost.
+        await enqueue(
+            db,
+            "send_email",
+            {
+                "to": user.email,
+                "subject": "Your Tel-Agent sign-in code",
+                "body": mail.reset_code_body(
+                    code, int(codes.CODE_LIFETIME.total_seconds() // 60)
+                ),
+            },
         )
+        await db.commit()
 
     # The same answer either way, and deliberately not "sent" versus "not sent".
     return ForgotResponse(delivery="email")

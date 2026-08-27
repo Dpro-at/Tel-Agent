@@ -96,6 +96,11 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True
     smtp_use_ssl: bool = False
 
+    # The in-process scheduler. Off in tests, which drive the runner directly rather
+    # than racing a loop; off in a second API process once one exists, so that exactly
+    # one clock ticks.
+    jobs_enabled: bool = True
+
     # §B9.2. This key encrypts every user-entered credential stored in the database.
     # It must never sit in the same place as the data it protects.
     encryption_key: str | None = None

@@ -26,12 +26,14 @@ from api.models.credential import (
 )
 from api.models.extensions import ORIGINS, App, AppInstall
 from api.models.identity import ROLES, Membership, User, Workspace
+from api.models.jobs import JOB_STATUSES, BackgroundJob, ScheduledTask
 from api.models.session import Session
 
 __all__ = [
     "CHANNEL_KINDS",
     "CODE_PURPOSES",
     "EVENTS",
+    "JOB_STATUSES",
     "ORIGINS",
     "ROLES",
     "SCOPES",
@@ -40,6 +42,7 @@ __all__ = [
     "AuthAttempt",
     "AuthCode",
     "AuthEvent",
+    "BackgroundJob",
     "Call",
     "Channel",
     "Conversation",
@@ -48,6 +51,7 @@ __all__ = [
     "Message",
     "Number",
     "PasswordHistory",
+    "ScheduledTask",
     "Session",
     "User",
     "UserKey",
