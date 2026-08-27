@@ -18,11 +18,12 @@ from api.config import Settings
 from api.dependencies import CurrentSession, CurrentUser
 from api.errors import envelope_response
 from api.models import Membership, User, Workspace
-from api.security import lockout
-from api.security.password import verify_and_upgrade
+from api.security import audit, lockout
+from api.security.password import PasswordTooShort, verify_and_upgrade, verify_password
 from api.security.session import (
     clear_session_cookie,
     create_session,
+    hash_token,
     revoke_all_other_sessions,
     revoke_session,
     set_session_cookie,
@@ -135,6 +136,13 @@ async def login(request: Request, payload: LoginRequest, response: Response) -> 
             "sign-in refused",
             extra={"username": payload.username, "reason": "credentials"},
         )
+        await audit.record(
+            db,
+            "login_locked" if triggered is not None else "login_failed",
+            request=request,
+            user_id=user.id if user else None,
+            username=payload.username,
+        )
         # The failure that trips the lock says so in the same response. The sign-in
         # screen's blocked state shows "that password is wrong" *and* the unlock time
         # together, so answering 401 now and 429 only on the next attempt would leave
@@ -157,6 +165,9 @@ async def login(request: Request, payload: LoginRequest, response: Response) -> 
     token = await create_session(db, user, user_agent=request.headers.get("user-agent"), ip=ip)
     set_session_cookie(response, token, secure=not settings.debug)
     logger.info("signed in", extra={"user_id": user.id})
+    await audit.record(
+        db, "login_succeeded", request=request, user_id=user.id, username=user.username
+    )
 
     return Me(
         id=user.id,
@@ -196,6 +207,7 @@ async def logout(request: Request, response: Response, session: CurrentSession) 
         await revoke_session(db, token)
     clear_session_cookie(response, secure=not settings.debug)
     logger.info("signed out", extra={"user_id": session.user_id})
+    await audit.record(db, "logout", request=request, user_id=session.user_id)
     return SignedOut()
 
 
@@ -214,4 +226,138 @@ async def logout_everywhere(request: Request, user: CurrentUser) -> SignedOut:
     token = token_from_request(request)
     ended = await revoke_all_other_sessions(db, user.id, token) if token else 0
     logger.info("signed out everywhere", extra={"user_id": user.id, "ended": ended})
+    await audit.record(
+        db,
+        "logout_all",
+        request=request,
+        user_id=user.id,
+        username=user.username,
+        details={"sessions_ended": ended},
+    )
     return SignedOut(signed_out=False, other_sessions_ended=ended)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=1024)
+    new_password: str = Field(min_length=1, max_length=1024)
+
+
+class PasswordChanged(BaseModel):
+    changed: bool = True
+    # Told to the user, as the screen promises: "Every other browser and phone signed
+    # in to this account is signed out."
+    other_sessions_ended: int = 0
+
+
+@router.post(
+    "/password",
+    summary="Change the password, signed in",
+    response_model=PasswordChanged,
+)
+async def change_password(
+    request: Request, payload: ChangePasswordRequest, user: CurrentUser
+) -> object:
+    """The ordinary case - somebody who knows their password picking a new one.
+
+    The current password is required even though the caller already holds a session:
+    a session is a browser, not a person, and on a shared machine an open tab must not
+    be enough to lock the real owner out by changing the password under them.
+    """
+    from api.security.passwords_policy import PasswordReused, set_password
+
+    db: DbSession = request.state.db
+
+    if not verify_password(payload.current_password, user.password_hash):
+        # Deliberately the same shape as a failed sign-in, and counted like one:
+        # this endpoint is a password-guessing oracle for whoever sits at an
+        # unlocked browser otherwise.
+        ip = request.client.host if request.client else None
+        await lockout.record_failure(db, action="password", username=user.username, ip=ip)
+        await audit.record(
+            db,
+            "login_failed",
+            request=request,
+            user_id=user.id,
+            username=user.username,
+            details={"via": "change_password"},
+        )
+        return envelope_response(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            code="unauthenticated",
+            message="That is not the current password.",
+        )
+
+    token = token_from_request(request)
+    try:
+        ended = await set_password(
+            db,
+            user,
+            payload.new_password,
+            # The one session that survives is the browser doing the changing.
+            keep_session_token_hash=hash_token(token) if token else None,
+        )
+    except PasswordReused:
+        return envelope_response(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="password_reused",
+            message="This is one of your recent passwords. Choose a different one.",
+        )
+    except PasswordTooShort as error:
+        return envelope_response(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="password_too_short",
+            message=str(error),
+        )
+
+    await audit.record(
+        db,
+        "password_changed",
+        request=request,
+        user_id=user.id,
+        username=user.username,
+        details={"sessions_ended": ended},
+    )
+    return PasswordChanged(other_sessions_ended=ended)
+
+
+class AuditEntry(BaseModel):
+    event: str
+    ip: str | None
+    user_agent: str | None
+    created_at: str
+    details: dict | None
+
+
+@router.get(
+    "/events",
+    summary="Recent account events, for the settings tab",
+    response_model=list[AuditEntry],
+)
+async def account_events(request: Request, user: CurrentUser) -> list[AuditEntry]:
+    """The user's own trail only - who signed in, from where, and what changed.
+
+    Scoped to the requesting account. An owner-wide view across every user belongs to
+    the Users & access tab and arrives with the roles work, where "may this person see
+    that" has an enforcer.
+    """
+    from sqlalchemy import select as sa_select
+
+    from api.models import AuthEvent
+
+    db: DbSession = request.state.db
+    rows = await db.execute(
+        sa_select(AuthEvent)
+        .where(AuthEvent.user_id == user.id)
+        .order_by(AuthEvent.created_at.desc(), AuthEvent.id.desc())
+        .limit(50)
+    )
+    return [
+        AuditEntry(
+            event=row.event,
+            ip=row.ip,
+            user_agent=row.user_agent,
+            created_at=row.created_at.isoformat(),
+            details=row.details,
+        )
+        for row in rows.scalars()
+    ]

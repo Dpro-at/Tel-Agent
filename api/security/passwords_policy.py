@@ -65,6 +65,13 @@ async def set_password(
     password, and somebody who proved themselves with a code or a key. Putting the check
     here would mean the reset flow had to lie about knowing the old one.
     """
+    # The current password counts as the most recent one, whether or not it ever
+    # passed through here - the first-run administrator's never did, and without this
+    # line "choose one you have not used before" quietly excused exactly one password:
+    # the one most likely to be reused.
+    if verify_password(new_password, user.password_hash):
+        raise PasswordReused
+
     for entry in await _recent(db, user.id):
         if verify_password(new_password, entry.password_hash):
             raise PasswordReused

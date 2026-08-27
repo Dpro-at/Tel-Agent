@@ -7,6 +7,7 @@ migration that drops the table instead. So this module imports all of them, and
 """
 
 from api.models.attempt import SCOPES, AuthAttempt
+from api.models.audit import EVENTS, AuthEvent
 from api.models.common import enum_column, utc_now_column, workspace_fk
 from api.models.conversation import (
     CHANNEL_KINDS,
@@ -30,6 +31,7 @@ from api.models.session import Session
 __all__ = [
     "CHANNEL_KINDS",
     "CODE_PURPOSES",
+    "EVENTS",
     "ORIGINS",
     "ROLES",
     "SCOPES",
@@ -37,6 +39,7 @@ __all__ = [
     "AppInstall",
     "AuthAttempt",
     "AuthCode",
+    "AuthEvent",
     "Call",
     "Channel",
     "Conversation",

@@ -32,7 +32,7 @@ from api import mail
 from api.config import Settings
 from api.errors import envelope_response
 from api.models import User
-from api.security import codes, lockout, ssh_keys
+from api.security import audit, codes, lockout, ssh_keys
 from api.security.password import PasswordTooShort
 from api.security.passwords_policy import PasswordReused, set_password
 from api.security.session import create_session, set_session_cookie
@@ -146,6 +146,13 @@ async def forgot(request: Request, payload: ForgotRequest) -> object:
 
     user = await _user(db, payload.username)
     if user is not None and user.email:
+        await audit.record(
+            db,
+            "recovery_code_requested",
+            request=request,
+            user_id=user.id,
+            username=user.username,
+        )
         code = await codes.issue(db, user, "reset")
         # `smtplib` blocks. On the event loop it would stall every other request while
         # a slow mail server thinks about it.
@@ -193,6 +200,13 @@ async def verify_code(request: Request, payload: CodeRequest, response: Response
             db, user, user_agent=request.headers.get("user-agent"), ip=ip
         )
         set_session_cookie(response, token, secure=not settings.debug)
+        await audit.record(
+            db,
+            "second_factor_used",
+            request=request,
+            user_id=user.id,
+            username=user.username,
+        )
         return Accepted()
 
     # A reset: hand back a ticket that authorises exactly one password change.
@@ -287,6 +301,13 @@ async def key_verify(request: Request, payload: KeyVerifyRequest, response: Resp
 
     if matched is None:
         await lockout.record_failure(db, action="key", username=payload.username, ip=ip)
+        await audit.record(
+            db,
+            "key_sign_in_failed",
+            request=request,
+            user_id=user.id if user else None,
+            username=payload.username,
+        )
         return envelope_response(
             status_code=status.HTTP_401_UNAUTHORIZED,
             code="unauthenticated",
@@ -343,5 +364,8 @@ async def reset_password(request: Request, payload: ResetRequest, response: Resp
             message=str(error),
         )
 
+    await audit.record(
+        db, "password_reset", request=request, user_id=user.id, username=user.username
+    )
     response.delete_cookie(RESET_COOKIE, path="/", secure=not settings.debug)
     return Accepted()
