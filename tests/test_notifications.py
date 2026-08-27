@@ -1,0 +1,256 @@
+"""Notifications — P4.
+
+The screen makes one distinction that everything here turns on: *"Two kinds of thing
+live here. The ones at the top are waiting on a decision."* A test suite that treats
+this as read/unread would pass while the product quietly filed away work nobody did.
+"""
+
+from __future__ import annotations
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api import notifications
+from api.config import Settings
+from api.main import create_app
+from api.models import Membership, Notification, User, Workspace
+from api.security.password import hash_password
+
+PASSWORD = "a sentence i can actually remember"  # noqa: S105
+
+
+@pytest.fixture
+async def stage(migrated: AsyncSession, settings: Settings, database_url: str):
+    """Two workspaces; a reception account and a viewer in the first, plus items."""
+    first = Workspace(name="Wagner & Partner")
+    second = Workspace(name="Wolf Studio")
+    migrated.add_all([first, second])
+    await migrated.flush()
+
+    password_hash = hash_password(PASSWORD)
+    people = {}
+    for username, role in (("sabine", "reception"), ("lukas", "viewer")):
+        user = User(username=username, password_hash=password_hash)
+        migrated.add(user)
+        await migrated.flush()
+        people[username] = user
+        migrated.add(Membership(user_id=user.id, workspace_id=first.id, role=role))
+
+    # Somebody who only belongs to the other workspace.
+    outsider = User(username="wolf", password_hash=password_hash)
+    migrated.add(outsider)
+    await migrated.flush()
+    migrated.add(Membership(user_id=outsider.id, workspace_id=second.id, role="owner"))
+    await migrated.commit()
+
+    # One decision and one log entry in the first workspace; one decision in the other.
+    await notifications.raise_notification(
+        migrated,
+        workspace_id=first.id,
+        category="failure",
+        title="SMS confirmation was never delivered to Anna Gruber",
+        needs_decision=True,
+        primary_action="resend_notification",
+        action_payload={"to": "+4366412345678"},
+    )
+    await notifications.raise_notification(
+        migrated,
+        workspace_id=first.id,
+        category="system",
+        title="Webhook delivery recovered",
+        needs_decision=False,
+    )
+    await notifications.raise_notification(
+        migrated,
+        workspace_id=second.id,
+        category="review",
+        title="A caller was blocked in the other workspace",
+        needs_decision=True,
+    )
+
+    app = create_app(settings.model_copy(update={"database_url": database_url}))
+    clients: dict[str, AsyncClient] = {}
+    async with app.router.lifespan_context(app):
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
+        for username in ("sabine", "lukas", "wolf"):
+            client = AsyncClient(transport=transport, base_url="http://localhost")
+            response = await client.post(
+                "/api/auth/login", json={"username": username, "password": PASSWORD}
+            )
+            assert response.status_code == 200
+            clients[username] = client
+        try:
+            yield (first.id, second.id), clients
+        finally:
+            for client in clients.values():
+                await client.aclose()
+
+
+# --- The two sections --------------------------------------------------------
+
+
+async def test_decisions_and_log_arrive_separated(stage) -> None:
+    """The split is the product's, not the layout's: one list is work, one is history."""
+    _ids, clients = stage
+
+    body = (await clients["sabine"].get("/api/notifications")).json()
+
+    assert [item["title"] for item in body["waiting"]] == [
+        "SMS confirmation was never delivered to Anna Gruber"
+    ]
+    assert [item["title"] for item in body["log"]] == ["Webhook delivery recovered"]
+    assert body["open_count"] == 1
+
+
+async def test_the_action_and_its_payload_survive(stage) -> None:
+    """The screen's primary button needs to know what to do and to what."""
+    _ids, clients = stage
+
+    waiting = (await clients["sabine"].get("/api/notifications")).json()["waiting"][0]
+
+    assert waiting["primary_action"] == "resend_notification"
+    assert waiting["action_payload"] == {"to": "+4366412345678"}
+
+
+async def test_filtering_by_category(stage) -> None:
+    _ids, clients = stage
+
+    body = (await clients["sabine"].get("/api/notifications?category=system")).json()
+
+    assert body["waiting"] == []
+    assert len(body["log"]) == 1
+
+
+# --- Mark all as read, and what it must not do -------------------------------
+
+
+async def test_mark_all_read_clears_the_log_and_keeps_the_decision(stage) -> None:
+    """The heart of P4.
+
+    A version that resolved everything would file away a promised SMS that never went
+    out, without anybody deciding what to do about it - which is the one thing this
+    screen exists to prevent.
+    """
+    _ids, clients = stage
+
+    marked = (await clients["sabine"].post("/api/notifications/mark-log-read")).json()
+
+    assert marked == {"resolved": 1, "still_waiting": 1}
+
+    after = (await clients["sabine"].get("/api/notifications")).json()
+    assert len(after["waiting"]) == 1, "the decision must survive being marked read"
+    assert after["open_count"] == 1
+
+
+async def test_resolving_moves_an_item_out_of_waiting(stage) -> None:
+    _ids, clients = stage
+
+    waiting = (await clients["sabine"].get("/api/notifications")).json()["waiting"][0]
+    resolved = await clients["sabine"].post(f"/api/notifications/{waiting['id']}/resolve")
+
+    assert resolved.status_code == 200
+    assert resolved.json()["resolved_at"] is not None
+
+    after = (await clients["sabine"].get("/api/notifications")).json()
+    assert after["waiting"] == []
+    assert after["open_count"] == 0
+
+
+async def test_resolving_twice_keeps_the_first_timestamp(stage, migrated: AsyncSession) -> None:
+    """Two people clicking the same button must not rewrite when it was handled."""
+    _ids, clients = stage
+    waiting = (await clients["sabine"].get("/api/notifications")).json()["waiting"][0]
+
+    first = (await clients["sabine"].post(f"/api/notifications/{waiting['id']}/resolve")).json()
+    second = (
+        await clients["sabine"].post(f"/api/notifications/{waiting['id']}/resolve")
+    ).json()
+
+    assert first["resolved_at"] == second["resolved_at"]
+
+
+# --- Scoping and roles -------------------------------------------------------
+
+
+async def test_one_workspace_never_sees_another(stage) -> None:
+    """D-028 at the one place that reads this table."""
+    _ids, clients = stage
+
+    mine = (await clients["sabine"].get("/api/notifications")).json()
+    theirs = (await clients["wolf"].get("/api/notifications")).json()
+
+    titles = {item["title"] for item in mine["waiting"] + mine["log"]}
+    assert "A caller was blocked in the other workspace" not in titles
+    assert [item["title"] for item in theirs["waiting"]] == [
+        "A caller was blocked in the other workspace"
+    ]
+
+
+async def test_a_foreign_id_is_indistinguishable_from_a_missing_one(
+    stage, migrated: AsyncSession
+) -> None:
+    """Resolving somebody else's item must not reveal that it exists."""
+    from sqlalchemy import select
+
+    (_first, second_id), clients = stage
+    other = await migrated.scalar(
+        select(Notification).where(Notification.workspace_id == second_id)
+    )
+    assert other is not None
+
+    foreign = await clients["sabine"].post(f"/api/notifications/{other.id}/resolve")
+    missing = await clients["sabine"].post("/api/notifications/999999/resolve")
+
+    assert foreign.status_code == missing.status_code == 404
+    assert foreign.json()["error"]["message"] == missing.json()["error"]["message"]
+
+
+async def test_a_viewer_reads_but_cannot_resolve(stage) -> None:
+    """ "Reads calls. Changes nothing, answers nothing." - the role matrix, enforced."""
+    _ids, clients = stage
+
+    assert (await clients["lukas"].get("/api/notifications")).status_code == 200
+
+    waiting = (await clients["lukas"].get("/api/notifications")).json()["waiting"][0]
+    refused = await clients["lukas"].post(f"/api/notifications/{waiting['id']}/resolve")
+
+    assert refused.status_code == 403
+    assert "reception" in refused.json()["error"]["message"]
+    assert (await clients["lukas"].post("/api/notifications/mark-log-read")).status_code == 403
+
+
+async def test_signing_out_closes_the_list(stage) -> None:
+    """Closed by default, like everything else."""
+    _ids, clients = stage
+    clients["sabine"].cookies.clear()
+
+    assert (await clients["sabine"].get("/api/notifications")).status_code == 401
+
+
+# --- Raising ------------------------------------------------------------------
+
+
+async def test_raising_never_raises(migrated: AsyncSession) -> None:
+    """A notification about a failure must not fail in a way that loses the failure."""
+    result = await notifications.raise_notification(
+        migrated,
+        workspace_id=999999,  # no such workspace: the insert violates a foreign key
+        category="failure",
+        title="something went wrong somewhere",
+    )
+
+    assert result is None  # reported, not raised
+
+
+async def test_an_unknown_category_is_caught_at_the_call_site(
+    migrated: AsyncSession,
+) -> None:
+    workspace = Workspace(name="W")
+    migrated.add(workspace)
+    await migrated.flush()
+
+    with pytest.raises(AssertionError):
+        await notifications.raise_notification(
+            migrated, workspace_id=workspace.id, category="gossip", title="x"
+        )
