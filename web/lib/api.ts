@@ -245,3 +245,140 @@ export function forgetResetUsername(): void {
     // Nothing to do: it expires with the tab anyway.
   }
 }
+
+// --- System health, and the log behind it ------------------------------------
+
+export type ServiceState = "ok" | "degraded" | "down" | "not_configured";
+
+export type ServiceRow = {
+  id: string;
+  state: ServiceState;
+  /** Milliseconds, when there was something to measure. Null is not zero: a service
+   *  with no timing must not be drawn as an instant one. */
+  latency_ms: number | null;
+  detail: string | null;
+};
+
+export type SystemStatus = {
+  verdict: "ok" | "degraded" | "down";
+  version: string;
+  environment: string;
+  services: ServiceRow[];
+  storage: {
+    total_bytes: number | null;
+    free_bytes: number | null;
+    parts: Record<string, number>;
+  };
+  scheduler: Record<
+    string,
+    { enabled: boolean; last_run_at: string | null; last_status: string | null; next_run_at: string | null }
+  >;
+};
+
+export function systemStatus(): Promise<SystemStatus> {
+  return api<SystemStatus>("/api/system/status");
+}
+
+export type LogLine = {
+  time: string;
+  level: string;
+  service: string;
+  message: string;
+  request_id: string | null;
+  exception: string | null;
+};
+
+export type LogPage = { entries: LogLine[]; capacity: number; retained: number };
+
+export type LogFilter = "all" | "errors" | "warnings" | "calls";
+
+export function systemLog(level: LogFilter = "all", limit = 100): Promise<LogPage> {
+  return api<LogPage>(`/api/system/log?level=${level}&limit=${limit}`);
+}
+
+// --- Backup ------------------------------------------------------------------
+
+export type BackupTarget = {
+  path: string;
+  configured: boolean;
+  writable: boolean;
+  detail: string;
+  free_bytes: number | null;
+};
+
+export type Snapshot = {
+  id: number;
+  kind: "manual" | "nightly" | "before_update";
+  status: "running" | "ok" | "unverified" | "failed";
+  started_at: string;
+  verified_at: string | null;
+  size_bytes: number | null;
+  recordings_included: boolean;
+  schema_revision: string | null;
+  error: string | null;
+  present: boolean;
+};
+
+export type BackupOverview = {
+  state: "ok" | "stale" | "none" | "running";
+  target: BackupTarget;
+  include_recordings: boolean;
+  last_good_at: string | null;
+  consecutive_failures: number;
+  last_error: string | null;
+  snapshots: Snapshot[];
+  retention: { daily: number; weekly: number };
+};
+
+export function backupOverview(): Promise<BackupOverview> {
+  return api<BackupOverview>("/api/backup");
+}
+
+export function checkBackupTarget(): Promise<BackupTarget> {
+  return api<BackupTarget>("/api/backup/target/check");
+}
+
+export function runBackup(): Promise<{ queued: boolean; detail: string }> {
+  return api("/api/backup/run", { method: "POST" });
+}
+
+export function deleteBackup(id: number): Promise<void> {
+  return api<void>(`/api/backup/${id}`, { method: "DELETE" });
+}
+
+export type RestoreStaged = { staged: boolean; detail: string; warnings: string[] };
+
+export function stageRestore(id: number, confirmDate: string): Promise<RestoreStaged> {
+  return api<RestoreStaged>(`/api/backup/${id}/restore`, {
+    method: "POST",
+    json: { confirm_date: confirmDate },
+  });
+}
+
+/** A download is a whole archive, so it is a navigation, not a fetch into memory. */
+export function backupDownloadUrl(id: number): string {
+  return `${API_URL}/api/backup/${id}/download`;
+}
+
+// --- Settings ----------------------------------------------------------------
+
+export type SettingRow = {
+  key: string;
+  scope: string;
+  kind: "string" | "integer" | "boolean";
+  secret: boolean;
+  description: string;
+  /** A secret comes back masked, never in full — §B9.2. Writing the mask back is
+   *  ignored by the server, which is what lets a form submit every field. */
+  value: string | number | boolean | null;
+};
+
+export function allSettings(): Promise<SettingRow[]> {
+  return api<SettingRow[]>("/api/settings");
+}
+
+export function saveSettings(
+  values: Record<string, string | number | boolean | null>,
+): Promise<{ written: string[]; ignored_masked: string[] }> {
+  return api("/api/settings", { method: "PATCH", json: { values } });
+}

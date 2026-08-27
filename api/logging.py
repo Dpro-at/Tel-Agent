@@ -16,6 +16,7 @@ import json
 import logging
 import re
 import sys
+import traceback
 from contextvars import ContextVar
 from typing import Any
 
@@ -136,6 +137,19 @@ class SecretRedactionFilter(logging.Filter):
                     return True
                 record.args = None
             record.msg = self._redact_inline(record.msg)
+
+        # The traceback too. An exception's own message routinely carries the value
+        # that caused it - `InvalidToken: 9999:AAH...` - and neither handler formats
+        # the traceback through this filter, so it is formatted here instead. Setting
+        # `exc_text` is what makes both of them reuse the redacted version rather than
+        # re-deriving it from `exc_info`.
+        if record.exc_info and not record.exc_text:
+            try:
+                record.exc_text = "".join(traceback.format_exception(*record.exc_info))
+            except Exception:  # pragma: no cover - a broken exc_info is not worth a crash
+                record.exc_text = None
+        if record.exc_text:
+            record.exc_text = self._redact_inline(record.exc_text)
         return True
 
     @classmethod
@@ -187,8 +201,10 @@ class JsonFormatter(logging.Formatter):
             if key not in _STANDARD_ATTRIBUTES and key != "request_id":
                 payload[key] = value
 
-        if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
+        if record.exc_text or record.exc_info:
+            # `exc_text` first: the redaction filter fills it in, and re-deriving from
+            # `exc_info` here would write the unredacted traceback to stdout.
+            payload["exception"] = record.exc_text or self.formatException(record.exc_info)
 
         return json.dumps(payload, default=str, ensure_ascii=False)
 

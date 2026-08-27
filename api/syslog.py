@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import traceback
 from collections import deque
 from dataclasses import dataclass
 from typing import Any
@@ -39,6 +40,11 @@ CAPACITY = 500
 # Calls. "Calls" is not a level - it is the services that carry a conversation.
 CALL_SERVICES = frozenset({"agent", "tools", "sip", "stt", "tts"})
 
+# How much of a traceback is kept. The last frames, not the first: the line that raised
+# is at the bottom, and the frames above it are the web framework's - the same on every
+# error, and telling an operator nothing.
+EXCEPTION_TAIL = 2000
+
 
 @dataclass(frozen=True)
 class Entry:
@@ -49,6 +55,10 @@ class Entry:
     service: str
     message: str
     request_id: str | None
+    # The exception text, when the line was logged with one. Without it an error
+    # reads "unhandled exception" and the panel sends whoever is reading it to a
+    # terminal - which is the one thing this panel exists to avoid.
+    exception: str | None = None
 
     def as_json(self) -> dict[str, Any]:
         return {
@@ -57,6 +67,7 @@ class Entry:
             "service": self.service,
             "message": self.message,
             "request_id": self.request_id,
+            "exception": self.exception,
         }
 
 
@@ -96,10 +107,31 @@ class RecentLogHandler(logging.Handler):
                     # already run on the handler chain by this point.
                     message=record.getMessage()[:500],
                     request_id=getattr(record, "request_id", None),
+                    exception=self._exception_text(record),
                 )
             )
         except Exception:  # pragma: no cover - defensive, per the handler contract
             self.handleError(record)
+
+    @staticmethod
+    def _exception_text(record: logging.LogRecord) -> str | None:
+        """The traceback, formatted here rather than left as a live exception object.
+
+        Holding `exc_info` itself would keep every frame - and therefore every local
+        variable in them, request bodies and credentials included - alive in memory for
+        as long as the ring holds the line. Formatting to a string at the moment of
+        logging is what stops a bounded log from pinning an unbounded object graph.
+
+        It is a `str` for a second reason: a traceback formatted later, on the way out
+        of the endpoint, would not have passed through the redaction filter.
+        """
+        if record.exc_info is None and not record.exc_text:
+            return None
+        try:
+            text = record.exc_text or "".join(traceback.format_exception(*record.exc_info))
+        except Exception:  # pragma: no cover - a broken exc_info is not worth a crash
+            return None
+        return text[-EXCEPTION_TAIL:]
 
     def recent(self, *, level: str = "all", limit: int = 100) -> list[Entry]:
         """Newest first, filtered the way the screen's four chips filter.

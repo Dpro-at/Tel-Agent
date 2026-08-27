@@ -267,4 +267,62 @@ def test_the_entry_shape_matches_what_the_screen_renders() -> None:
         request_id=None,
     )
 
-    assert set(entry.as_json()) == {"time", "level", "service", "message", "request_id"}
+    assert set(entry.as_json()) == {
+        "time",
+        "level",
+        "service",
+        "message",
+        "request_id",
+        "exception",
+    }
+
+
+def test_an_error_carries_its_traceback() -> None:
+    """ "unhandled exception" with nothing under it is what a terminal is for.
+
+    Found the hard way: a live 500 was investigated through this endpoint, and the
+    endpoint had nothing to say beyond the message.
+    """
+    configure_logging("INFO")
+    handler = recent_log_handler()
+    assert handler is not None
+    handler.clear()
+
+    try:
+        raise RuntimeError("no such table: backups")
+    except RuntimeError:
+        logging.getLogger("api.backup").exception("unhandled exception")
+
+    entry = handler.recent()[0]
+    assert entry.exception is not None
+    assert "no such table: backups" in entry.exception
+    assert "RuntimeError" in entry.exception
+
+
+def test_a_secret_inside_a_traceback_is_redacted_too() -> None:
+    """An exception's own message routinely carries the value that caused it, and the
+    traceback is not the message - neither handler formatted it through the filter."""
+    configure_logging("INFO")
+    handler = recent_log_handler()
+    assert handler is not None
+    handler.clear()
+
+    try:
+        raise RuntimeError(f"rejected: token={CREDENTIAL}")
+    except RuntimeError:
+        logging.getLogger("api.channels").exception("could not connect")
+
+    entry = handler.recent()[0]
+    assert entry.exception is not None
+    assert CREDENTIAL not in entry.exception
+    assert "[redacted]" in entry.exception
+
+
+def test_a_line_without_an_exception_has_none() -> None:
+    """The field is null rather than an empty string: the screen renders a disclosure
+    triangle only when there is something behind it."""
+    handler = RecentLogHandler()
+    handler.emit(logging.LogRecord("api.agent", logging.INFO, "x.py", 1, "hello", (), None))
+
+    assert handler.recent()[0].exception is None
+    assert handler.recent()[0].as_json()["exception"] is None
