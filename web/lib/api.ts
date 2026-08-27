@@ -324,6 +324,8 @@ export type BackupOverview = {
   target: BackupTarget;
   include_recordings: boolean;
   last_good_at: string | null;
+  /** Computed by the server, which owns the clock that took the backup. */
+  last_good_age_days: number | null;
   consecutive_failures: number;
   last_error: string | null;
   snapshots: Snapshot[];

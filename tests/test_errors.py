@@ -143,3 +143,35 @@ async def test_the_error_shape_is_the_same_across_every_failure(
         assert isinstance(error["code"], str)
         assert isinstance(error["message"], str)
         assert error["request_id"]
+
+
+# --- A response the browser cannot read is a response that does not exist -----
+
+
+async def test_a_500_carries_cors_headers(failing_client) -> None:
+    """Found from a browser, and only from a browser.
+
+    `RequestIdMiddleware` catches unhandled exceptions and returns the 500 envelope
+    itself. While it sat outside the CORS layer, that envelope skipped CORS on the way
+    out and every 500 reached the dashboard as `net::ERR_FAILED` - no status, no
+    request id to quote, and an error screen that could only say "offline". curl does
+    not enforce CORS, so nothing but this assertion catches it.
+    """
+    response = await failing_client.get("/boom", headers={"Origin": "http://localhost:3000"})
+
+    assert response.status_code == 500
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:3000"
+    # And the id is readable, which is the other half of being able to report it.
+    assert (
+        "x-request-id" in (response.headers.get("access-control-expose-headers") or "").lower()
+    )
+
+
+async def test_a_refusal_carries_cors_headers(client) -> None:
+    """The 401 the dashboard must read to send somebody to the sign-in screen."""
+    response = await client.get(
+        "/api/notifications", headers={"Origin": "http://localhost:3000"}
+    )
+
+    assert response.status_code == 401
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:3000"

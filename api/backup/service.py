@@ -288,10 +288,15 @@ async def verdict(db: DbSession) -> dict[str, Any]:
         if r.status == "failed" and (latest_good is None or r.id > latest_good.id)
     ]
 
+    last_good = _aware(latest_good.verified_at) if latest_good else None
     return {
         "state": state,
         "target_configured": bool(configured),
-        "last_good_at": (_aware(latest_good.verified_at) if latest_good else None),
+        "last_good_at": last_good,
+        # Computed here rather than in the browser. Two clocks disagree - a laptop
+        # whose time is a day out would report a fresh backup as nine days old, or
+        # worse, an old one as fresh. The server took the backup; it owns the age.
+        "last_good_age_days": (_now() - last_good).days if last_good else None,
         "consecutive_failures": len(failures_since),
         "last_error": failures_since[0].error if failures_since else None,
     }

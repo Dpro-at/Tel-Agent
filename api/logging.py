@@ -80,6 +80,15 @@ SECRET_FIELD_NAMES = frozenset(
         "signature",
         "credentials",
         "credentials_encrypted",
+        # The column secrets are actually written to. It reached a log line as a
+        # SQLAlchemy parameter dump - `'secret_value': 'the-real-password'` - inside
+        # an exception raised on the INSERT. `secret` alone does not match it: the
+        # word boundary after `secret` fails against the underscore.
+        "secret_value",
+        "secret_key",
+        "private_key",
+        "refresh_token",
+        "access_token",
         "api_key",
         "secret",
         "encryption_key",
@@ -155,10 +164,18 @@ class SecretRedactionFilter(logging.Filter):
     @classmethod
     def _redact_inline(cls, text: str) -> str:
         if cls._INLINE is None:
-            names = "|".join(sorted(SECRET_FIELD_NAMES))
-            # `password='x'`, `token: abc`, `"api_key": "sk-..."` - the value after a
-            # secret-named field is replaced, whatever quoting surrounds it.
-            cls._INLINE = re.compile(r"(?i)\b(" + names + r")\b(\s*[=:]\s*[\"']?)([^\"'\s,}]+)")
+            # Longest first: the alternation is first-match, and `secret` would
+            # otherwise win against `secret_value` at the same position.
+            names = "|".join(sorted(SECRET_FIELD_NAMES, key=len, reverse=True))
+            # `password='x'`, `token: abc`, `"api_key": "sk-..."`, and - the one
+            # that was missed - a quoted dict key: `'secret_value': 'the-password'`,
+            # which is how SQLAlchemy dumps parameters into an exception message.
+            # The closing quote sits between the name and the colon, so it belongs
+            # to the separator rather than being something the pattern can assume
+            # away.
+            cls._INLINE = re.compile(
+                r"(?i)\b(" + names + r")\b([\"']?\s*[=:]\s*[\"']?)([^\"'\s,}]+)"
+            )
         return cls._INLINE.sub(r"\g<1>\g<2>" + _REDACTED, text)
 
 

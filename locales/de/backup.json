@@ -85,5 +85,7 @@
   "restore_staged_title": "Wiederherstellung vorgemerkt — zum Ausführen neu starten",
   "restore_staged_body": "Bisher hat sich nichts geändert. Die Wiederherstellung erfolgt beim nächsten Start; bis dahin bleibt diese Installation unangetastet.",
   "recordings_in": "Enthält Audioaufzeichnungen",
-  "recordings_out": "Nur Transkripte, kein Audio"
+  "recordings_out": "Nur Transkripte, kein Audio",
+  "verdict_ok_title_real": "Gesichert und zurückgelesen, damit die Wiederherstellung belegt ist",
+  "verdict_ok_body_real": "Die letzte geprüfte Sicherung wurde um {when} geschrieben. Es werden {daily} tägliche Stände aufbewahrt, danach einer pro Woche für drei Monate."
 }
