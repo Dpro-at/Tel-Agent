@@ -42,6 +42,7 @@ from api.routes import auth as auth_routes
 from api.routes import notifications as notification_routes
 from api.routes import recovery as recovery_routes
 from api.routes import settings as settings_routes
+from api.routes import system as system_routes
 
 TAGS_METADATA = [
     {
@@ -244,6 +245,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(auth_routes.router)
     app.include_router(notification_routes.router)
+    app.include_router(system_routes.router)
     app.include_router(settings_routes.router)
     app.include_router(recovery_routes.router)
 
