@@ -2,7 +2,8 @@
 
 You are working in **Tel-Agent**, an AGPL-3.0 self-hosted AI phone and messaging
 assistant by Dpro GmbH (Vienna). This file is the short entry point for any coding
-agent (Cursor, Codex, Copilot, and similar).
+agent — Claude Code, OpenAI Codex, GitHub Copilot, Cursor, Google Antigravity,
+Gemini CLI, Windsurf, Zed, Aider, and anything else that reads `AGENTS.md`.
 
 **The full working contract is [`CLAUDE.md`](CLAUDE.md).** Read it before changing
 code. When `docs/SPEC.md` and any other document disagree, the specification wins.
@@ -67,6 +68,21 @@ Commits: Conventional Commits, English, imperative (`feat(api): …`, `docs: …
 Branches: `feat/`, `fix/`, `docs/`, `chore/`, `refactor/`, `test/`.
 
 ---
+
+## Where each agent starts
+
+Every entry file below points back here. `AGENTS.md` and `CLAUDE.md` are the only two
+that carry content — the rest are pointers, so the rules can never drift apart.
+
+| Agent | Reads |
+|---|---|
+| Claude Code | `CLAUDE.md` (full contract) |
+| OpenAI Codex, Cursor, Windsurf, Zed, Aider, Jules | `AGENTS.md` |
+| Google Antigravity, Gemini CLI | `GEMINI.md` → `AGENTS.md` |
+| GitHub Copilot | `.github/copilot-instructions.md` → `AGENTS.md` |
+
+Using an agent that reads none of these? Point it at `AGENTS.md` by hand and open a PR
+adding its entry file as a one-line pointer.
 
 ## Cursor-specific rules
 

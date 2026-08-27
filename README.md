@@ -34,13 +34,13 @@
 
 <p>Connect them over MCP — and get full control.</p>
 
-<!-- Eight logos, one file per theme. Three of them (OpenAI, Ollama, Manus) are
-     single-colour marks, so the strip is built twice rather than recoloured live. -->
+<!-- Thirteen logos, one file per theme. Seven of them are single-colour marks, so the
+     strip is built twice rather than recoloured live. See docs/brand/models/README.md. -->
 <p>
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/brand/models/models-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/brand/models/models-light.svg">
-  <img src="docs/brand/models/models-light.svg" alt="Works with OpenAI, Claude, Gemini, Mistral, Ollama, Perplexity, Copilot and Manus" height="28">
+  <img src="docs/brand/models/models-light.svg" alt="Works with OpenAI, Claude, Gemini, Mistral, Ollama, Perplexity, Copilot, Manus, DeepSeek, Grok, Qwen, Groq and OpenRouter" height="28">
 </picture>
 </p>
 
@@ -213,6 +213,21 @@ channel end to end, pull requests adding features will be pointed at
 **All contributors must sign the [CLA](CLA.md)** before their first pull request is
 merged. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening one. Everything in the
 repository — code, comments, commit messages, documentation — is written in English.
+
+<!-- Two marks, inked per theme. These are the agents the repo is configured for, not
+     models Tel-Agent connects to — that row is at the top. docs/brand/agents/README.md -->
+<p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/agents/agents-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/brand/agents/agents-light.svg">
+  <img src="docs/brand/agents/agents-light.svg" alt="Built with Antigravity and Codex" height="24">
+</picture>
+</p>
+
+**Working with an AI coding agent?** Point it at [`AGENTS.md`](AGENTS.md) — Codex,
+Antigravity and the rest find it on their own. [`CLAUDE.md`](CLAUDE.md) is the full
+working contract; every other entry file in the repository is a pointer to those two, so
+the rules cannot drift apart.
 
 Found a security problem? **Do not open a public issue** — see
 [`SECURITY.md`](SECURITY.md).
