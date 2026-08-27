@@ -28,6 +28,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.config import Settings, get_settings
 from api.db import check_database, create_engine, create_sessionmaker
 from api.errors import ErrorResponse, install_error_handlers
+from api.extensions.builtin import BUILTIN
+from api.extensions.registry import Registry, sync_catalogue
 from api.jobs import builtin as builtin_jobs
 from api.jobs.runner import ensure_schedule
 from api.jobs.runner import loop as job_loop
@@ -114,6 +116,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # deploy: the smallest installation is one machine and somebody who does not run a
     # process manager. Without it the housekeeping tasks have no caller at all, which
     # is the state this codebase was in until P2.
+    # Extensions load after the database and before the first request, so no request
+    # ever sees a half-loaded registry. A refusal is recorded and startup continues:
+    # in an in-process design one broken extension must not stop the server answering.
+    registry = Registry()
+    for module_path in BUILTIN:
+        registry.load(module_path)
+    app.state.extensions = registry
+
+    try:
+        async with app.state.sessionmaker() as db:
+            await sync_catalogue(db, registry)
+    except Exception:
+        # The catalogue mirrors what is running; it is not a precondition for running.
+        # An unmigrated database must still start the server, or `alembic upgrade head`
+        # could never be run against it.
+        logging.getLogger("api.extensions").exception("could not sync the app catalogue")
+
     worker: asyncio.Task | None = None
     if settings.jobs_enabled:
         try:
