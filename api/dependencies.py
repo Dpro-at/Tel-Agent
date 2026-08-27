@@ -47,6 +47,45 @@ def is_public(path: str) -> bool:
     return path in PUBLIC_PATHS
 
 
+def served_paths(app: object) -> set[str]:
+    """Every path this application actually serves, flattened.
+
+    `app.routes` is **not** flat. Since FastAPI 0.14x, `include_router` leaves an
+    `_IncludedRouter` entry that holds its own `.routes` rather than splicing the
+    children into the top level. A walk that only looks at the top level therefore
+    sees the four routes registered directly on the app and none of the routers -
+    which is precisely how the closed-by-default test came to be inspecting almost
+    nothing while reporting green.
+
+    Recursing is the fix, and it is written here beside `PUBLIC_PATHS` rather than in
+    a test, because "what does this application serve" is a question the rule itself
+    is about.
+    """
+    found: set[str] = set()
+
+    def walk(routes: object) -> None:
+        for route in routes or []:
+            path = getattr(route, "path", None)
+            if isinstance(path, str):
+                found.add(path)
+
+            # An `_IncludedRouter` exposes neither `.path` nor `.routes`; the children
+            # hang off `original_router`, and their `.path` is *already* prefixed
+            # because `include_router` rewrites them as it copies. A mount is the
+            # other shape, and carries `.routes` directly.
+            included = getattr(route, "original_router", None)
+            if included is not None:
+                walk(getattr(included, "routes", None))
+                continue
+
+            children = getattr(route, "routes", None)
+            if children:
+                walk(children)
+
+    walk(getattr(app, "routes", []))
+    return found
+
+
 class Unauthenticated(HTTPException):
     """401, in the one error envelope every failure uses.
 
