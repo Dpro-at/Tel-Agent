@@ -38,6 +38,7 @@ from api.middleware.request_id import RequestIdMiddleware
 from api.middleware.ws_auth import WebSocketAuthMiddleware
 from api.routes import auth as auth_routes
 from api.routes import recovery as recovery_routes
+from api.routes import settings as settings_routes
 
 TAGS_METADATA = [
     {
@@ -222,6 +223,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(RequestIdMiddleware)
 
     app.include_router(auth_routes.router)
+    app.include_router(settings_routes.router)
     app.include_router(recovery_routes.router)
 
     @app.get(

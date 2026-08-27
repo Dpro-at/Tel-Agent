@@ -95,9 +95,13 @@ async def _send_email(db: DbSession, payload: dict) -> None:
     import asyncio
 
     settings = get_settings()
+    # Resolved at send time, not at enqueue time: an operator who fixes the mail
+    # server in Settings should rescue the messages already queued, not only the
+    # next ones.
+    config = await mail.resolve(db, settings)
     sent = await asyncio.to_thread(
         mail.send,
-        settings,
+        config,
         to=payload["to"],
         subject=payload["subject"],
         body=payload["body"],

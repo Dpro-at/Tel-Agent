@@ -135,7 +135,8 @@ async def forgot(request: Request, payload: ForgotRequest) -> object:
             ],
         )
 
-    if not mail.is_configured(settings):
+    mail_config = await mail.resolve(db, settings)
+    if not mail_config.configured:
         # Not an error. The screen has a state for exactly this, and pretending a
         # message is on its way would send somebody to wait for one that never arrives.
         return ForgotResponse(delivery="unavailable")

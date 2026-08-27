@@ -34,6 +34,25 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+
+def render_item(type_: str, obj: object, autogen_context: object) -> object:
+    """Render a custom column type as a bare name, and import it.
+
+    Autogenerate writes a custom type by its full path — `api.models.encrypted.
+    EncryptedStr()` — without importing anything, so the generated migration raises
+    `NameError` the first time it runs. Handling it here means every future encrypted
+    column is rendered correctly instead of hand-patched after each generation.
+    """
+    from api.models.encrypted import EncryptedStr
+
+    if type_ == "type" and isinstance(obj, EncryptedStr):
+        autogen_context.imports.add(  # type: ignore[attr-defined]
+            "from api.models.encrypted import EncryptedStr"
+        )
+        return "EncryptedStr()"
+    return False
+
+
 # Objects autogenerate must not touch.
 #
 # Both of these were caught by reading a generated migration before running it, and
@@ -79,6 +98,7 @@ def _configure(connection: Connection) -> None:
         compare_type=True,
         compare_server_default=True,
         include_object=include_object,
+        render_item=render_item,
     )
 
 
