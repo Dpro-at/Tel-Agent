@@ -1,0 +1,21 @@
+{
+  "title": "Restablece tu contraseña",
+  "body": "Introduce tu nombre de usuario. Si existe una cuenta con ese nombre, se envía un código de seis dígitos a la dirección de correo asociada.",
+  "username": "Nombre de usuario",
+  "send": "Enviar el código",
+  "send_offline": "Servidor inaccesible",
+  "privacy_note": "La pantalla dice lo mismo exista la cuenta o no. Decírtelo sería decírselo a cualquiera que lo preguntara.",
+  "back": "Volver a iniciar sesión",
+  "self_hosted": "Autoalojado · nada sale de esta máquina",
+  "limit_label": "Demasiadas solicitudes",
+  "limit_title": "Esta cuenta ha pedido un código cinco veces",
+  "limit_body": "Se dejan de enviar códigos durante quince minutos. Los códigos ya enviados siguen funcionando hasta que expiren.",
+  "limit_retry_at": "puedes volver a pedirlo a las {time}",
+  "no_mail_title": "Esta instalación no puede enviar correo",
+  "no_mail_body": "No hay ningún servidor de correo configurado, así que no hay adónde enviar un código. Un administrador restablece la contraseña en la propia máquina:",
+  "no_mail_hint": "El comando muestra una contraseña nueva una sola vez. No se guarda y no se puede volver a mostrar.",
+  "no_mail_settings": "Configura un servidor de correo en Configuración",
+  "offline_title": "Este navegador no puede conectarse a tu servidor Tel-Agent",
+  "offline_body": "No hay respuesta de {host}. Tus llamadas no se ven afectadas si la máquina sigue funcionando; este es un problema de red entre tú y ella. Verifica que estás en la red empresarial o conectado a la VPN.",
+  "offline_retry": "Reintentar conexión"
+}
