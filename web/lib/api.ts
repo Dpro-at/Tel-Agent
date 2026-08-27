@@ -109,12 +109,32 @@ export type Me = {
   workspaces: WorkspaceSummary[];
 };
 
-export function signIn(username: string, password: string): Promise<Me> {
-  return api<Me>("/api/auth/login", { method: "POST", json: { username, password } });
+// The session cookie is HttpOnly and lives on the API origin, so the dashboard's own
+// middleware can never see it. This marker on the dashboard origin is what lets the
+// middleware route a signed-out visitor to the sign-in screen without a round trip.
+// It is a routing hint, not security: the API refuses regardless (D14's own words),
+// and forging it buys a redirect to screens whose every request then gets a 401.
+export const SIGNED_IN_HINT = "telagent_signed_in";
+
+function setSignedInHint(on: boolean): void {
+  if (typeof document === "undefined") return;
+  document.cookie = on
+    ? `${SIGNED_IN_HINT}=1; path=/; max-age=${14 * 24 * 60 * 60}; samesite=lax`
+    : `${SIGNED_IN_HINT}=; path=/; max-age=0`;
 }
 
-export function signOut(): Promise<void> {
-  return api<void>("/api/auth/logout", { method: "POST" });
+export async function signIn(username: string, password: string): Promise<Me> {
+  const me = await api<Me>("/api/auth/login", {
+    method: "POST",
+    json: { username, password },
+  });
+  setSignedInHint(true);
+  return me;
+}
+
+export async function signOut(): Promise<void> {
+  await api<void>("/api/auth/logout", { method: "POST" });
+  setSignedInHint(false);
 }
 
 export function currentUser(): Promise<Me> {
@@ -141,15 +161,18 @@ export function requestCode(username: string): Promise<ForgotResult> {
   return api<ForgotResult>("/api/auth/forgot", { method: "POST", json: { username } });
 }
 
-export function verifyCode(
+export async function verifyCode(
   username: string,
   code: string,
   purpose: "reset" | "second_factor" = "reset",
 ): Promise<{ ok: boolean }> {
-  return api("/api/auth/code/verify", {
+  const result = await api<{ ok: boolean }>("/api/auth/code/verify", {
     method: "POST",
     json: { username, code, purpose },
   });
+  // A verified second factor IS a sign-in; a reset verification is not.
+  if (purpose === "second_factor") setSignedInHint(true);
+  return result;
 }
 
 export type Challenge = {
@@ -166,15 +189,17 @@ export function mintChallenge(username: string): Promise<Challenge> {
   });
 }
 
-export function verifyKeySignature(
+export async function verifyKeySignature(
   username: string,
   challenge: string,
   signature: string,
 ): Promise<{ ok: boolean }> {
-  return api("/api/auth/key/verify", {
+  const result = await api<{ ok: boolean }>("/api/auth/key/verify", {
     method: "POST",
     json: { username, challenge, signature },
   });
+  setSignedInHint(true);
+  return result;
 }
 
 export function resetPassword(password: string): Promise<{ ok: boolean }> {

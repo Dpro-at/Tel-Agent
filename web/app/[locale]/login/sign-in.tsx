@@ -196,7 +196,18 @@ function SignInCard({
     setUnreachable(false);
     try {
       await signIn(username, password);
-      router.push(`/${locale}/home`);
+      // Land where the visitor was going when the middleware turned them away.
+      // Absolute URLs are refused: `next` comes from the address bar, and an open
+      // redirect on a sign-in page is a phishing primitive.
+      // Read at submit time from the address bar rather than through
+      // useSearchParams: the hook drags a Suspense boundary into a statically
+      // prerendered page for a value only needed on click.
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.push(
+        next && next.startsWith("/") && !next.startsWith("//")
+          ? (next as Parameters<typeof router.push>[0])
+          : `/${locale}/home`,
+      );
     } catch (error) {
       if (error instanceof OfflineError) {
         // A network failure is not a wrong password, and the screen draws them very
