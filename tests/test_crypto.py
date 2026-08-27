@@ -249,6 +249,32 @@ def test_secret_named_fields_are_redacted_from_records() -> None:
     assert "[redacted]" in line
 
 
+def test_a_secret_passed_as_an_argument_is_redacted_and_still_formats() -> None:
+    """`log.warning("token: %s", value)` - the ordinary way to write it.
+
+    Redacting the format string alone replaced the `%s` while the credential stayed in
+    `record.args`, and `getMessage()` then raised "not all arguments converted" - which
+    silently dropped the whole line instead of writing a redacted one.
+    """
+    from api.logging import JsonFormatter, SecretRedactionFilter
+
+    record = logging.LogRecord(
+        "api.test",
+        logging.WARNING,
+        __file__,
+        1,
+        "could not connect with token: %s",
+        (SECRET_VALUE,),
+        None,
+    )
+
+    SecretRedactionFilter().filter(record)
+    line = JsonFormatter().format(record)
+
+    assert SECRET_VALUE not in line
+    assert "[redacted]" in line
+
+
 async def test_a_posted_credential_appears_nowhere_in_captured_logs(
     migrated: AsyncSession,
     configured_key: bytes,

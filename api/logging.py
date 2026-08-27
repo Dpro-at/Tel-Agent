@@ -19,9 +19,14 @@ import sys
 from contextvars import ContextVar
 from typing import Any
 
+from api.syslog import RecentLogHandler
+
 # Identifies the handler this module installs, so that reconfiguring replaces it rather
 # than removing every handler anybody else attached.
 _HANDLER_NAME = "telagent.json"
+# The in-memory ring the health screen reads. Named like the JSON handler so
+# `configure_logging` can replace its own without touching anybody else's.
+_RECENT_HANDLER_NAME = "telagent.recent"
 
 # Set by the request-id middleware, read by the log filter. A ContextVar rather than a
 # global because concurrent requests share the process: a global would let one request's
@@ -118,6 +123,18 @@ class SecretRedactionFilter(logging.Filter):
                     setattr(record, key, _scrub(value))
 
         if isinstance(record.msg, str) and record.msg:
+            if record.args:
+                # Interpolate before redacting, not after. `token: %s` with the
+                # credential in `args` would otherwise have its placeholder replaced
+                # while the argument stayed behind, and `getMessage()` then raises
+                # "not all arguments converted" - which drops the line entirely. The
+                # secret is in the argument anyway, so redacting the format string
+                # alone would have missed it.
+                try:
+                    record.msg = record.getMessage()
+                except Exception:  # pragma: no cover - a malformed call site
+                    return True
+                record.args = None
             record.msg = self._redact_inline(record.msg)
         return True
 
@@ -191,6 +208,15 @@ def configure_logging(level: str = "INFO") -> None:
     handler.addFilter(SecretRedactionFilter())
     handler.set_name(_HANDLER_NAME)
 
+    # The same records the JSON handler formats also land in a bounded ring, so the
+    # health screen can show them. Added after the redaction filter, so a line on the
+    # screen has already been through it - the panel cannot show a secret the log file
+    # would not have shown.
+    recent = RecentLogHandler()
+    recent.set_name(_RECENT_HANDLER_NAME)
+    recent.addFilter(RequestIdFilter())
+    recent.addFilter(SecretRedactionFilter())
+
     root = logging.getLogger()
     # Replace only *our* handler, never the whole list.
     #
@@ -198,9 +224,11 @@ def configure_logging(level: str = "INFO") -> None:
     # twice, and it silently removes anything else that attached one - an error
     # reporter, a journal handler, or the test framework's capture. Building an
     # application would then disable logging for whatever set it up first.
-    for existing in [h for h in root.handlers if h.get_name() == _HANDLER_NAME]:
+    ours = (_HANDLER_NAME, _RECENT_HANDLER_NAME)
+    for existing in [h for h in root.handlers if h.get_name() in ours]:
         root.removeHandler(existing)
     root.addHandler(handler)
+    root.addHandler(recent)
     root.setLevel(level)
 
     # uvicorn's access log duplicates the access line the middleware writes, without a
@@ -210,3 +238,16 @@ def configure_logging(level: str = "INFO") -> None:
     for name in ("uvicorn", "uvicorn.error"):
         logging.getLogger(name).handlers = []
         logging.getLogger(name).propagate = True
+
+
+def recent_log_handler() -> RecentLogHandler | None:
+    """The ring installed by `configure_logging`, if there is one.
+
+    Looked up rather than held in a module global: two applications built in one
+    process (which the test suite does constantly) would otherwise share one ring and
+    show each other's lines.
+    """
+    for handler in logging.getLogger().handlers:
+        if handler.get_name() == _RECENT_HANDLER_NAME and isinstance(handler, RecentLogHandler):
+            return handler
+    return None
