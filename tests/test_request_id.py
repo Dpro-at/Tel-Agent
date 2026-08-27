@@ -185,4 +185,6 @@ def test_the_app_builds_without_leaving_the_probe_route(settings: Settings) -> N
     """A guard on the fixture above: the probe is added to its own app, not the shared one."""
     app: FastAPI = create_app(settings)
 
-    assert not any(route.path == "/concurrency-probe" for route in app.routes)  # type: ignore[attr-defined]
+    assert not any(
+        route.path == "/concurrency-probe" for route in app.routes if hasattr(route, "path")
+    )
