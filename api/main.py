@@ -29,6 +29,7 @@ from api.logging import configure_logging
 from api.middleware.auth import AuthenticationMiddleware
 from api.middleware.csrf import CsrfMiddleware
 from api.middleware.request_id import RequestIdMiddleware
+from api.middleware.ws_auth import WebSocketAuthMiddleware
 from api.routes import auth as auth_routes
 from api.routes import recovery as recovery_routes
 
@@ -173,6 +174,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     #   outermost gate is logged under an id.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
     app.add_middleware(AuthenticationMiddleware)
+    # The websocket twin of the gate above: BaseHTTPMiddleware never sees websocket
+    # scopes, so without this every websocket route would bypass authentication.
+    app.add_middleware(WebSocketAuthMiddleware)
     app.add_middleware(CsrfMiddleware)
     app.add_middleware(
         CORSMiddleware,

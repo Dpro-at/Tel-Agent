@@ -212,7 +212,13 @@ def test_same_host_comparison(origin: str, host: str, allowed: bool) -> None:
 
 
 @pytest.fixture
-def ws_app(settings: Settings):
+def ws_app(settings: Settings, monkeypatch: pytest.MonkeyPatch):
+    # The probe is public for the duration: this file tests the CSRF gate, and since
+    # D15 the authentication gate would otherwise refuse the handshake first - the
+    # foreign-origin test would then pass for the wrong reason.
+    from api import dependencies
+
+    monkeypatch.setattr(dependencies, "PUBLIC_PATHS", dependencies.PUBLIC_PATHS | {"/ws-probe"})
     app = create_app(settings)
 
     @app.websocket("/ws-probe")
