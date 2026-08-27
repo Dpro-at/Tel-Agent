@@ -48,6 +48,12 @@ jobs:
       # key, and 0 when a community language is behind. Falling behind is exactly what
       # a community locale is allowed to do.
       - run: node scripts/check-locales.mjs
+      # And this one gates every locale, community ones included. Being unfinished is
+      # allowed; a {placeholder} that was dropped or misspelled in a string that already
+      # shipped is a bug, invisible to a coverage count and to a reviewer who does not
+      # read the language. `always()` so one run reports both problems, not two.
+      - run: node scripts/check-placeholders.mjs
+        if: always()
 
   api:
     name: api and agent — format, lint, imports, tests
