@@ -21,6 +21,7 @@ from api.security.codes import delete_expired_codes
 from api.security.lockout import delete_stale_counters
 from api.security.session import delete_expired_sessions
 from api.security.ssh_keys import delete_expired_challenges
+from api.settings import store
 
 logger = logging.getLogger("api.jobs")
 
@@ -32,6 +33,11 @@ CORE_SCHEDULE = {
     "cleanup_lockouts": 3600,
     "cleanup_key_challenges": 3600,
     "health_probe": 300,
+    # Nightly. The screen says "03:00, when nobody is calling"; the runner schedules on
+    # an interval rather than at a wall-clock time, so this is a daily beat whose first
+    # run is set when the schedule row is created. A cron-style time is worth having
+    # and is not worth blocking the backup on.
+    "backup_nightly": 86400,
 }
 
 
@@ -81,6 +87,43 @@ async def _health_probe(db: DbSession) -> None:
     # transaction on the same SQLite file blocks on the file lock and then reports
     # "unreachable" - a probe that manufactures the failure it is watching for.
     await db.execute(text("SELECT 1"))
+
+
+@task("backup_nightly")
+async def _backup_nightly(db: DbSession) -> None:
+    """Take the nightly backup, then prune what retention no longer keeps.
+
+    Pruning runs *after* a successful backup and never before one. Deleting old
+    archives first would, on the night the target is unreachable, leave an
+    installation with fewer copies than it started with — which is the opposite of
+    what a backup system is for.
+    """
+    from api.backup import service as backup_service
+
+    if not await store.get(db, backup_service.TARGET_KEY):
+        # No target chosen. Not a failure: the screen already says loudly that there
+        # is no backup of this installation, and a task that failed nightly would bury
+        # that message under an error nobody can act on from here.
+        return
+
+    row = await backup_service.run_backup(db, kind="nightly")
+    if row.status == "failed":
+        raise RuntimeError(row.error or "backup failed")
+    await backup_service.prune(db)
+
+
+@job("run_backup")
+async def _run_backup(db: DbSession, payload: dict) -> None:
+    """The "Back up now" button, off the request that pressed it.
+
+    A backup of a database with recordings takes minutes; a request cannot hold that
+    open. So the button enqueues and the screen watches the row appear.
+    """
+    from api.backup import service as backup_service
+
+    row = await backup_service.run_backup(db, kind=payload.get("kind", "manual"))
+    if row.status == "failed":
+        raise RuntimeError(row.error or "backup failed")
 
 
 @job("send_email")

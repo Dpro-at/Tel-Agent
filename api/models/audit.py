@@ -33,6 +33,13 @@ EVENTS = (
     "key_sign_in_succeeded",
     "key_sign_in_failed",
     "recovery_code_requested",
+    # P7. Not account events in the narrow sense, and recorded here anyway: one backup
+    # archive is every transcript on the installation, so downloading one is a data
+    # export, and staging a restore is the only action in the product that deletes
+    # everything since a date. Both need a name attached to them afterwards.
+    "backup_downloaded",
+    "backup_deleted",
+    "restore_staged",
 )
 
 

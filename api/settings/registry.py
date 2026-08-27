@@ -45,6 +45,25 @@ REGISTRY: dict[str, Definition] = _define(
     Definition("smtp.from", "installation", description="The From address on outgoing mail."),
     Definition("smtp.use_tls", "installation", "boolean", True, description="STARTTLS."),
     Definition("smtp.use_ssl", "installation", "boolean", False, description="Implicit TLS."),
+    # Backup - P7. The target is a directory this process can write to: a mounted
+    # network share or a USB disk, which are the same thing to this code. Empty means
+    # no target chosen, which is a real state with its own screen and not a default to
+    # be filled in - writing backups next to the database by default would put the
+    # only copy on the disk whose failure is the thing being insured against.
+    Definition(
+        "backup.target_path",
+        "installation",
+        description="Directory backups are written to. A mounted network share or a "
+        "USB disk. Empty means no backups are taken.",
+    ),
+    Definition(
+        "backup.include_recordings",
+        "installation",
+        "boolean",
+        False,
+        description="Include call audio. Roughly 60x larger archives; excluding it "
+        "leaves restores with transcripts but no audio to prove what was said.",
+    ),
     # Per workspace, because two businesses on one installation answer differently.
     Definition(
         "recording.announce",
