@@ -37,18 +37,44 @@ logger = logging.getLogger("api.notifications")
 # `msg_<key>`.** The locale gate then refuses a build where German or Arabic is
 # missing it, which is what keeps the screen from being trilingual in its furniture
 # and English in its content.
+# Every parameter here is data that reads the same in any language - a path, a count,
+# a task name, a date. Anything explanatory is passed as `detail` instead, which is
+# shown as machine output rather than folded into a translated sentence.
 MESSAGES: dict[str, frozenset[str]] = {
     # Backup - P7. The one an installation most needs to hear about, because a nightly
     # job failing is silent by nature.
-    "backup_failed": frozenset({"reason"}),
-    "backup_unverified": frozenset({"reason"}),
+    "backup_failed": frozenset(),
+    "backup_unverified": frozenset(),
     "backup_no_target": frozenset(),
     "restore_staged": frozenset({"taken_at"}),
-    # Scheduling - P2.
+    # Scheduling - P2. The task's name is an identifier, not prose.
     "task_failed": frozenset({"task"}),
     # Mail - the failure the forgot-password screen depends on not happening quietly.
-    "mail_failed": frozenset({"subject"}),
+    "mail_failed": frozenset(),
 }
+
+# Longer than this and it stops being a hint and starts being a log. The full text is
+# in the log, under the request id, where an operator who needs all of it can find it.
+DETAIL_LIMIT = 500
+
+
+def _safe_detail(detail: str | None) -> str | None:
+    """Trim the machine's words, and strip anything that looks like a credential.
+
+    `detail` is nearly always `str(exception)`, and an exception message routinely
+    carries the value that caused it. That exact shape - a SQLAlchemy parameter dump
+    inside a failed INSERT - has already carried a live password into a log line in
+    this codebase. A notification is the worse place for it to land: kept for thirty
+    days, and readable by anybody with `viewer`.
+
+    The same filter the log handlers use, so there is one answer to "what counts as a
+    secret" rather than two that drift apart.
+    """
+    if not detail:
+        return None
+    from api.logging import redact_inline
+
+    return redact_inline(detail)[:DETAIL_LIMIT]
 
 
 class UnknownMessage(ValueError):
@@ -83,6 +109,7 @@ async def raise_notification(
     category: str,
     message_key: str,
     params: dict[str, Any] | None = None,
+    detail: str | None = None,
     needs_decision: bool = False,
     primary_action: str = "none",
     action_payload: dict[str, Any] | None = None,
@@ -111,6 +138,7 @@ async def raise_notification(
             needs_decision=needs_decision,
             message_key=message_key,
             params=params,
+            detail=_safe_detail(detail),
             primary_action=primary_action,
             action_payload=action_payload,
             conversation_id=conversation_id,

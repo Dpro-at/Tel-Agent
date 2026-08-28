@@ -26,7 +26,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.db import Base
@@ -78,9 +78,29 @@ class Notification(Base):
     # different ones, and a column per parameter would be a column that is null for
     # every other message.
     #
+    # **Data, never prose.** A path, a count, a task name, a date - things that read the
+    # same in every language. A parameter carrying an explanatory sentence would put
+    # the server's language back inside a translated one, which is the whole failure
+    # this column pair exists to avoid. Explanations go in `detail` below.
+    #
     # **Never a secret and never personal data beyond what the message needs.** These
     # are stored for thirty days and read by anybody with `viewer`.
     params: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+    # The machine's own words about what went wrong - usually an exception message or a
+    # provider's error string. Kept apart from the translated sentence and shown as what
+    # it is: monospace, left to right, plainly not part of the prose around it.
+    #
+    # It is deliberately not translated and deliberately not a parameter. "Connection
+    # refused to smtp.example.com:587" is the part an operator acts on, and inventing a
+    # translated sentence for every error a provider can return is not possible.
+    #
+    # **Redacted on the way in.** This is nearly always `str(exception)`, and an
+    # exception message routinely carries the value that caused it - a SQLAlchemy
+    # parameter dump has already put a live password into a log line once in this
+    # codebase. A notification is worse than a log: it is kept for thirty days and read
+    # by anybody with `viewer`.
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     primary_action: Mapped[str] = mapped_column(
         enum_column(*ACTIONS, name="notification_action"), nullable=False, default="none"

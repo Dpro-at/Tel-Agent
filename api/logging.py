@@ -111,6 +111,17 @@ def _scrub(value: object) -> object:
     return value
 
 
+def redact_inline(text: str) -> str:
+    """Strip `name=value` pairs whose name is a secret, wherever they appear in text.
+
+    Public because two things now depend on it: the log handlers, and the notification
+    store - which keeps an exception message for thirty days where anybody with
+    `viewer` can read it. One answer to "what counts as a secret", so the two cannot
+    drift apart.
+    """
+    return SecretRedactionFilter._redact_inline(text)
+
+
 class SecretRedactionFilter(logging.Filter):
     """Strip secret-named fields from every record before it is formatted.
 
