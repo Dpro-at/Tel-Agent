@@ -30,6 +30,7 @@ from api.models.identity import ROLES, Membership, User, Workspace
 from api.models.invite import INVITE_LIFETIME, INVITE_ROLES, Invite
 from api.models.jobs import JOB_STATUSES, BackgroundJob, ScheduledTask
 from api.models.notification import CATEGORIES, Notification
+from api.models.rule import RULE_ACTIONS, Rule
 from api.models.session import Session
 from api.models.setting import Setting
 
@@ -45,6 +46,7 @@ __all__ = [
     "JOB_STATUSES",
     "ORIGINS",
     "ROLES",
+    "RULE_ACTIONS",
     "SCOPES",
     "App",
     "AppInstall",
@@ -63,6 +65,7 @@ __all__ = [
     "Notification",
     "Number",
     "PasswordHistory",
+    "Rule",
     "ScheduledTask",
     "Session",
     "Setting",
