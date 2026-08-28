@@ -292,6 +292,29 @@ export const OUR_TOOLS: { name: string; desc: Key; scope: "read" | "act" | "writ
   { name: "set_routing_rule", desc: "tool_set_routing_rule_desc", scope: "write", on: false },
 ];
 
+/**
+ * The audit vocabulary the screen knows how to name — `EVENTS` in
+ * `api/models/audit.py`. An event outside this map is rendered verbatim as machine
+ * output: a vocabulary entry added on the server must degrade to something readable,
+ * never to a blank row.
+ */
+export const EVENT_LABEL: Record<string, Key> = {
+  login_succeeded: "ev_login_succeeded",
+  login_failed: "ev_login_failed",
+  login_locked: "ev_login_locked",
+  logout: "ev_logout",
+  logout_all: "ev_logout_all",
+  password_changed: "ev_password_changed",
+  password_reset: "ev_password_reset",
+  second_factor_used: "ev_second_factor_used",
+  key_sign_in_succeeded: "ev_key_sign_in_succeeded",
+  key_sign_in_failed: "ev_key_sign_in_failed",
+  recovery_code_requested: "ev_recovery_code_requested",
+  backup_downloaded: "ev_backup_downloaded",
+  backup_deleted: "ev_backup_deleted",
+  restore_staged: "ev_restore_staged",
+};
+
 export type Role = "owner" | "admin" | "reception" | "viewer" | "invited";
 
 export const MEMBERS: {
