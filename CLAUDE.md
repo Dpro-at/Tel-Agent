@@ -305,6 +305,16 @@ Competitive notes belong in , which is gitignored and never published.
 
 ---
 
+## Finishing a milestone
+
+Move `· **in progress**` to the next heading in `docs/ROADMAP.md`. That marker is
+the only place the current milestone is written, and the website parses it out of
+this repository at build time - the badge, the download page and `llms.txt` all
+read it, so a marker left behind makes the public site understate the product.
+
+It is one line, and it belongs to closing a milestone rather than to opening the
+next one. Nothing else needs editing for the number to move.
+
 ## Where things are
 
 | Path | Contents |
