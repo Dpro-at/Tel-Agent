@@ -73,7 +73,9 @@ def upgrade() -> None:
     )
     with op.batch_alter_table("invites", schema=None) as batch_op:
         batch_op.create_index(batch_op.f("ix_invites_user_id"), ["user_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_invites_workspace_id"), ["workspace_id"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_invites_workspace_id"), ["workspace_id"], unique=False
+        )
 
     # ### end Alembic commands ###
 
