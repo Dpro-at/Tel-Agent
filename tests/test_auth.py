@@ -193,8 +193,9 @@ async def test_every_route_is_protected_unless_it_is_on_the_public_list(
         assert response.json()["error"]["code"] == "unauthenticated"
 
     # And the list itself is short enough to read in one go. If it is growing, that is
-    # the thing to notice.
-    assert len(PUBLIC_PATHS) <= 12
+    # the thing to notice. Raised from 12 when D-034 added the two invite routes,
+    # which are guarded by their one-time token rather than a session.
+    assert len(PUBLIC_PATHS) <= 14
 
 
 async def test_an_expired_session_is_refused_and_deleted(

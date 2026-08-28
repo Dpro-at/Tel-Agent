@@ -13,13 +13,16 @@ import {
   accountEvents,
   changeMemberRole,
   changePassword,
+  createInvite,
   currentUser,
   membersList,
+  regenerateInvite,
   removeMember,
   sendTestMail,
   signOutEverywhereElse,
   updateMyLocale,
   type AccountEvent,
+  type InviteLink,
   type Member,
 } from "@/lib/api";
 import { interpolate } from "@/lib/i18n";
@@ -877,6 +880,213 @@ function ChangePasswordDialog({
  * no endpoint is removed, not drawn. The owner's row and the reader's own row carry
  * no menu — the server refuses both, and a menu of refusals is not a menu.
  */
+/**
+ * Inviting somebody in — D-034, the admin half.
+ *
+ * Two phases in one dialog: the form (an email address and a role, nothing else),
+ * and the issued link. The link is shown once and shown always — when mail is
+ * configured a copy also goes by email, and when it is not, "copy it and send it
+ * yourself" is the designed answer rather than a failure.
+ */
+function InviteDialog({
+  t,
+  issued,
+  onIssued,
+  onClose,
+}: {
+  t: SettingsDictionary;
+  issued: InviteLink | null;
+  onIssued: (link: InviteLink) => void;
+  onClose: () => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"admin" | "reception" | "viewer">("reception");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const ROLE_NOTES: Record<"admin" | "reception" | "viewer", { label: string; note: string }> = {
+    admin: { label: t[ROLE_LABEL.admin], note: t.inv_admin_note },
+    reception: { label: t[ROLE_LABEL.reception], note: t.inv_reception_note },
+    viewer: { label: t[ROLE_LABEL.viewer], note: t.inv_viewer_note },
+  };
+
+  const link =
+    issued === null || typeof window === "undefined"
+      ? null
+      : `${window.location.origin}${issued.invite_path}`;
+
+  async function submit() {
+    setPending(true);
+    setError(null);
+    try {
+      const created = await createInvite(email.trim(), role);
+      onIssued(created);
+      setCopied(false);
+    } catch (thrown) {
+      if (thrown instanceof ApiError && thrown.code === "invalid_email") {
+        setError(t.inv_err_email);
+      } else {
+        setError(thrown instanceof Error ? thrown.message : String(thrown));
+      }
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function copy() {
+    if (link === null) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+    } catch {
+      // Clipboard can be unavailable; the link is on screen to select by hand.
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-start justify-center overflow-auto p-[60px_24px]"
+      style={{ background: "var(--od-scrim-3)" }}
+    >
+      <div className="border-od-border-9 bg-od-panel w-full max-w-[520px] rounded-xl border">
+        <div className="border-od-line flex flex-wrap items-start justify-between gap-x-5 gap-y-3 border-b p-[20px_22px]">
+          <div className="min-w-0">
+            <h2 className="text-od-text m-0 text-[19px] font-semibold">{t.inv_title}</h2>
+            <p className="text-od-muted-4 mt-[6px] max-w-[50ch] text-pretty">{t.inv_note}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="border-od-border-7 text-od-muted hover:text-od-text-2 cursor-pointer rounded-md border bg-transparent p-[6px_10px] hover:bg-[var(--od-raise-6)]"
+          >
+            {t.close}
+          </button>
+        </div>
+
+        {issued === null ? (
+          <form
+            className="flex flex-col gap-[18px] p-[20px_22px]"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submit();
+            }}
+          >
+            <label className="block">
+              <span className="text-od-muted-5 text-[12.5px]">{t.inv_email_label}</span>
+              <input
+                dir="ltr"
+                type="email"
+                autoComplete="off"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="mono ltr-data border-od-border-6 bg-od-canvas-2 text-od-text-2 mt-[6px] w-full rounded-[7px] border p-[10px_12px] text-[13.5px]"
+              />
+            </label>
+
+            <div>
+              <div className="text-od-muted-5 text-[12.5px]">{t.inv_role_label}</div>
+              <div className="mt-2 flex flex-col gap-2">
+                {(["admin", "reception", "viewer"] as const).map((entry) => {
+                  const on = role === entry;
+                  return (
+                    <button
+                      key={entry}
+                      type="button"
+                      onClick={() => setRole(entry)}
+                      className="flex cursor-pointer items-start gap-[11px] rounded-[9px] border p-[12px_14px] text-start"
+                      style={{
+                        borderColor: on ? "var(--od-violet)" : "var(--od-border-7)",
+                        background: on ? "var(--od-raise-10)" : "var(--od-canvas-2)",
+                      }}
+                    >
+                      <span
+                        className="mt-[3px] size-[15px] flex-none rounded-full border"
+                        style={{
+                          borderColor: on ? "var(--od-violet)" : "var(--od-stroke-5)",
+                          background: on ? "var(--od-violet)" : "transparent",
+                          boxShadow: on ? "inset 0 0 0 3px var(--od-panel)" : "none",
+                        }}
+                      />
+                      <span className="min-w-0">
+                        <span className="text-od-text-2 block font-semibold">
+                          {ROLE_NOTES[entry].label}
+                        </span>
+                        <span className="text-od-muted-5 mt-[3px] block text-[12.5px] text-pretty">
+                          {ROLE_NOTES[entry].note}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {error ? (
+              <p className="m-0 text-[13px] text-pretty text-[color:var(--od-red-text-6)]">
+                {error}
+              </p>
+            ) : null}
+
+            <div className="flex items-center justify-end gap-[10px]">
+              <button
+                type="submit"
+                disabled={pending || !email.trim()}
+                className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-md border p-[9px_16px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {pending ? t.inv_creating : t.inv_create}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="flex flex-col gap-[16px] p-[20px_22px]">
+            <div className="border-od-line bg-od-panel-deep-2 rounded-[9px] border p-[13px_15px]">
+              <div className="flex flex-wrap items-center justify-between gap-x-[14px] gap-y-[10px]">
+                <div className="min-w-0">
+                  <div className="text-od-text-5 text-[13px] font-medium">{t.inv_link_title}</div>
+                  <div
+                    dir="ltr"
+                    className="mono ltr-data text-od-muted-5 mt-[5px] text-start text-[12px] [overflow-wrap:anywhere]"
+                  >
+                    {link}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void copy()}
+                  className="cursor-pointer rounded-[7px] border p-[8px_13px] text-[13px] font-medium whitespace-nowrap"
+                  style={{
+                    borderColor: copied ? "var(--od-green-border)" : "var(--od-border-7)",
+                    background: copied ? "rgba(63,185,132,.10)" : "transparent",
+                    color: copied ? "var(--od-green-text)" : "var(--od-text-3)",
+                  }}
+                >
+                  {copied ? t.inv_copied : t.inv_copy}
+                </button>
+              </div>
+            </div>
+
+            <p className="text-od-muted-5 m-0 text-[13px] text-pretty">
+              {issued.mailed ? t.inv_mailed : t.inv_not_mailed}
+            </p>
+            <p className="text-od-faint m-0 text-[12.5px] text-pretty">{t.inv_expires}</p>
+
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={onClose}
+                className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-md border p-[9px_16px] font-medium"
+              >
+                {t.inv_done}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function UsersPanels({ t }: { t: SettingsDictionary }) {
   const members = useResource<Member[]>(() => membersList());
   const me = useResource(() => currentUser());
@@ -884,6 +1094,9 @@ function UsersPanels({ t }: { t: SettingsDictionary }) {
   const [confirming, setConfirming] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // The invite dialog: open for a new invitation, or showing a freshly issued link.
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [issued, setIssued] = useState<InviteLink | null>(null);
 
   function openMenu(userId: number | null) {
     setMenuFor(userId);
@@ -907,9 +1120,21 @@ function UsersPanels({ t }: { t: SettingsDictionary }) {
   return (
     <>
       <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border p-[18px]">
-        <h3 className="text-od-muted-4 m-0 text-[13px] font-semibold tracking-[.07em] uppercase">
-          {t.u_team}
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-[10px]">
+          <h3 className="text-od-muted-4 m-0 text-[13px] font-semibold tracking-[.07em] uppercase">
+            {t.u_team}
+          </h3>
+          <button
+            type="button"
+            onClick={() => {
+              setIssued(null);
+              setInviteOpen(true);
+            }}
+            className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-md border p-[8px_14px] text-[13px] font-medium whitespace-nowrap"
+          >
+            {t.u_invite}
+          </button>
+        </div>
 
         {members.data === null && members.loading ? (
           <p className="text-od-muted-5 m-0 py-[14px] text-[13px]">{t.live_loading}</p>
@@ -986,7 +1211,22 @@ function UsersPanels({ t }: { t: SettingsDictionary }) {
                           className="border-od-border-9 bg-od-panel absolute top-[34px] end-0 z-50 flex w-[208px] flex-col gap-px rounded-[9px] border p-[5px]"
                           style={{ boxShadow: "0 12px 28px var(--od-scrim-4)" }}
                         >
-                          {invited ? null : (
+                          {invited ? (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                void act(async () => {
+                                  const link = await regenerateInvite(member.user_id);
+                                  setIssued(link);
+                                  setInviteOpen(true);
+                                })
+                              }
+                              className="text-od-text-3 cursor-pointer rounded-md border-none bg-transparent p-[8px_10px] text-start text-[13.5px] hover:bg-[var(--od-raise-5)] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {t.u_resend}
+                            </button>
+                          ) : (
                             <>
                               <div className="p-[6px_10px_3px] text-[10.5px] tracking-[.08em] uppercase text-[color:var(--od-faint-5)]">
                                 {t.u_change_perms}
@@ -1046,6 +1286,18 @@ function UsersPanels({ t }: { t: SettingsDictionary }) {
           {t.u_workspace_note}
         </div>
       </div>
+
+      {inviteOpen ? (
+        <InviteDialog
+          t={t}
+          issued={issued}
+          onIssued={(link) => {
+            setIssued(link);
+            members.reload();
+          }}
+          onClose={() => setInviteOpen(false)}
+        />
+      ) : null}
 
       <div className="border-od-line bg-od-panel-deep-3 overflow-hidden rounded-[10px] border">
         <div className="p-[16px_18px_12px]">

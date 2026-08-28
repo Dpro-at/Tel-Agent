@@ -260,6 +260,8 @@ export const EVENT_LABEL: Record<string, Key> = {
   role_changed: "ev_role_changed",
   member_removed: "ev_member_removed",
   workspace_created: "ev_workspace_created",
+  invite_created: "ev_invite_created",
+  invite_accepted: "ev_invite_accepted",
 };
 
 export type Role = "owner" | "admin" | "reception" | "viewer" | "invited";

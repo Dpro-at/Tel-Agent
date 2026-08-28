@@ -40,6 +40,8 @@ EVENTS = (
     "role_changed",
     "member_removed",
     "workspace_created",
+    "invite_created",
+    "invite_accepted",
     # P7. Not account events in the narrow sense, and recorded here anyway: one backup
     # archive is every transcript on the installation, so downloading one is a data
     # export, and staging a restore is the only action in the product that deletes
