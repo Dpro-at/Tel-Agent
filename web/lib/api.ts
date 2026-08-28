@@ -384,3 +384,43 @@ export function saveSettings(
 ): Promise<{ written: string[]; ignored_masked: string[] }> {
   return api("/api/settings", { method: "PATCH", json: { values } });
 }
+
+// --- Notifications -----------------------------------------------------------
+
+export type NotificationCategory = "failure" | "review" | "missed" | "system";
+
+export type NotificationItem = {
+  id: number;
+  category: NotificationCategory;
+  needs_decision: boolean;
+  /** Prose written by whatever raised this, in the server's language — not a locale
+   *  key. The screen renders it as given rather than pretending it is translated. */
+  title: string;
+  body: string | null;
+  primary_action: string;
+  action_payload: Record<string, unknown> | null;
+  conversation_id: number | null;
+  created_at: string;
+  resolved_at: string | null;
+};
+
+export type NotificationList = {
+  /** Waiting on a decision only a person can make. */
+  waiting: NotificationItem[];
+  /** What happened while nobody was watching. */
+  log: NotificationItem[];
+  open_count: number;
+};
+
+export function notificationList(category?: NotificationCategory): Promise<NotificationList> {
+  const query = category ? `?category=${category}` : "";
+  return api<NotificationList>(`/api/notifications${query}`);
+}
+
+export function resolveNotification(id: number): Promise<NotificationItem> {
+  return api<NotificationItem>(`/api/notifications/${id}/resolve`, { method: "POST" });
+}
+
+export function markLogRead(): Promise<{ resolved: number; still_waiting: number }> {
+  return api("/api/notifications/mark-log-read", { method: "POST" });
+}
