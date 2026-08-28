@@ -343,7 +343,7 @@ export function Conversations({
                             label={channelLabel(t, thread.channel)}
                           />
                           <span className="text-od-text font-medium text-pretty">
-                            {thread.who ?? t.thread_visitor}
+                            {thread.who_name ?? thread.who ?? t.thread_visitor}
                           </span>
                           <span
                             dir="ltr"
@@ -455,7 +455,7 @@ function ThreadPane({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-[9px]">
             <span className="text-od-text text-[16px] font-semibold">
-              {thread.who ?? t.thread_visitor}
+              {thread.who_name ?? thread.who ?? t.thread_visitor}
             </span>
             <ChannelBadge
               kind={thread.channel}

@@ -127,17 +127,35 @@ def _run(connection: Connection) -> None:
         context.run_migrations()
 
 
-async def run_migrations_online() -> None:
-    """Connect with the application's own engine and run the migrations."""
-    engine: AsyncEngine = create_engine(get_settings())
+def run_migrations_online() -> None:
+    """Connect and run the migrations.
 
-    async with engine.connect() as connection:
-        await connection.run_sync(_run)
+    **SQLite migrates over the stdlib driver, not aiosqlite.** Batch mode rebuilds a
+    table by creating a copy and dropping the original, and with rows present the
+    async driver still holds the read cursor from the data copy when the DROP
+    arrives - SQLite answers "database table is locked" and the migration dies
+    half-applied. The application keeps its async engine; DDL does not need one.
+    """
+    url = _url()
+    if url.startswith("sqlite+aiosqlite"):
+        from sqlalchemy import create_engine as create_sync_engine
 
-    await engine.dispose()
+        engine = create_sync_engine(url.replace("sqlite+aiosqlite", "sqlite", 1))
+        with engine.connect() as connection:
+            _run(connection)
+        engine.dispose()
+        return
+
+    async def _online() -> None:
+        engine: AsyncEngine = create_engine(get_settings())
+        async with engine.connect() as connection:
+            await connection.run_sync(_run)
+        await engine.dispose()
+
+    asyncio.run(_online())
 
 
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    asyncio.run(run_migrations_online())
+    run_migrations_online()

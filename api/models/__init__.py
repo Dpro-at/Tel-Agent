@@ -10,6 +10,7 @@ from api.models.attempt import SCOPES, AuthAttempt
 from api.models.audit import EVENTS, AuthEvent
 from api.models.backup import BACKUP_KINDS, BACKUP_STATUSES, Backup
 from api.models.common import enum_column, utc_now_column, workspace_fk
+from api.models.contact import Contact
 from api.models.conversation import (
     CHANNEL_KINDS,
     Call,
@@ -57,6 +58,7 @@ __all__ = [
     "Backup",
     "Call",
     "Channel",
+    "Contact",
     "Conversation",
     "Invite",
     "KeyChallenge",

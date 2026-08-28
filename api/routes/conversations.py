@@ -32,7 +32,7 @@ from api.conversations import (
     previews,
     search_filter,
 )
-from api.models import Call, Channel, Conversation, Message
+from api.models import Call, Channel, Contact, Conversation, Message
 from api.security.permissions import WorkspaceContext, require_viewer
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
@@ -62,6 +62,9 @@ class ThreadOut(BaseModel):
     # Whoever is on the other end, as the channel knows them. For a call this is the
     # caller's number; for a messaging channel the channel's own thread identifier.
     who: str | None
+    # And as the phonebook knows them, when it does - matched on the number at read
+    # time. Null is the honest answer for a caller nobody has named yet.
+    who_name: str | None
     preview: str | None
     message_count: int
     is_call: bool
@@ -103,7 +106,12 @@ class ThreadDetail(ThreadOut):
 
 
 def _thread(
-    row: Conversation, channel_kind: str, preview: str | None, count: int, is_call: bool
+    row: Conversation,
+    channel_kind: str,
+    preview: str | None,
+    count: int,
+    is_call: bool,
+    who_name: str | None = None,
 ) -> ThreadOut:
     return ThreadOut(
         id=row.id,
@@ -115,10 +123,26 @@ def _thread(
         started_at=_utc(row.started_at) or "",
         ended_at=_utc(row.ended_at),
         who=row.external_id,
+        who_name=who_name,
         preview=preview,
         message_count=count,
         is_call=is_call,
     )
+
+
+async def _names_for(
+    db: DbSession, workspace_id: int, whos: list[str | None]
+) -> dict[str, str]:
+    """The phonebook's names for these channel identities, in one query."""
+    numbers = [who for who in whos if who]
+    if not numbers:
+        return {}
+    rows = await db.execute(
+        select(Contact.e164, Contact.name).where(
+            Contact.workspace_id == workspace_id, Contact.e164.in_(numbers)
+        )
+    )
+    return dict(rows.all())
 
 
 @router.get("", response_model=ThreadPage, summary="The threads in this workspace")
@@ -181,6 +205,7 @@ async def list_conversations(
         .scalars()
         .all()
     )
+    name_by_who = await _names_for(db, context.id, [row[0].external_id for row in rows])
 
     return ThreadPage(
         threads=[
@@ -190,6 +215,7 @@ async def list_conversations(
                 preview_by_id.get(row[0].id),
                 count_by_id.get(row[0].id, 0),
                 row[0].id in call_ids,
+                name_by_who.get(row[0].external_id or ""),
             )
             for row in rows
         ],
@@ -280,6 +306,7 @@ async def read_conversation(
         .all()
     )
     call = await db.get(Call, row.id)
+    name_by_who = await _names_for(db, context.id, [row.external_id])
 
     return ThreadDetail(
         **_thread(
@@ -288,6 +315,7 @@ async def read_conversation(
             messages[-1].text[:160] if messages else None,
             len(messages),
             call is not None,
+            name_by_who.get(row.external_id or ""),
         ).model_dump(),
         summary=row.summary,
         messages=[
