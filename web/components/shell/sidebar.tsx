@@ -2,7 +2,7 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import ar from "../../../locales/ar/shell.json";
 import de from "../../../locales/de/shell.json";
@@ -10,8 +10,11 @@ import en from "../../../locales/en/shell.json";
 
 import { NavIcon } from "@/components/shell/icons";
 import { IncomingCall } from "@/components/shell/incoming-call";
+import { currentUser, signOut, type Me } from "@/lib/api";
 import { interpolate, pickDictionary } from "@/lib/i18n";
 import type { Locale } from "@/lib/locales";
+import { useResource } from "@/lib/use-resource";
+import { activeWorkspaceId, setActiveWorkspaceId } from "@/lib/workspace";
 
 /**
  * The theme lives on `<html data-od-theme>`, written by the inline script in the
@@ -112,11 +115,14 @@ const NAV: { label: LabelKey; items: Item[] }[] = [
   },
 ];
 
-const WORKSPACES = [
-  { name: "Wagner & Partner", note: "3 numbers · 4 assistants" },
-  { name: "Wagner Nachbetreuung", note: "1 number · 1 assistant" },
-  { name: "Wolf Studio", note: "shared with you by Sabine" },
-];
+/** The note under each workspace in the switcher: the reader's role there. */
+const ROLE_KEY: Record<string, LabelKey> = {
+  owner: "role_owner",
+  admin: "role_admin",
+  reception: "role_reception",
+  viewer: "role_viewer",
+  invited: "role_invited",
+};
 
 export function Sidebar({
   locale,
@@ -133,7 +139,42 @@ export function Sidebar({
   const theme = useSyncExternalStore(subscribeTheme, readTheme, darkTheme);
   const [open, setOpen] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [workspace, setWorkspace] = useState(0);
+
+  // Who is signed in and which workspaces they belong to — the switcher's truth.
+  // The shell renders on every screen, so this is one request per page, answered
+  // from the same session cookie every other call already carries.
+  const me = useResource<Me>(() => currentUser());
+  const workspaces = me.data?.workspaces ?? [];
+  const storedId = me.data === null ? null : activeWorkspaceId();
+  const current = workspaces.find((entry) => entry.id === storedId) ?? workspaces[0] ?? null;
+
+  // A stored id whose membership is gone — removed from the workspace, or the
+  // workspace deleted — must not keep every request pinned to a 403.
+  useEffect(() => {
+    if (me.data !== null && storedId !== null && current !== null && current.id !== storedId) {
+      setActiveWorkspaceId(null);
+    }
+  }, [me.data, storedId, current]);
+
+  function switchWorkspace(id: number) {
+    setActiveWorkspaceId(id);
+    // A workspace is a separate installation in every way that matters, so the
+    // whole page reloads into it rather than patching state screen by screen.
+    window.location.reload();
+  }
+
+  async function signOutAndLeave() {
+    try {
+      await signOut();
+    } catch {
+      // The server may be unreachable; the sign-in screen is still the right place
+      // to land, and the cookie the server holds expires on its own.
+    }
+    // A full-document navigation on purpose: signing out must drop every piece of
+    // in-memory state the dashboard holds, which a client-side route change keeps.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign(`/${locale}/login`);
+  }
 
   function toggleTheme() {
     const next = theme === "dark" ? "light" : "dark";
@@ -288,33 +329,38 @@ export function Sidebar({
                 <div className="p-[8px_10px_6px] text-[10.5px] tracking-[.1em] uppercase text-[color:var(--od-faint-5)]">
                   {t.workspace_heading}
                 </div>
-                {WORKSPACES.map((entry, index) => {
-                  const current = index === workspace;
+                {workspaces.map((entry) => {
+                  const active_ = current !== null && entry.id === current.id;
+                  const roleKey = ROLE_KEY[entry.role];
                   return (
                     <button
-                      key={entry.name}
+                      key={entry.id}
                       type="button"
                       onClick={() => {
-                        setWorkspace(index);
                         setMenuOpen(false);
+                        if (!active_) switchWorkspace(entry.id);
                       }}
                       className="hover:bg-od-raise flex w-full cursor-pointer items-center gap-[9px] rounded-lg border-none bg-transparent p-[7px_10px]"
                     >
                       <span
                         className="inline-flex size-6 flex-none items-center justify-center rounded-[7px] border text-[11.5px] font-semibold"
                         style={{
-                          borderColor: current ? "var(--od-violet-border)" : "var(--od-border-9)",
-                          background: current ? "rgba(139,124,255,.14)" : "var(--od-raise-5)",
-                          color: current ? "var(--od-violet-3)" : "var(--od-muted-2)",
+                          borderColor: active_ ? "var(--od-violet-border)" : "var(--od-border-9)",
+                          background: active_ ? "rgba(139,124,255,.14)" : "var(--od-raise-5)",
+                          color: active_ ? "var(--od-violet-3)" : "var(--od-muted-2)",
                         }}
                       >
-                        {entry.name.slice(0, 1)}
+                        {entry.name.slice(0, 1).toUpperCase()}
                       </span>
                       <span className="min-w-0 flex-[1_1_auto] text-start">
                         <span className="text-od-text block text-[13px] font-medium">{entry.name}</span>
-                        <span className="text-od-faint mt-px block text-[11.5px]">{entry.note}</span>
+                        {roleKey ? (
+                          <span className="text-od-faint mt-px block text-[11.5px]">
+                            {t[roleKey]}
+                          </span>
+                        ) : null}
                       </span>
-                      {current ? (
+                      {active_ ? (
                         <span className="flex-none text-[12px] text-[color:var(--od-violet-2)]">✓</span>
                       ) : null}
                     </button>
@@ -337,12 +383,13 @@ export function Sidebar({
                   {t.settings}
                 </Link>
                 <div className="bg-od-border m-[6px_4px] h-px" />
-                <Link
-                  href={href("/login")}
-                  className="text-od-muted-4 hover:bg-od-raise hover:text-od-text-2 flex items-center gap-[9px] rounded-lg p-[8px_10px] text-[13px] hover:no-underline"
+                <button
+                  type="button"
+                  onClick={() => void signOutAndLeave()}
+                  className="text-od-muted-4 hover:bg-od-raise hover:text-od-text-2 flex w-full cursor-pointer items-center gap-[9px] rounded-lg border-none bg-transparent p-[8px_10px] text-start text-[13px]"
                 >
                   {t.sign_out}
-                </Link>
+                </button>
               </div>
             ) : null}
 
@@ -355,11 +402,15 @@ export function Sidebar({
               }`}
             >
               <span className="border-od-border-9 text-od-text-2 inline-flex size-[26px] flex-none items-center justify-center rounded-full border bg-[var(--od-raise-5)] text-[11.5px] font-semibold">
-                M
+                {me.data?.username.slice(0, 1).toUpperCase() ?? "·"}
               </span>
               <span className="min-w-0 flex-[1_1_auto] text-start">
-                <span className="text-od-text-2 block text-[13px]">Mohamed</span>
-                <span className="text-od-faint block text-[11.5px]">{WORKSPACES[workspace].name}</span>
+                <span className="text-od-text-2 block text-[13px]">
+                  {me.data?.username ?? "…"}
+                </span>
+                {current ? (
+                  <span className="text-od-faint block text-[11.5px]">{current.name}</span>
+                ) : null}
               </span>
               <span className="text-od-faint-2 flex-none text-[10px]">{menuOpen ? "⌄" : "›"}</span>
             </button>

@@ -33,6 +33,13 @@ EVENTS = (
     "key_sign_in_succeeded",
     "key_sign_in_failed",
     "recovery_code_requested",
+    # The workspaces epic. Written against the *affected* account, not the acting one:
+    # "your role here changed" and "you were removed" are facts about the person they
+    # happened to, and the settings tab shows each person their own trail. Who did it
+    # goes in `details`.
+    "role_changed",
+    "member_removed",
+    "workspace_created",
     # P7. Not account events in the narrow sense, and recorded here anyway: one backup
     # archive is every transcript on the installation, so downloading one is a data
     # export, and staging a restore is the only action in the product that deletes

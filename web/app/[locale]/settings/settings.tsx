@@ -9,11 +9,16 @@ import { Sidebar } from "@/components/shell/sidebar";
 import { StatePreview, type ScreenState } from "@/components/state-preview";
 import {
   ApiError,
+  ASSIGNABLE_ROLES,
   accountEvents,
+  changeMemberRole,
   changePassword,
   currentUser,
+  membersList,
+  removeMember,
   signOutEverywhereElse,
   type AccountEvent,
+  type Member,
 } from "@/lib/api";
 import { interpolate } from "@/lib/i18n";
 import type { Locale } from "@/lib/locales";
@@ -21,8 +26,6 @@ import {
   API_KEYS,
   EVENT_LABEL,
   HOST_FIELDS,
-  INVITE_ROLES,
-  MEMBERS,
   OUR_TOOLS,
   PAGE_LINKS,
   ROLE_COLUMNS,
@@ -192,8 +195,6 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
   const router = useRouter();
   const [state, setState] = useState<ScreenState>("default");
   const [tab, setTab] = useState("general");
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [memberMenu, setMemberMenu] = useState<string | null>(null);
 
   const offline = state === "offline";
   const empty = state === "empty";
@@ -313,14 +314,7 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
                     </div>
 
                     {tab === "profile" ? <ProfilePanels t={t} /> : null}
-                    {tab === "users" ? (
-                      <UsersPanels
-                        t={t}
-                        onInvite={() => setInviteOpen(true)}
-                        memberMenu={memberMenu}
-                        onMemberMenu={setMemberMenu}
-                      />
-                    ) : null}
+                    {tab === "users" ? <UsersPanels t={t} /> : null}
                     {tab === "api" ? <ApiPanels t={t} /> : null}
                     {tab === "mcp" ? <McpPanels locale={locale} t={t} /> : null}
                     {tab === "advanced" ? (
@@ -386,7 +380,6 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
         )}
       </div>
 
-      {inviteOpen ? <InviteDialog t={t} onClose={() => setInviteOpen(false)} /> : null}
     </div>
   );
 }
@@ -738,135 +731,180 @@ function ChangePasswordDialog({
   );
 }
 
-function UsersPanels({
-  t,
-  onInvite,
-  memberMenu,
-  onMemberMenu,
-}: {
-  t: SettingsDictionary;
-  onInvite: () => void;
-  memberMenu: string | null;
-  onMemberMenu: (email: string | null) => void;
-}) {
+/**
+ * The team list, wired to `/api/members`.
+ *
+ * What went, and why: the "Invite member" button and its dialog were a drawing of a
+ * flow whose decisions are not taken (who picks the username, what the link token
+ * is), and the phone chips, extension numbers and "also in Wolf Studio" lines
+ * described phones and cross-workspace visibility that do not exist. A control with
+ * no endpoint is removed, not drawn. The owner's row and the reader's own row carry
+ * no menu — the server refuses both, and a menu of refusals is not a menu.
+ */
+function UsersPanels({ t }: { t: SettingsDictionary }) {
+  const members = useResource<Member[]>(() => membersList());
+  const me = useResource(() => currentUser());
+  const [menuFor, setMenuFor] = useState<number | null>(null);
+  const [confirming, setConfirming] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  function openMenu(userId: number | null) {
+    setMenuFor(userId);
+    setConfirming(null);
+  }
+
+  async function act(action: () => Promise<unknown>) {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await action();
+      openMenu(null);
+      members.reload();
+    } catch (thrown) {
+      setNotice(thrown instanceof Error ? thrown.message : String(thrown));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
       <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border p-[18px]">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-[10px]">
-          <h3 className="text-od-muted-4 m-0 text-[13px] font-semibold tracking-[.07em] uppercase">
-            {t.u_team}
-          </h3>
-          <button
-            type="button"
-            onClick={onInvite}
-            className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-md border p-[8px_14px] text-[13px] font-medium whitespace-nowrap"
-          >
-            {t.u_invite}
-          </button>
-        </div>
+        <h3 className="text-od-muted-4 m-0 text-[13px] font-semibold tracking-[.07em] uppercase">
+          {t.u_team}
+        </h3>
 
-        <div className="mt-[10px] flex flex-col">
-          {MEMBERS.map((member) => {
-            const invited = member.role === "invited";
-            const active = member.hasPhone && !invited;
-            return (
-              <div
-                key={member.email}
-                className="border-od-border flex flex-wrap items-center gap-x-[18px] gap-y-3 border-b py-[13px]"
-              >
-                <span className="border-od-border-9 text-od-text-3 inline-flex size-8 flex-none items-center justify-center rounded-full border bg-[var(--od-raise-5)] text-[12.5px] font-semibold">
-                  {member.name.charAt(0)}
-                </span>
-                <div className="min-w-[180px] flex-[1_1_220px]">
-                  <div className="flex flex-wrap items-center gap-[9px]">
-                    <span className="text-od-text font-medium">{member.name}</span>
-                    <span
-                      className="rounded-md border p-[2px_9px] text-[12px] font-medium"
-                      style={{
-                        borderColor: invited ? "var(--od-amber-border)" : "var(--od-border-7)",
-                        background: invited ? "var(--od-amber-bg)" : "var(--od-raise-5)",
-                        color: invited ? "var(--od-amber-text)" : "var(--od-muted-4)",
-                      }}
-                    >
-                      {t[ROLE_LABEL[member.role]]}
-                    </span>
-                    {/* A role alone does not let someone answer — a phone must be registered. */}
-                    <span
-                      className="rounded-[5px] border p-[1px_8px] text-[11px] font-semibold whitespace-nowrap"
-                      style={{
-                        borderColor: active ? "var(--od-green-border)" : "var(--od-border-2)",
-                        background: active ? "rgba(63,185,132,.10)" : "transparent",
-                        color: active ? "var(--od-green-text)" : "var(--od-faint)",
-                      }}
-                    >
-                      {invited ? t.u_not_active : member.hasPhone ? t.u_can_answer : t.u_no_phone}
-                    </span>
+        {members.data === null && members.loading ? (
+          <p className="text-od-muted-5 m-0 py-[14px] text-[13px]">{t.live_loading}</p>
+        ) : members.data === null ? (
+          <div className="py-[14px]">
+            <p className="m-0 text-[13px] text-[color:var(--od-red-text-6)]">
+              {members.error?.message ?? t.live_failed}
+            </p>
+            <button
+              type="button"
+              onClick={members.reload}
+              className="border-od-stroke bg-od-raise-10 text-od-text-2 mt-3 cursor-pointer rounded-[7px] border p-[7px_13px] text-[12.5px]"
+            >
+              {t.live_retry}
+            </button>
+          </div>
+        ) : (
+          <div className="mt-[10px] flex flex-col">
+            {members.data.map((member) => {
+              const invited = member.role === "invited";
+              // The server refuses acting on the owner and on your own row; a menu
+              // of refusals is not a menu, so those rows simply have none.
+              const actionable =
+                member.role !== "owner" && me.data !== null && member.user_id !== me.data.id;
+              return (
+                <div
+                  key={member.user_id}
+                  className="border-od-border flex flex-wrap items-center gap-x-[18px] gap-y-3 border-b py-[13px]"
+                >
+                  <span className="border-od-border-9 text-od-text-3 inline-flex size-8 flex-none items-center justify-center rounded-full border bg-[var(--od-raise-5)] text-[12.5px] font-semibold">
+                    {member.username.charAt(0).toUpperCase()}
+                  </span>
+                  <div className="min-w-[180px] flex-[1_1_220px]">
+                    <div className="flex flex-wrap items-center gap-[9px]">
+                      <span className="text-od-text font-medium">{member.username}</span>
+                      <span
+                        className="rounded-md border p-[2px_9px] text-[12px] font-medium"
+                        style={{
+                          borderColor: invited ? "var(--od-amber-border)" : "var(--od-border-7)",
+                          background: invited ? "var(--od-amber-bg)" : "var(--od-raise-5)",
+                          color: invited ? "var(--od-amber-text)" : "var(--od-muted-4)",
+                        }}
+                      >
+                        {t[ROLE_LABEL[member.role as Role]]}
+                      </span>
+                      {invited ? (
+                        <span className="border-od-border-2 text-od-faint rounded-[5px] border p-[1px_8px] text-[11px] font-semibold whitespace-nowrap">
+                          {t.u_not_active}
+                        </span>
+                      ) : null}
+                    </div>
+                    {member.email ? (
+                      <div
+                        dir="ltr"
+                        className="text-od-muted-5 mt-[3px] text-start text-[12.5px] [overflow-wrap:anywhere]"
+                      >
+                        {member.email}
+                      </div>
+                    ) : null}
                   </div>
-                  <div
-                    dir="ltr"
-                    className="text-od-muted-5 mt-[3px] text-[12.5px] [overflow-wrap:anywhere]"
-                  >
-                    {member.email}
-                  </div>
-                  <div className="text-od-faint mt-[5px] flex flex-wrap gap-x-[10px] gap-y-1 text-[12px]">
-                    <span className="text-pretty">{t[member.access]}</span>
-                    <span className="text-[color:var(--od-faint-5)]">·</span>
-                    <span className="text-pretty">{t[member.elsewhere]}</span>
-                  </div>
-                </div>
 
-                <div className="relative ms-auto">
-                  <button
-                    type="button"
-                    onClick={() => onMemberMenu(memberMenu === member.email ? null : member.email)}
-                    aria-label={t.u_more}
-                    className="text-od-muted-4 hover:text-od-text-3 inline-flex size-[30px] cursor-pointer items-center justify-center rounded-[7px] border border-transparent bg-transparent text-[17px] leading-none hover:bg-[var(--od-raise-5)]"
-                  >
-                    ⋯
-                  </button>
-                  {memberMenu === member.email ? (
-                    <div
-                      className="border-od-border-9 bg-od-panel absolute top-[34px] end-0 z-50 flex w-[208px] flex-col gap-px rounded-[9px] border p-[5px]"
-                      style={{ boxShadow: "0 12px 28px var(--od-scrim-4)" }}
-                    >
-                      {[
-                        { id: "perms", label: t.u_change_perms, tone: "" },
-                        {
-                          id: "reset",
-                          label: invited ? t.u_resend : t.u_reset_pw,
-                          tone: "",
-                        },
-                        { id: "activity", label: t.u_activity, tone: "" },
-                        {
-                          id: "remove",
-                          label: invited ? t.u_cancel_invite : t.u_remove,
-                          tone: member.removable ? "danger" : "off",
-                        },
-                      ].map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className="rounded-md border-none bg-transparent p-[8px_10px] text-start text-[13.5px] hover:bg-[var(--od-raise-5)]"
-                          style={{
-                            cursor: item.tone === "off" ? "not-allowed" : "pointer",
-                            color:
-                              item.tone === "danger"
-                                ? "var(--od-red-text-4)"
-                                : item.tone === "off"
-                                  ? "var(--od-faint-5)"
-                                  : "var(--od-text-3)",
-                          }}
+                  {actionable ? (
+                    <div className="relative ms-auto">
+                      <button
+                        type="button"
+                        onClick={() => openMenu(menuFor === member.user_id ? null : member.user_id)}
+                        aria-label={t.u_more}
+                        className="text-od-muted-4 hover:text-od-text-3 inline-flex size-[30px] cursor-pointer items-center justify-center rounded-[7px] border border-transparent bg-transparent text-[17px] leading-none hover:bg-[var(--od-raise-5)]"
+                      >
+                        ⋯
+                      </button>
+                      {menuFor === member.user_id ? (
+                        <div
+                          className="border-od-border-9 bg-od-panel absolute top-[34px] end-0 z-50 flex w-[208px] flex-col gap-px rounded-[9px] border p-[5px]"
+                          style={{ boxShadow: "0 12px 28px var(--od-scrim-4)" }}
                         >
-                          {item.label}
-                        </button>
-                      ))}
+                          {invited ? null : (
+                            <>
+                              <div className="p-[6px_10px_3px] text-[10.5px] tracking-[.08em] uppercase text-[color:var(--od-faint-5)]">
+                                {t.u_change_perms}
+                              </div>
+                              {ASSIGNABLE_ROLES.filter((role) => role !== member.role).map(
+                                (role) => (
+                                  <button
+                                    key={role}
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() =>
+                                      void act(() => changeMemberRole(member.user_id, role))
+                                    }
+                                    className="text-od-text-3 cursor-pointer rounded-md border-none bg-transparent p-[8px_10px] text-start text-[13.5px] hover:bg-[var(--od-raise-5)] disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {t[ROLE_LABEL[role]]}
+                                  </button>
+                                ),
+                              )}
+                              <div className="bg-od-border m-[4px_2px] h-px" />
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() =>
+                              confirming === member.user_id
+                                ? void act(() => removeMember(member.user_id))
+                                : setConfirming(member.user_id)
+                            }
+                            className="cursor-pointer rounded-md border-none bg-transparent p-[8px_10px] text-start text-[13.5px] hover:bg-[var(--od-raise-5)] disabled:cursor-not-allowed disabled:opacity-50"
+                            style={{ color: "var(--od-red-text-4)" }}
+                          >
+                            {confirming === member.user_id
+                              ? t.u_confirm_remove
+                              : invited
+                                ? t.u_cancel_invite
+                                : t.u_remove}
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
+
+        {notice ? (
+          <div className="mt-3 text-[13px] text-pretty text-[color:var(--od-red-text-6)]">
+            {notice}
+          </div>
+        ) : null}
 
         <div className="text-od-faint mt-[14px] max-w-[74ch] text-[12.5px] text-pretty">
           {t.u_workspace_note}
@@ -1114,127 +1152,6 @@ function McpPanels({ locale, t }: { locale: Locale; t: SettingsDictionary }) {
           {t.m_outward_link}
         </span>
       </Link>
-    </div>
-  );
-}
-
-function InviteDialog({ t, onClose }: { t: SettingsDictionary; onClose: () => void }) {
-  const [role, setRole] = useState("reception");
-  const [copied, setCopied] = useState(false);
-
-  return (
-    <div
-      className="fixed inset-0 z-[60] flex items-start justify-center overflow-auto p-[60px_24px]"
-      style={{ background: "var(--od-scrim-3)" }}
-    >
-      <div className="border-od-border-9 bg-od-panel w-full max-w-[520px] rounded-xl border">
-        <div className="border-od-line flex flex-wrap items-start justify-between gap-x-5 gap-y-3 border-b p-[20px_22px]">
-          <div className="min-w-0">
-            <h2 className="text-od-text m-0 text-[19px] font-semibold">{t.inv_title}</h2>
-            <p className="text-od-muted-4 mt-[6px] max-w-[50ch] text-pretty">{t.inv_note}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="border-od-border-7 text-od-muted hover:text-od-text-2 cursor-pointer rounded-md border bg-transparent p-[6px_10px] hover:bg-[var(--od-raise-6)]"
-          >
-            {t.close}
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-[18px] p-[20px_22px]">
-          <div>
-            <div className="text-od-muted-5 text-[12.5px]">{t.inv_email_label}</div>
-            <div
-              dir="ltr"
-              className="mono ltr-data border-od-border-6 bg-od-canvas-2 text-od-faint-2 mt-[6px] rounded-[7px] border p-[10px_12px] text-[13.5px]"
-            >
-              name@wagner-partner.at
-            </div>
-          </div>
-
-          <div>
-            <div className="text-od-muted-5 text-[12.5px]">{t.inv_role_label}</div>
-            <div className="mt-2 flex flex-col gap-2">
-              {INVITE_ROLES.map((entry) => {
-                const on = role === entry.id;
-                return (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    onClick={() => setRole(entry.id)}
-                    className="flex cursor-pointer items-start gap-[11px] rounded-[9px] border p-[12px_14px] text-start"
-                    style={{
-                      borderColor: on ? "var(--od-violet)" : "var(--od-border-7)",
-                      background: on ? "var(--od-raise-10)" : "var(--od-canvas-2)",
-                    }}
-                  >
-                    <span
-                      className="mt-[3px] size-[15px] flex-none rounded-full border"
-                      style={{
-                        borderColor: on ? "var(--od-violet)" : "var(--od-stroke-5)",
-                        background: on ? "var(--od-violet)" : "transparent",
-                        boxShadow: on ? "inset 0 0 0 3px var(--od-panel)" : "none",
-                      }}
-                    />
-                    <span className="min-w-0">
-                      <span className="text-od-text-2 block font-semibold">{t[entry.label]}</span>
-                      <span className="text-od-muted-5 mt-[3px] block text-[12.5px] text-pretty">
-                        {t[entry.note]}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="border-od-line bg-od-panel-deep-2 rounded-[9px] border p-[13px_15px]">
-            <div className="flex flex-wrap items-center justify-between gap-x-[14px] gap-y-[10px]">
-              <div className="min-w-0">
-                <div className="text-od-text-5 text-[13px] font-medium">
-                  {t.inv_link_title}
-                </div>
-                <div
-                  dir="ltr"
-                  className="mono ltr-data text-od-muted-5 mt-[5px] text-[12px] [overflow-wrap:anywhere]"
-                >
-                  https://telagent.wagner-partner.local/invite/4F2K9QD1
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setCopied(true)}
-                className="cursor-pointer rounded-[7px] border p-[8px_13px] text-[13px] font-medium whitespace-nowrap"
-                style={{
-                  borderColor: copied ? "var(--od-green-border)" : "var(--od-border-7)",
-                  background: copied ? "rgba(63,185,132,.10)" : "transparent",
-                  color: copied ? "var(--od-green-text)" : "var(--od-text-3)",
-                }}
-              >
-                {copied ? t.inv_copied : t.inv_copy}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="border-od-line flex flex-wrap items-center justify-end gap-[10px] border-t p-[16px_22px]">
-          <button
-            type="button"
-            onClick={onClose}
-            className="border-od-border-2 text-od-muted hover:text-od-text-2 cursor-pointer rounded-[7px] border bg-transparent p-[9px_15px] whitespace-nowrap"
-          >
-            {t.cancel}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 inline-flex cursor-pointer items-center gap-[9px] rounded-[7px] border p-[9px_16px] font-semibold whitespace-nowrap"
-          >
-            {t.inv_send} <span className="mono ltr-data text-od-faint text-[11.5px]">⌘↵</span>
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
