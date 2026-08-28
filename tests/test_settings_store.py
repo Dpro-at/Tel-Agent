@@ -293,3 +293,85 @@ async def test_the_store_beats_the_environment_for_mail(
     assert after.host == "new.example"
     assert after.sender == "new@example.test"
     assert after.configured is True
+
+
+# --- The two failures the browser found ---------------------------------------
+
+
+async def test_the_column_a_secret_is_written_to_is_redacted() -> None:
+    """A SQLAlchemy parameter dump carried a live password into the log.
+
+    The INSERT failed, the exception text included
+    `'secret_value': 'the-real-password'`, and the log panel then showed it to anybody
+    with an admin session. `secret` alone does not match `secret_value` - the word
+    boundary fails against the underscore - so the column name is listed in its own
+    right.
+    """
+    import logging
+
+    from api.logging import JsonFormatter, SecretRedactionFilter
+
+    leaked = "the-real-mail-password"
+    record = logging.LogRecord(
+        "api.db",
+        logging.ERROR,
+        __file__,
+        1,
+        "INSERT failed [parameters: [{'key': 'smtp.password', 'secret_value': '%s'}]]",
+        (leaked,),
+        None,
+    )
+
+    SecretRedactionFilter().filter(record)
+    line = JsonFormatter().format(record)
+
+    assert leaked not in line
+    assert "[redacted]" in line
+
+
+async def test_storing_a_secret_without_a_key_is_answered_not_crashed(
+    migrated, settings, database_url
+) -> None:
+    """An installation with no ENCRYPTION_KEY cannot store a credential at all.
+
+    It used to find that out inside the INSERT, as an unhandled 500 - which is both a
+    useless answer for the person typing an SMTP password and the route by which the
+    password reached the log.
+    """
+    from httpx import ASGITransport, AsyncClient
+
+    from api.main import create_app
+    from api.models import Membership, User, Workspace
+    from api.security.password import hash_password
+
+    password = "a sentence i can actually remember"  # noqa: S105
+    workspace = Workspace(name="Wagner & Partner")
+    migrated.add(workspace)
+    await migrated.flush()
+    user = User(username="mohamed", password_hash=hash_password(password))
+    migrated.add(user)
+    await migrated.flush()
+    migrated.add(Membership(user_id=user.id, workspace_id=workspace.id, role="admin"))
+    await migrated.commit()
+
+    # No encryption key, which is the whole point.
+    app = create_app(
+        settings.model_copy(update={"database_url": database_url, "encryption_key": None})
+    )
+    async with app.router.lifespan_context(app):
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
+        async with AsyncClient(transport=transport, base_url="http://localhost") as http:
+            assert (
+                await http.post(
+                    "/api/auth/login", json={"username": "mohamed", "password": password}
+                )
+            ).status_code == 200
+
+            response = await http.patch(
+                "/api/settings", json={"values": {"smtp.password": "whatever"}}
+            )
+
+    assert response.status_code == 409
+    body = response.json()["error"]
+    assert body["code"] == "encryption_key_missing"
+    assert "ENCRYPTION_KEY" in body["message"]

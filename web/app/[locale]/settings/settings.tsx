@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { LiveSettings, type FieldCopy } from "@/components/settings/live-settings";
 import { Sidebar } from "@/components/shell/sidebar";
 import { StatePreview, type ScreenState } from "@/components/state-preview";
 import { interpolate } from "@/lib/i18n";
@@ -19,7 +20,6 @@ import {
   ROLE_LABEL,
   ROLE_MATRIX,
   SECTIONS,
-  SMTP_FIELDS,
   TABS,
   WEBHOOKS,
   type Control,
@@ -122,6 +122,50 @@ function SectionHead({ title, note }: { title: string; note?: string }) {
       {note ? <span className="text-od-faint text-[12.5px] text-pretty">{note}</span> : null}
     </div>
   );
+}
+
+/** The label bundle every live panel needs, assembled once from the dictionary. */
+function liveLabels(t: SettingsDictionary) {
+  return {
+    save: t.live_save,
+    saving: t.live_saving,
+    saved: t.live_saved,
+    unchanged: t.live_unchanged,
+    loading: t.live_loading,
+    failed: t.live_failed,
+    retry: t.live_retry,
+    secretKept: t.live_secret_kept,
+  };
+}
+
+/**
+ * The mail server, read from and written to the settings store.
+ *
+ * These six keys are the ones the forgot-password screen depends on — its `no_mail`
+ * state is exactly "smtp.host is empty" — so they are the first settings that had to
+ * stop being a drawing.
+ */
+function mailFields(t: SettingsDictionary): FieldCopy[] {
+  return [
+    { key: "smtp.host", label: t.f_smtp_host, help: t.f_smtp_host_help },
+    { key: "smtp.port", label: t.f_smtp_port, help: t.f_smtp_port_help },
+    { key: "smtp.username", label: t.f_smtp_user },
+    { key: "smtp.password", label: t.f_smtp_pass, help: t.f_smtp_pass_help },
+    { key: "smtp.from", label: t.f_send_as, help: t.f_send_as_help },
+    { key: "smtp.use_tls", label: t.f_smtp_tls, help: t.f_smtp_tls_help },
+    { key: "smtp.use_ssl", label: t.f_smtp_ssl, help: t.f_smtp_ssl_help },
+  ];
+}
+
+function backupFields(t: SettingsDictionary): FieldCopy[] {
+  return [
+    { key: "backup.target_path", label: t.f_backup_path, help: t.f_backup_path_help },
+    {
+      key: "backup.include_recordings",
+      label: t.f_backup_recordings,
+      help: t.f_backup_recordings_help,
+    },
+  ];
 }
 
 export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary }) {
@@ -260,30 +304,26 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
                     {tab === "api" ? <ApiPanels t={t} /> : null}
                     {tab === "mcp" ? <McpPanels locale={locale} t={t} /> : null}
                     {tab === "advanced" ? (
-                      <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border">
-                        <SectionHead title={t.host_title} note={t.host_note} />
-                        {HOST_FIELDS.map((field) => (
-                          <FieldRow key={field.id} t={t} field={field} />
-                        ))}
-                      </div>
+                      <>
+                        <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border">
+                          <SectionHead
+                            title={t.backup_section_title}
+                            note={t.backup_section_note}
+                          />
+                          <LiveSettings fields={backupFields(t)} labels={liveLabels(t)} />
+                        </div>
+                        <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border">
+                          <SectionHead title={t.host_title} note={t.host_note} />
+                          {HOST_FIELDS.map((field) => (
+                            <FieldRow key={field.id} t={t} field={field} />
+                          ))}
+                        </div>
+                      </>
                     ) : null}
                     {tab === "notifications" ? (
                       <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border">
-                        <SectionHead title={t.smtp_title} note={t.smtp_note} />
-                        {SMTP_FIELDS.map((field) => (
-                          <FieldRow key={field.id} t={t} field={field} />
-                        ))}
-                        <div className="flex flex-wrap items-center justify-between gap-x-[18px] gap-y-3 border-t border-[color:var(--od-raise-6)] p-[14px_18px]">
-                          <div className="text-od-muted-5 max-w-[60ch] text-[13px] text-pretty">
-                            {t.smtp_last_test}
-                          </div>
-                          <button
-                            type="button"
-                            className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-md border p-[8px_14px] text-[13px] font-medium"
-                          >
-                            {t.smtp_send_test}
-                          </button>
-                        </div>
+                        <SectionHead title={t.smtp_title} note={t.live_note} />
+                        <LiveSettings fields={mailFields(t)} labels={liveLabels(t)} />
                       </div>
                     ) : null}
 

@@ -112,6 +112,43 @@ def send(config: MailConfig, *, to: str, subject: str, body: str) -> bool:
     return True
 
 
+def can_connect(config: MailConfig, *, timeout: float = 5.0) -> bool:
+    """Whether the mail server answers, without sending anything.
+
+    The health screen asks this on a beat, so it must not put a message in anybody's
+    inbox. It connects, negotiates TLS and signs in - which is where a wrong password
+    actually shows up - then quits without composing mail.
+
+    A shorter timeout than `send`: this runs while somebody is looking at a screen, and
+    a mail server that takes ten seconds to answer has already told them what they
+    needed to know.
+
+    Blocking, like `send`. The caller hands it to a worker thread.
+    """
+    if not config.host:
+        return False
+    try:
+        if config.use_ssl:
+            server: smtplib.SMTP = smtplib.SMTP_SSL(config.host, config.port, timeout=timeout)
+        else:
+            server = smtplib.SMTP(config.host, config.port, timeout=timeout)
+            if config.use_tls:
+                server.starttls()
+        with server:
+            if config.username:
+                server.login(config.username, config.password or "")
+            server.noop()
+    except Exception as error:
+        # Logged at warning, not exception: an unreachable mail server on a screen
+        # somebody is refreshing would otherwise write a traceback every few seconds.
+        logger.warning(
+            "mail server did not answer",
+            extra={"host": config.host, "port": config.port, "reason": str(error)[:200]},
+        )
+        return False
+    return True
+
+
 def reset_code_body(code: str, minutes: int) -> str:
     return (
         f"Your Tel-Agent sign-in code is {code}.\n\n"

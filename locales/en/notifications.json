@@ -45,5 +45,21 @@
   "when_yesterday": "yesterday",
   "when_two_days": "2 days ago",
   "retention_note": "Kept for thirty days, then deleted. Which of these also reach you by email is set per type — failures always do, whatever else you switch off.",
-  "email_settings": "Email settings"
+  "email_settings": "Email settings",
+  "loading": "Loading…",
+  "retry": "Try again",
+  "error_offline_title": "The server could not be reached",
+  "error_failed_title": "This page could not load",
+  "resolve": "Mark as dealt with",
+  "resolving": "Saving…",
+  "marked_read": "{count} moved out of the log. Still waiting on a decision: {waiting}.",
+  "nothing_to_mark": "There was nothing in the log to clear.",
+  "tag_system": "System",
+  "untranslated_note": "Notification text is written by whatever raised it and is not translated.",
+  "msg_backup_failed": "The nightly backup did not run: {reason}",
+  "msg_backup_unverified": "A backup was written but could not be read back: {reason}",
+  "msg_backup_no_target": "No backup target is set, so no backup is being taken at all.",
+  "msg_restore_staged": "A restore from {taken_at} is staged and will run on the next restart.",
+  "msg_task_failed": "The scheduled task {task} failed.",
+  "msg_mail_failed": "An email could not be sent: {subject}"
 }

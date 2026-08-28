@@ -25,13 +25,64 @@ from api.models.notification import ACTIONS, CATEGORIES
 logger = logging.getLogger("api.notifications")
 
 
+# Every message this product can raise, and the parameters each one needs.
+#
+# Declared here for the same reason the settings registry is declared: a key that is
+# not in this table cannot be written. An unknown key is a typo, and a typo becomes a
+# screen showing a raw identifier to somebody trying to find out why the phone stopped
+# working. The parameter names are part of the declaration, so a caller that forgets
+# one fails at the call site instead of printing `{reason}` onto the screen.
+#
+# **Adding a message means adding it here and to `locales/*/notifications.json` as
+# `msg_<key>`.** The locale gate then refuses a build where German or Arabic is
+# missing it, which is what keeps the screen from being trilingual in its furniture
+# and English in its content.
+MESSAGES: dict[str, frozenset[str]] = {
+    # Backup - P7. The one an installation most needs to hear about, because a nightly
+    # job failing is silent by nature.
+    "backup_failed": frozenset({"reason"}),
+    "backup_unverified": frozenset({"reason"}),
+    "backup_no_target": frozenset(),
+    "restore_staged": frozenset({"taken_at"}),
+    # Scheduling - P2.
+    "task_failed": frozenset({"task"}),
+    # Mail - the failure the forgot-password screen depends on not happening quietly.
+    "mail_failed": frozenset({"subject"}),
+}
+
+
+class UnknownMessage(ValueError):
+    """A key that is not in the catalogue, or parameters that do not match it."""
+
+
+def check_message(message_key: str, params: dict[str, Any]) -> None:
+    """Refuse a message the screen could not render.
+
+    Checked at the moment of raising rather than at the moment of display: a
+    notification is read hours later by somebody with a problem, and "the message is
+    broken" is the worst thing they could find waiting for them.
+    """
+    required = MESSAGES.get(message_key)
+    if required is None:
+        raise UnknownMessage(
+            f"unknown notification message {message_key!r}. Add it to MESSAGES and to "
+            f"locales/*/notifications.json as 'msg_{message_key}'."
+        )
+    missing = required - set(params)
+    if missing:
+        raise UnknownMessage(
+            f"notification {message_key!r} needs {sorted(missing)}, which the caller "
+            "did not pass"
+        )
+
+
 async def raise_notification(
     db: DbSession,
     *,
     workspace_id: int,
     category: str,
-    title: str,
-    body: str | None = None,
+    message_key: str,
+    params: dict[str, Any] | None = None,
     needs_decision: bool = False,
     primary_action: str = "none",
     action_payload: dict[str, Any] | None = None,
@@ -46,13 +97,20 @@ async def raise_notification(
     assert category in CATEGORIES, f"unknown category {category!r}"  # noqa: S101
     assert primary_action in ACTIONS, f"unknown action {primary_action!r}"  # noqa: S101
 
+    # Raised, not swallowed. Everything below this line is written defensively because
+    # a notification must not break what it reports on - but an unknown message key is
+    # a programming error in the *caller*, and hiding it would leave the screen with a
+    # row nobody can read and no clue where it came from.
+    params = params or {}
+    check_message(message_key, params)
+
     try:
         notification = Notification(
             workspace_id=workspace_id,
             category=category,
             needs_decision=needs_decision,
-            title=title[:200],
-            body=body,
+            message_key=message_key,
+            params=params,
             primary_action=primary_action,
             action_payload=action_payload,
             conversation_id=conversation_id,
@@ -70,6 +128,7 @@ async def raise_notification(
         "notification raised",
         extra={
             "category": category,
+            "message_key": message_key,
             "needs_decision": needs_decision,
             "workspace_id": workspace_id,
         },

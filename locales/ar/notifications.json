@@ -45,5 +45,21 @@
   "when_yesterday": "أمس",
   "when_two_days": "قبل يومين",
   "retention_note": "تُحفظ ثلاثين يومًا ثم تُحذف. وأيّها يصلك بالبريد أيضًا يُضبط لكل نوع — أما الإخفاقات فتصل دائمًا مهما أطفأت غيرها.",
-  "email_settings": "إعدادات البريد"
+  "email_settings": "إعدادات البريد",
+  "loading": "جارٍ التحميل…",
+  "retry": "حاول مرة أخرى",
+  "error_offline_title": "تعذّر الوصول إلى الخادم",
+  "error_failed_title": "تعذّر تحميل هذه الصفحة",
+  "resolve": "علّمها كمُنجزة",
+  "resolving": "جارٍ الحفظ…",
+  "marked_read": "{count} خرجت من السجل. ما زال ينتظر قراراً: {waiting}.",
+  "nothing_to_mark": "ما كان في السجل شيء يُمسح.",
+  "tag_system": "النظام",
+  "untranslated_note": "نص التنبيه يكتبه ما أطلقه، وهو غير مترجَم.",
+  "msg_backup_failed": "النسخة الاحتياطية الليلية لم تعمل: {reason}",
+  "msg_backup_unverified": "كُتبت نسخة احتياطية لكن تعذّرت إعادة قراءتها: {reason}",
+  "msg_backup_no_target": "لا توجد وجهة للنسخ الاحتياطي، فلا تُؤخذ أي نسخة إطلاقاً.",
+  "msg_restore_staged": "استرجاع من {taken_at} مُسجَّل وسينفَّذ عند إعادة التشغيل القادمة.",
+  "msg_task_failed": "فشلت المهمة المجدولة {task}.",
+  "msg_mail_failed": "تعذّر إرسال بريد إلكتروني: {subject}"
 }

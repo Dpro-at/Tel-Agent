@@ -16,6 +16,7 @@ import json
 import logging
 import re
 import sys
+import traceback
 from contextvars import ContextVar
 from typing import Any
 
@@ -79,6 +80,15 @@ SECRET_FIELD_NAMES = frozenset(
         "signature",
         "credentials",
         "credentials_encrypted",
+        # The column secrets are actually written to. It reached a log line as a
+        # SQLAlchemy parameter dump - `'secret_value': 'the-real-password'` - inside
+        # an exception raised on the INSERT. `secret` alone does not match it: the
+        # word boundary after `secret` fails against the underscore.
+        "secret_value",
+        "secret_key",
+        "private_key",
+        "refresh_token",
+        "access_token",
         "api_key",
         "secret",
         "encryption_key",
@@ -136,15 +146,36 @@ class SecretRedactionFilter(logging.Filter):
                     return True
                 record.args = None
             record.msg = self._redact_inline(record.msg)
+
+        # The traceback too. An exception's own message routinely carries the value
+        # that caused it - `InvalidToken: 9999:AAH...` - and neither handler formats
+        # the traceback through this filter, so it is formatted here instead. Setting
+        # `exc_text` is what makes both of them reuse the redacted version rather than
+        # re-deriving it from `exc_info`.
+        if record.exc_info and not record.exc_text:
+            try:
+                record.exc_text = "".join(traceback.format_exception(*record.exc_info))
+            except Exception:  # pragma: no cover - a broken exc_info is not worth a crash
+                record.exc_text = None
+        if record.exc_text:
+            record.exc_text = self._redact_inline(record.exc_text)
         return True
 
     @classmethod
     def _redact_inline(cls, text: str) -> str:
         if cls._INLINE is None:
-            names = "|".join(sorted(SECRET_FIELD_NAMES))
-            # `password='x'`, `token: abc`, `"api_key": "sk-..."` - the value after a
-            # secret-named field is replaced, whatever quoting surrounds it.
-            cls._INLINE = re.compile(r"(?i)\b(" + names + r")\b(\s*[=:]\s*[\"']?)([^\"'\s,}]+)")
+            # Longest first: the alternation is first-match, and `secret` would
+            # otherwise win against `secret_value` at the same position.
+            names = "|".join(sorted(SECRET_FIELD_NAMES, key=len, reverse=True))
+            # `password='x'`, `token: abc`, `"api_key": "sk-..."`, and - the one
+            # that was missed - a quoted dict key: `'secret_value': 'the-password'`,
+            # which is how SQLAlchemy dumps parameters into an exception message.
+            # The closing quote sits between the name and the colon, so it belongs
+            # to the separator rather than being something the pattern can assume
+            # away.
+            cls._INLINE = re.compile(
+                r"(?i)\b(" + names + r")\b([\"']?\s*[=:]\s*[\"']?)([^\"'\s,}]+)"
+            )
         return cls._INLINE.sub(r"\g<1>\g<2>" + _REDACTED, text)
 
 
@@ -187,8 +218,10 @@ class JsonFormatter(logging.Formatter):
             if key not in _STANDARD_ATTRIBUTES and key != "request_id":
                 payload[key] = value
 
-        if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
+        if record.exc_text or record.exc_info:
+            # `exc_text` first: the redaction filter fills it in, and re-deriving from
+            # `exc_info` here would write the unredacted traceback to stdout.
+            payload["exception"] = record.exc_text or self.formatException(record.exc_info)
 
         return json.dumps(payload, default=str, ensure_ascii=False)
 

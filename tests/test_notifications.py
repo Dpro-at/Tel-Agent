@@ -49,7 +49,8 @@ async def stage(migrated: AsyncSession, settings: Settings, database_url: str):
         migrated,
         workspace_id=first.id,
         category="failure",
-        title="SMS confirmation was never delivered to Anna Gruber",
+        message_key="backup_failed",
+        params={"reason": "the share stopped accepting the connection"},
         needs_decision=True,
         primary_action="resend_notification",
         action_payload={"to": "+4366412345678"},
@@ -58,14 +59,15 @@ async def stage(migrated: AsyncSession, settings: Settings, database_url: str):
         migrated,
         workspace_id=first.id,
         category="system",
-        title="Webhook delivery recovered",
+        message_key="task_failed",
+        params={"task": "cleanup_sessions"},
         needs_decision=False,
     )
     await notifications.raise_notification(
         migrated,
         workspace_id=second.id,
         category="review",
-        title="A caller was blocked in the other workspace",
+        message_key="backup_no_target",
         needs_decision=True,
     )
 
@@ -96,10 +98,13 @@ async def test_decisions_and_log_arrive_separated(stage) -> None:
 
     body = (await clients["sabine"].get("/api/notifications")).json()
 
-    assert [item["title"] for item in body["waiting"]] == [
-        "SMS confirmation was never delivered to Anna Gruber"
-    ]
-    assert [item["title"] for item in body["log"]] == ["Webhook delivery recovered"]
+    assert [item["message_key"] for item in body["waiting"]] == ["backup_failed"]
+    # And the parameters travel with it, because the sentence is assembled on the
+    # screen and half a sentence is worse than none.
+    assert body["waiting"][0]["params"] == {
+        "reason": "the share stopped accepting the connection"
+    }
+    assert [item["message_key"] for item in body["log"]] == ["task_failed"]
     assert body["open_count"] == 1
 
 
@@ -180,11 +185,9 @@ async def test_one_workspace_never_sees_another(stage) -> None:
     mine = (await clients["sabine"].get("/api/notifications")).json()
     theirs = (await clients["wolf"].get("/api/notifications")).json()
 
-    titles = {item["title"] for item in mine["waiting"] + mine["log"]}
-    assert "A caller was blocked in the other workspace" not in titles
-    assert [item["title"] for item in theirs["waiting"]] == [
-        "A caller was blocked in the other workspace"
-    ]
+    keys = {item["message_key"] for item in mine["waiting"] + mine["log"]}
+    assert "backup_no_target" not in keys
+    assert [item["message_key"] for item in theirs["waiting"]] == ["backup_no_target"]
 
 
 async def test_a_foreign_id_is_indistinguishable_from_a_missing_one(
@@ -237,7 +240,7 @@ async def test_raising_never_raises(migrated: AsyncSession) -> None:
         migrated,
         workspace_id=999999,  # no such workspace: the insert violates a foreign key
         category="failure",
-        title="something went wrong somewhere",
+        message_key="backup_no_target",
     )
 
     assert result is None  # reported, not raised
@@ -252,5 +255,79 @@ async def test_an_unknown_category_is_caught_at_the_call_site(
 
     with pytest.raises(AssertionError):
         await notifications.raise_notification(
-            migrated, workspace_id=workspace.id, category="gossip", title="x"
+            migrated,
+            workspace_id=workspace.id,
+            category="gossip",
+            message_key="backup_no_target",
+        )
+
+
+# --- The catalogue and the translations must not drift apart ------------------
+
+
+def _locale_messages(locale: str) -> dict[str, str]:
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "locales" / locale / "notifications.json").read_text(encoding="utf-8")
+    return json.loads(text)
+
+
+def test_every_declared_message_has_a_string_in_every_language() -> None:
+    """A key with no sentence behind it is a screen showing a raw identifier.
+
+    The locale gate checks that `de` and `ar` match `en`; nothing checked that `en`
+    matches the *code*. This is that half.
+    """
+    from api.notifications import MESSAGES
+
+    for locale in ("en", "de", "ar"):
+        strings = _locale_messages(locale)
+        missing = [key for key in MESSAGES if f"msg_{key}" not in strings]
+        assert not missing, f"{locale} is missing: {missing}"
+
+
+def test_the_declared_parameters_match_the_placeholders() -> None:
+    """The catalogue says `backup_failed` needs `reason`; the sentence has `{reason}`.
+
+    Drift either way is a bug with no symptom until somebody reads the screen: a
+    placeholder with no declared parameter prints as `{reason}`, and a declared
+    parameter with no placeholder is a value silently dropped.
+    """
+    import re
+
+    from api.notifications import MESSAGES
+
+    strings = _locale_messages("en")
+    for key, declared in MESSAGES.items():
+        placeholders = set(re.findall(r"\{(\w+)\}", strings[f"msg_{key}"]))
+        assert placeholders == set(declared), (
+            f"{key}: sentence has {sorted(placeholders)}, catalogue declares {sorted(declared)}"
+        )
+
+
+async def test_an_unknown_message_is_refused(migrated: AsyncSession) -> None:
+    """Raised rather than swallowed.
+
+    Everything else in `raise_notification` is written defensively, because a
+    notification must not break what it reports on. An unknown key is different: it is
+    a mistake in the *caller*, and swallowing it would leave a row nobody can read and
+    no clue where it came from.
+    """
+    from api.notifications import UnknownMessage, raise_notification
+
+    with pytest.raises(UnknownMessage, match="unknown notification message"):
+        await raise_notification(
+            migrated, workspace_id=1, category="system", message_key="no_such_message"
+        )
+
+
+async def test_a_missing_parameter_is_refused(migrated: AsyncSession) -> None:
+    """Caught at the call site, not printed as `{reason}` onto somebody's screen."""
+    from api.notifications import UnknownMessage, raise_notification
+
+    with pytest.raises(UnknownMessage, match="needs"):
+        await raise_notification(
+            migrated, workspace_id=1, category="system", message_key="backup_failed"
         )

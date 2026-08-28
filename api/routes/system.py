@@ -15,14 +15,16 @@ internal detail leaves the building in a screenshot.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel
 
+from api.config import get_settings
 from api.logging import recent_log_handler
 from api.security.permissions import WorkspaceContext, require_admin
 from api.syslog import CAPACITY
+from api.system import status
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -33,6 +35,9 @@ class LogEntry(BaseModel):
     service: str
     message: str
     request_id: str | None
+    # The traceback, when there was one. "unhandled exception" with nothing under it
+    # sends the reader to a terminal, which is the trip this panel exists to save.
+    exception: str | None = None
 
 
 class LogPage(BaseModel):
@@ -72,3 +77,16 @@ async def recent_log(
         capacity=CAPACITY,
         retained=len(handler.entries),
     )
+
+
+@router.get("/status", summary="The detail behind the health screen")
+async def system_status(
+    request: Request, context: Annotated[WorkspaceContext, require_admin]
+) -> dict[str, Any]:
+    """Everything the health screen draws, in one round trip.
+
+    `/health` stays where it is and stays public - a monitor cannot sign in. This is
+    the detail behind it, and it is behind `admin` for the same reason the log is: it
+    names hosts, providers and paths.
+    """
+    return await status.collect(request.state.db, get_settings())

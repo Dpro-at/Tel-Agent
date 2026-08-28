@@ -333,6 +333,10 @@ async def test_the_verdict_goes_stale_before_it_goes_quiet(
     verdict = await service.verdict(seeded)
 
     assert verdict["state"] == "stale"
+    # The age comes from the server, not from the browser. Two clocks disagree, and a
+    # laptop whose time is a day out would otherwise report a nine-day-old backup as
+    # fresh - on the one screen where that mistake costs the transcripts.
+    assert verdict["last_good_age_days"] == 9
 
 
 async def test_the_verdict_says_none_when_there_has_never_been_one(

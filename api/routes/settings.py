@@ -37,6 +37,24 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 _MASK_PREFIX_CHARACTERS = "•*"
 
 
+def _encryption_available() -> bool:
+    """Whether this installation can encrypt at all.
+
+    Asked before writing rather than discovered inside the INSERT. The failure there
+    surfaced as an unhandled exception whose SQLAlchemy parameter dump carried the
+    plaintext password into the log - so this check is what keeps a missing key from
+    becoming a leaked one.
+    """
+    from api.config import get_settings
+    from api.security import crypto
+
+    try:
+        crypto.load_key(get_settings().encryption_key)
+    except crypto.EncryptionKeyError:
+        return False
+    return True
+
+
 def _is_echoed_mask(value: Any) -> bool:
     if not isinstance(value, str) or not value:
         return False
@@ -96,6 +114,21 @@ async def write_settings(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 code="unknown_setting",
                 message=str(error),
+            )
+
+        if spec.secret and not _encryption_available():
+            # A designed answer, not a traceback. An installation with no
+            # ENCRYPTION_KEY cannot store a credential at all (§B9.2), and the person
+            # typing an SMTP password into a form needs to be told that - not shown
+            # "something went wrong" while the reason sits in a log they cannot read.
+            return envelope_response(
+                status_code=status.HTTP_409_CONFLICT,
+                code="encryption_key_missing",
+                message=(
+                    "This installation has no ENCRYPTION_KEY, so credentials cannot be "
+                    "stored. Generate one with `openssl rand -hex 32`, put it in .env, "
+                    "and restart. Keep a copy somewhere that is not the backup."
+                ),
             )
 
         if spec.secret and _is_echoed_mask(value):

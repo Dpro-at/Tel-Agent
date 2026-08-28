@@ -215,24 +215,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Middleware, added innermost-first (the last one added is the outermost).
     # The stack a request passes through, outside in:
     #
-    #     request id -> CORS -> CSRF -> authentication -> trusted host -> route
+    #     CORS -> request id -> CSRF -> authentication -> trusted host -> route
     #
-    # Two orderings here are load-bearing:
+    # One ordering rule, applied twice: **CORS is outermost, so every response the
+    # browser must be able to read passes back out through it.**
     #
-    # * **CORS sits outside CSRF and authentication.** Both gates produce refusals
-    #   (403, 401), and a response born outside the CORS layer carries no
-    #   `Access-Control-Allow-Origin`. A browser then reports it as a network failure
-    #   rather than a status - so the dashboard could never read the 401 that should
-    #   send it to the sign-in screen. Found live, from the browser: curl does not
-    #   enforce CORS, so no curl test could ever catch it.
-    # * **The request id sits outside everything**, so even a refusal from the
-    #   outermost gate is logged under an id.
+    # * The gates below produce refusals (401, 403). A response born outside the CORS
+    #   layer carries no `Access-Control-Allow-Origin`, and a browser reports it as a
+    #   network failure rather than a status - so the dashboard could never read the
+    #   401 that should send it to the sign-in screen.
+    # * `RequestIdMiddleware` catches unhandled exceptions and returns the 500 envelope
+    #   *itself*. While it sat outside CORS, that envelope skipped the CORS layer on the
+    #   way out, and every 500 reached the browser as `net::ERR_FAILED` with no status
+    #   and no request id to quote. The one response class that most needs to be
+    #   readable was the one that could not be read.
+    #
+    # Both were found from a browser. curl does not enforce CORS, so no curl test
+    # catches either of them - `tests/test_errors.py` asserts the header instead.
+    #
+    # The cost of this order: a CORS preflight answered by the CORS layer never reaches
+    # `RequestIdMiddleware`, so it is not logged under an id. A preflight carries no
+    # application meaning, so that is the right thing to give up.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
     app.add_middleware(AuthenticationMiddleware)
     # The websocket twin of the gate above: BaseHTTPMiddleware never sees websocket
     # scopes, so without this every websocket route would bypass authentication.
     app.add_middleware(WebSocketAuthMiddleware)
     app.add_middleware(CsrfMiddleware)
+    app.add_middleware(RequestIdMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -242,7 +252,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # So a browser can read the id off a failed response and show it to the user.
         expose_headers=["X-Request-Id"],
     )
-    app.add_middleware(RequestIdMiddleware)
 
     app.include_router(auth_routes.router)
     app.include_router(notification_routes.router)

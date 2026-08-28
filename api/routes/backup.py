@@ -74,6 +74,7 @@ class Overview(BaseModel):
     target: TargetState
     include_recordings: bool
     last_good_at: dt.datetime | None
+    last_good_age_days: int | None
     consecutive_failures: int
     last_error: str | None
     snapshots: list[Snapshot]
@@ -120,6 +121,7 @@ async def overview(
         ),
         include_recordings=bool(await store.get(db, service.RECORDINGS_KEY)),
         last_good_at=verdict["last_good_at"],
+        last_good_age_days=verdict["last_good_age_days"],
         consecutive_failures=verdict["consecutive_failures"],
         last_error=verdict["last_error"],
         snapshots=[_snapshot(row) for row in rows],
