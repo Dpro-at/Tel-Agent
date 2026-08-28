@@ -56,10 +56,11 @@
   "nothing_to_mark": "Im Protokoll war nichts zu leeren.",
   "tag_system": "System",
   "untranslated_note": "Der Text einer Meldung stammt von der Stelle, die sie ausgelöst hat, und wird nicht übersetzt.",
-  "msg_backup_failed": "Die nächtliche Sicherung lief nicht: {reason}",
-  "msg_backup_unverified": "Eine Sicherung wurde geschrieben, konnte aber nicht zurückgelesen werden: {reason}",
+  "msg_backup_failed": "Die nächtliche Sicherung lief nicht.",
+  "msg_backup_unverified": "Eine Sicherung wurde geschrieben, aber das Zurücklesen zur Prüfung schlug fehl.",
   "msg_backup_no_target": "Es ist kein Sicherungsziel gesetzt, also wird gar nicht gesichert.",
   "msg_restore_staged": "Eine Wiederherstellung vom {taken_at} ist vorgemerkt und läuft beim nächsten Neustart.",
   "msg_task_failed": "Die geplante Aufgabe {task} ist fehlgeschlagen.",
-  "msg_mail_failed": "Eine E-Mail konnte nicht gesendet werden: {subject}"
+  "msg_mail_failed": "Eine E-Mail konnte nicht gesendet werden.",
+  "detail_heading": "Meldung des Systems"
 }

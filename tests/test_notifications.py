@@ -50,7 +50,7 @@ async def stage(migrated: AsyncSession, settings: Settings, database_url: str):
         workspace_id=first.id,
         category="failure",
         message_key="backup_failed",
-        params={"reason": "the share stopped accepting the connection"},
+        detail="connection refused to nas.wagner-partner.local:445",
         needs_decision=True,
         primary_action="resend_notification",
         action_payload={"to": "+4366412345678"},
@@ -101,9 +101,7 @@ async def test_decisions_and_log_arrive_separated(stage) -> None:
     assert [item["message_key"] for item in body["waiting"]] == ["backup_failed"]
     # And the parameters travel with it, because the sentence is assembled on the
     # screen and half a sentence is worse than none.
-    assert body["waiting"][0]["params"] == {
-        "reason": "the share stopped accepting the connection"
-    }
+    assert body["waiting"][0]["detail"] == "connection refused to nas.wagner-partner.local:445"
     assert [item["message_key"] for item in body["log"]] == ["task_failed"]
     assert body["open_count"] == 1
 
@@ -328,6 +326,79 @@ async def test_a_missing_parameter_is_refused(migrated: AsyncSession) -> None:
     from api.notifications import UnknownMessage, raise_notification
 
     with pytest.raises(UnknownMessage, match="needs"):
+        # `task_failed` declares `task`, and this call does not pass it.
         await raise_notification(
-            migrated, workspace_id=1, category="system", message_key="backup_failed"
+            migrated, workspace_id=1, category="system", message_key="task_failed"
         )
+
+
+# --- `detail`: the machine's words, and what must not be in them --------------
+
+
+async def test_a_secret_in_the_detail_is_redacted_before_it_is_stored(
+    migrated: AsyncSession,
+) -> None:
+    """`detail` is nearly always `str(exception)`, and that shape has leaked before.
+
+    A SQLAlchemy parameter dump inside a failed INSERT carried a live password into a
+    log line in this codebase. A notification is the worse place for it to land: kept
+    for thirty days, and readable by anybody with `viewer` rather than only by whoever
+    can reach the log.
+    """
+    from api.notifications import raise_notification
+
+    workspace = Workspace(name="W")
+    migrated.add(workspace)
+    await migrated.flush()
+
+    leaked = "hunter2-the-real-one"
+    row = await raise_notification(
+        migrated,
+        workspace_id=workspace.id,
+        category="failure",
+        message_key="mail_failed",
+        detail=f"login refused [parameters: {{'smtp_password': '{leaked}'}}]",
+    )
+
+    assert row is not None
+    assert leaked not in (row.detail or "")
+    assert "[redacted]" in (row.detail or "")
+
+
+async def test_a_long_detail_is_trimmed(migrated: AsyncSession) -> None:
+    """Past a point it stops being a hint and becomes a log.
+
+    The whole text is in the log under the request id, where somebody who needs all of
+    it can find it; a notification is a sentence and a clue, not a transcript.
+    """
+    from api.notifications import DETAIL_LIMIT, raise_notification
+
+    workspace = Workspace(name="W")
+    migrated.add(workspace)
+    await migrated.flush()
+
+    row = await raise_notification(
+        migrated,
+        workspace_id=workspace.id,
+        category="failure",
+        message_key="backup_failed",
+        detail="x" * (DETAIL_LIMIT * 3),
+    )
+
+    assert row is not None
+    assert len(row.detail or "") == DETAIL_LIMIT
+
+
+async def test_no_parameter_carries_prose() -> None:
+    """The rule this column pair exists to enforce.
+
+    A parameter is a path, a count, a name or a date - something that reads the same in
+    every language. The moment one carries an explanatory sentence, the server's
+    language is back inside a translated one, which is the failure the whole change was
+    made to fix. `reason` and `subject` were exactly that, and they are now `detail`.
+    """
+    from api.notifications import MESSAGES
+
+    prose = {"reason", "message", "error", "subject", "description", "text", "body"}
+    for key, params in MESSAGES.items():
+        assert not (params & prose), f"{key} takes prose as a parameter: {params & prose}"

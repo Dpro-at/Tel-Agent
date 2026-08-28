@@ -287,6 +287,21 @@ export function Notifications({ locale, t }: { locale: Locale; t: NotificationsD
                       >
                         {sentence(t, item)}
                       </div>
+                      {/* The machine's words, shown as machine output: monospace, left
+                          to right, and visibly not part of the translated sentence
+                          above it. A provider's error names the host and port, which is
+                          the part somebody can act on - and inventing a translated
+                          sentence for every error a provider can return is not
+                          possible. */}
+                      {item.detail ? (
+                        <div
+                          dir="ltr"
+                          className="mono ltr-data mt-[7px] max-w-[80ch] text-[11.5px] [overflow-wrap:anywhere]"
+                          style={{ color: tone.body }}
+                        >
+                          {item.detail}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {/* One button, not two. The second was a fixture: `primary_action`
@@ -357,6 +372,14 @@ export function Notifications({ locale, t }: { locale: Locale; t: NotificationsD
                   </span>
                   <div className="min-w-[240px] flex-[1_1_300px]">
                     <div className="text-od-text-3 text-pretty">{sentence(t, item)}</div>
+                    {item.detail ? (
+                      <div
+                        dir="ltr"
+                        className="mono ltr-data text-od-muted-5 mt-[4px] max-w-[80ch] text-[11.5px] [overflow-wrap:anywhere]"
+                      >
+                        {item.detail}
+                      </div>
+                    ) : null}
                   </div>
                   <span
                     dir="ltr"

@@ -397,8 +397,11 @@ export type NotificationItem = {
    *  lives in each locale's `notifications.json` as `msg_<key>`, so the screen renders
    *  it in the reader's language rather than the server's. */
   message_key: string;
-  /** What goes in the placeholders. */
+  /** What goes in the placeholders — data only: a path, a count, a name, a date. */
   params: Record<string, string | number>;
+  /** The machine's own words, if there were any. Never translated, shown as machine
+   *  output rather than folded into the sentence around it. */
+  detail: string | null;
   primary_action: string;
   action_payload: Record<string, unknown> | null;
   conversation_id: number | null;
