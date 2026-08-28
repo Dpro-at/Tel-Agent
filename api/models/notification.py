@@ -26,7 +26,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.db import Base
@@ -64,11 +64,23 @@ class Notification(Base):
     # informational because nobody got round to it.
     needs_decision: Mapped[bool] = mapped_column(nullable=False, default=False, index=True)
 
-    # Written by the code that raised it, in English, and translated by the screen
-    # through `title_key`/`body_key` when one exists. Free text is the fallback for
-    # anything a fixed key cannot express - a provider's own error message, say.
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
-    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # **A key, not a sentence.** The screen is translated into three languages and a
+    # notification is read on it; prose written by whatever raised the notification
+    # would arrive in the server's language and stay there, so a German receptionist
+    # would read English on an otherwise German screen.
+    #
+    # The key names the situation - `backup_failed` - and the parameters carry the
+    # parts that vary. The catalogue in `api/notifications.py` declares which
+    # parameters each key requires, so a caller that forgets one is a failure at the
+    # call site rather than a `{reason}` printed literally on somebody's screen.
+    message_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Values interpolated into the translated string. JSON because each message wants
+    # different ones, and a column per parameter would be a column that is null for
+    # every other message.
+    #
+    # **Never a secret and never personal data beyond what the message needs.** These
+    # are stored for thirty days and read by anybody with `viewer`.
+    params: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     primary_action: Mapped[str] = mapped_column(
         enum_column(*ACTIONS, name="notification_action"), nullable=False, default="none"

@@ -34,8 +34,10 @@ class NotificationOut(BaseModel):
     id: int
     category: str
     needs_decision: bool
-    title: str
-    body: str | None
+    # A key and its parameters. The screen holds the sentences, in three languages;
+    # the server holds which sentence and what goes in it.
+    message_key: str
+    params: dict[str, Any]
     primary_action: str
     action_payload: dict[str, Any] | None
     conversation_id: int | None
@@ -75,8 +77,8 @@ def _out(row: Notification) -> NotificationOut:
         id=row.id,
         category=row.category,
         needs_decision=row.needs_decision,
-        title=row.title,
-        body=row.body,
+        message_key=row.message_key,
+        params=row.params or {},
         primary_action=row.primary_action,
         action_payload=row.action_payload,
         conversation_id=row.conversation_id,

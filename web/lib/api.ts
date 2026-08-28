@@ -393,10 +393,12 @@ export type NotificationItem = {
   id: number;
   category: NotificationCategory;
   needs_decision: boolean;
-  /** Prose written by whatever raised this, in the server's language — not a locale
-   *  key. The screen renders it as given rather than pretending it is translated. */
-  title: string;
-  body: string | null;
+  /** Which message, from the catalogue in `api/notifications.py`. The sentence itself
+   *  lives in each locale's `notifications.json` as `msg_<key>`, so the screen renders
+   *  it in the reader's language rather than the server's. */
+  message_key: string;
+  /** What goes in the placeholders. */
+  params: Record<string, string | number>;
   primary_action: string;
   action_payload: Record<string, unknown> | null;
   conversation_id: number | null;

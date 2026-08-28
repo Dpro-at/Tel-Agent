@@ -72,6 +72,21 @@ const SEVERITY = {
   },
 } as const;
 
+/**
+ * The sentence for one notification, in the reader's language.
+ *
+ * The server sends a key and its parameters; the sentences live here, in three
+ * languages. A key with no sentence renders as the key itself rather than as an empty
+ * row — a screen that silently drops a notification is worse than one that shows an
+ * identifier somebody can search for, and the test suite is what stops that from
+ * happening in the first place.
+ */
+function sentence(t: NotificationsDictionary, item: NotificationItem): string {
+  const line = (t as Record<string, string>)[`msg_${item.message_key}`];
+  if (line === undefined) return item.message_key;
+  return interpolate(line, item.params);
+}
+
 /** A failure is red; anything else waiting on a person is amber. */
 function severityOf(item: NotificationItem): "red" | "amber" {
   return item.category === "failure" ? "red" : "amber";
@@ -266,23 +281,12 @@ export function Notifications({ locale, t }: { locale: Locale; t: NotificationsD
                           {clock(item.created_at)}
                         </span>
                       </div>
-                      {/* Written by whatever raised this, in the server's language.
-                          Rendered as given rather than passed through the dictionary,
-                          which would silently show a key when it did not match. */}
                       <div
                         className="mt-[6px] text-[15px] font-semibold text-pretty"
                         style={{ color: tone.title }}
                       >
-                        {item.title}
+                        {sentence(t, item)}
                       </div>
-                      {item.body ? (
-                        <div
-                          className="mt-[3px] max-w-[64ch] text-[13px] text-pretty"
-                          style={{ color: tone.body }}
-                        >
-                          {item.body}
-                        </div>
-                      ) : null}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {/* One button, not two. The second was a fixture: `primary_action`
@@ -352,12 +356,7 @@ export function Notifications({ locale, t }: { locale: Locale; t: NotificationsD
                     {settled ? "✓" : "!"}
                   </span>
                   <div className="min-w-[240px] flex-[1_1_300px]">
-                    <div className="text-od-text-3 text-pretty">{item.title}</div>
-                    {item.body ? (
-                      <div className="text-od-muted-5 mt-[3px] text-[12.5px] text-pretty">
-                        {item.body}
-                      </div>
-                    ) : null}
+                    <div className="text-od-text-3 text-pretty">{sentence(t, item)}</div>
                   </div>
                   <span
                     dir="ltr"
