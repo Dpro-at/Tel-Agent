@@ -19,7 +19,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
-from api.models import Notification
+from api.models import Notification, Workspace
 from api.models.notification import ACTIONS, CATEGORIES
 
 logger = logging.getLogger("api.notifications")
@@ -102,6 +102,36 @@ def check_message(message_key: str, params: dict[str, Any]) -> None:
         )
 
 
+async def _already_open(
+    db: DbSession, workspace_id: int, message_key: str, params: dict[str, Any]
+) -> bool:
+    """Is the same situation already on the screen, unresolved?
+
+    Compared on the message and its parameters, never on `detail`: a nightly backup
+    that fails with a different error each night is still one situation, and five
+    copies of it would teach the operator that this screen repeats itself — which is
+    the last lesson the screen reporting failures can afford to teach.
+
+    Params are compared in Python rather than in SQL. JSON equality differs between
+    the two dialects D-029 commits to, and the open rows for one workspace are a
+    handful, not a table scan.
+    """
+    rows = (
+        (
+            await db.execute(
+                select(Notification).where(
+                    Notification.workspace_id == workspace_id,
+                    Notification.message_key == message_key,
+                    Notification.resolved_at.is_(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return any(row.params == params for row in rows)
+
+
 async def raise_notification(
     db: DbSession,
     *,
@@ -114,12 +144,17 @@ async def raise_notification(
     primary_action: str = "none",
     action_payload: dict[str, Any] | None = None,
     conversation_id: int | None = None,
+    skip_if_open: bool = False,
 ) -> Notification | None:
-    """Record one notification and commit it. Returns None if recording failed.
+    """Record one notification and commit it. Returns None if nothing was recorded.
 
     Committed immediately rather than riding the caller's transaction: the thing being
     reported has usually just failed, and a rollback of that failure must not also
     erase the record that it happened.
+
+    `skip_if_open` is for callers that run on a beat. A nightly job that fails every
+    night must not add a row every night while the first one is still waiting; once
+    the operator resolves it, the next failure is news again and is raised again.
     """
     assert category in CATEGORIES, f"unknown category {category!r}"  # noqa: S101
     assert primary_action in ACTIONS, f"unknown action {primary_action!r}"  # noqa: S101
@@ -132,6 +167,8 @@ async def raise_notification(
     check_message(message_key, params)
 
     try:
+        if skip_if_open and await _already_open(db, workspace_id, message_key, params):
+            return None
         notification = Notification(
             workspace_id=workspace_id,
             category=category,
@@ -162,6 +199,61 @@ async def raise_notification(
         },
     )
     return notification
+
+
+async def raise_for_installation(
+    db: DbSession,
+    *,
+    category: str,
+    message_key: str,
+    params: dict[str, Any] | None = None,
+    detail: str | None = None,
+    needs_decision: bool = False,
+    primary_action: str = "none",
+    action_payload: dict[str, Any] | None = None,
+    skip_if_open: bool = False,
+) -> list[Notification]:
+    """Raise one event in every workspace, because it belongs to the machine.
+
+    A failed nightly backup, a scheduled task that stopped running, mail that cannot
+    leave the box: none of these happened *to* a workspace, but every workspace's data
+    sits inside that archive and behind that mail server. The notifications table is
+    scoped by workspace (D-028) and there is no installation row to hang these on —
+    inventing one would put machine-level failures on a screen nobody has — so each
+    workspace hears it, and each resolves its own copy.
+
+    Returns the rows that were actually written; an empty list on a fresh installation
+    with no workspace yet, or when every copy was skipped as already open.
+    """
+    # Checked before the loop, so a typo in the key fails even on an installation
+    # that has no workspace yet — the moment nothing would otherwise catch it.
+    check_message(message_key, params or {})
+
+    try:
+        workspace_ids = list((await db.execute(select(Workspace.id))).scalars().all())
+    except Exception:
+        logger.exception(
+            "could not list workspaces to notify", extra={"message_key": message_key}
+        )
+        return []
+
+    raised: list[Notification] = []
+    for workspace_id in workspace_ids:
+        row = await raise_notification(
+            db,
+            workspace_id=workspace_id,
+            category=category,
+            message_key=message_key,
+            params=params,
+            detail=detail,
+            needs_decision=needs_decision,
+            primary_action=primary_action,
+            action_payload=action_payload,
+            skip_if_open=skip_if_open,
+        )
+        if row is not None:
+            raised.append(row)
+    return raised
 
 
 async def resolve(

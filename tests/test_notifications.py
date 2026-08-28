@@ -260,6 +260,130 @@ async def test_an_unknown_category_is_caught_at_the_call_site(
         )
 
 
+# --- Installation-level events reach every workspace ---------------------------
+
+
+async def test_an_installation_event_reaches_every_workspace(
+    migrated: AsyncSession,
+) -> None:
+    """A failed backup did not happen to one workspace. Every workspace's data is in
+    that archive, and there is no installation-level screen to say it on (D-028)."""
+    first = Workspace(name="Wagner & Partner")
+    second = Workspace(name="Wolf Studio")
+    migrated.add_all([first, second])
+    await migrated.commit()
+
+    raised = await notifications.raise_for_installation(
+        migrated, category="failure", message_key="backup_failed", needs_decision=True
+    )
+
+    assert {row.workspace_id for row in raised} == {first.id, second.id}
+
+
+async def test_an_installation_event_with_a_bad_key_fails_even_with_no_workspace(
+    migrated: AsyncSession,
+) -> None:
+    """On a fresh installation the loop body never runs, which is exactly where a typo
+    would otherwise survive until the first workspace existed to crash on."""
+    with pytest.raises(notifications.UnknownMessage):
+        await notifications.raise_for_installation(
+            migrated, category="system", message_key="no_such_message"
+        )
+
+
+# --- skip_if_open: a repeating failure is one line, not a wall -----------------
+
+
+async def test_a_repeating_failure_is_raised_once_while_open(
+    migrated: AsyncSession,
+) -> None:
+    """A nightly job that fails every night must not add a row every night. Five
+    copies of one situation teach the operator that this screen repeats itself."""
+    workspace = Workspace(name="W")
+    migrated.add(workspace)
+    await migrated.flush()
+
+    first = await notifications.raise_notification(
+        migrated,
+        workspace_id=workspace.id,
+        category="failure",
+        message_key="backup_failed",
+        needs_decision=True,
+        skip_if_open=True,
+    )
+    # The next night fails differently. Still the same situation.
+    second = await notifications.raise_notification(
+        migrated,
+        workspace_id=workspace.id,
+        category="failure",
+        message_key="backup_failed",
+        detail="a different error tonight",
+        needs_decision=True,
+        skip_if_open=True,
+    )
+
+    assert first is not None
+    assert second is None
+
+
+async def test_a_resolved_failure_is_news_again(migrated: AsyncSession) -> None:
+    """Once the operator has dealt with it, the next failure is a new fact — resolving
+    without actually fixing anything must not silence the screen for good."""
+    workspace = Workspace(name="W")
+    migrated.add(workspace)
+    await migrated.flush()
+
+    first = await notifications.raise_notification(
+        migrated,
+        workspace_id=workspace.id,
+        category="failure",
+        message_key="backup_failed",
+        skip_if_open=True,
+    )
+    assert first is not None
+    await notifications.resolve(migrated, first)
+    await migrated.commit()
+
+    again = await notifications.raise_notification(
+        migrated,
+        workspace_id=workspace.id,
+        category="failure",
+        message_key="backup_failed",
+        skip_if_open=True,
+    )
+
+    assert again is not None
+
+
+async def test_the_dedup_tells_situations_apart_by_their_parameters(
+    migrated: AsyncSession,
+) -> None:
+    """Two different tasks failing are two situations, not a repeat of one."""
+    workspace = Workspace(name="W")
+    migrated.add(workspace)
+    await migrated.flush()
+
+    first = await notifications.raise_notification(
+        migrated,
+        workspace_id=workspace.id,
+        category="system",
+        message_key="task_failed",
+        params={"task": "cleanup_sessions"},
+        skip_if_open=True,
+    )
+    second = await notifications.raise_notification(
+        migrated,
+        workspace_id=workspace.id,
+        category="system",
+        message_key="task_failed",
+        params={"task": "backup_nightly"},
+        skip_if_open=True,
+    )
+
+    assert first is not None
+    assert second is not None
+
+
 # --- The catalogue and the translations must not drift apart ------------------
 
 

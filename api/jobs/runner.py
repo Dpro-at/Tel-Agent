@@ -157,10 +157,25 @@ async def run_due_tasks(sessionmaker: async_sessionmaker) -> int:
                 await handler(db)
                 row.last_status, row.last_error = "ok", None
                 ran += 1
-            except Exception:
+            except Exception as error:
                 row.last_status = "failed"
                 row.last_error = traceback.format_exc(limit=5)
                 logger.exception("scheduled task failed", extra={"task": row.name})
+                # The operator's copy of the line above. A scheduled task fails with
+                # nobody watching — that is what "scheduled" means — and the log is
+                # read after somebody already knows something is wrong. Deduplicated
+                # while unresolved, so an hourly task that keeps failing is one line
+                # on the screen, not a wall of them.
+                from api import notifications
+
+                await notifications.raise_for_installation(
+                    db,
+                    category="system",
+                    message_key="task_failed",
+                    params={"task": row.name},
+                    detail=str(error) or repr(error),
+                    skip_if_open=True,
+                )
             await db.commit()
     return ran
 

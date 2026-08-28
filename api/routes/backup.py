@@ -28,6 +28,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
+from api import notifications
 from api.backup import archive, service, targets
 from api.backup.service import ROOT
 from api.dependencies import CurrentUser
@@ -303,6 +304,16 @@ async def stage_restore(
         request=request,
         user_id=user.id,
         details={"backup_id": row.id, "taken_at": row.started_at.isoformat()},
+    )
+    # Every workspace hears it, not only the owner's screen: the restart this asks
+    # for drops the phone line for everybody, and the restore itself deletes every
+    # workspace's data since that date. Informational, not a decision — the decision
+    # was the owner's and has been taken; there is no button here that could undo it.
+    await notifications.raise_for_installation(
+        db,
+        category="system",
+        message_key="restore_staged",
+        params={"taken_at": row.started_at.date().isoformat()},
     )
     logger.warning(
         "restore staged; the next start will replace the database",

@@ -98,17 +98,51 @@ async def _backup_nightly(db: DbSession) -> None:
     installation with fewer copies than it started with — which is the opposite of
     what a backup system is for.
     """
+    from api import notifications
     from api.backup import service as backup_service
 
     if not await store.get(db, backup_service.TARGET_KEY):
         # No target chosen. Not a failure: the screen already says loudly that there
         # is no backup of this installation, and a task that failed nightly would bury
-        # that message under an error nobody can act on from here.
+        # that message under an error nobody can act on from here. It is still the
+        # situation `backup_no_target` exists for, so it is said once — one open item
+        # per workspace, not a fresh one every night — and said again only after
+        # somebody resolves it without actually choosing a target.
+        await notifications.raise_for_installation(
+            db,
+            category="review",
+            message_key="backup_no_target",
+            needs_decision=True,
+            skip_if_open=True,
+        )
         return
 
     row = await backup_service.run_backup(db, kind="nightly")
     if row.status == "failed":
+        # Raised before the re-raise, so the operator hears about it even though the
+        # task record fails. A nightly job failing is silent by nature — the catalogue
+        # says this is the one an installation most needs to hear about.
+        await notifications.raise_for_installation(
+            db,
+            category="failure",
+            message_key="backup_failed",
+            detail=row.error,
+            needs_decision=True,
+            skip_if_open=True,
+        )
         raise RuntimeError(row.error or "backup failed")
+    if row.status == "unverified":
+        # The bytes are there and could not be read back. Not a failed task — the
+        # archive may well be fine — but not a copy anybody should trust either, and
+        # trusting it silently is how "known to restore" stops being true.
+        await notifications.raise_for_installation(
+            db,
+            category="review",
+            message_key="backup_unverified",
+            detail=row.error,
+            needs_decision=True,
+            skip_if_open=True,
+        )
     await backup_service.prune(db)
 
 
@@ -137,6 +171,8 @@ async def _send_email(db: DbSession, payload: dict) -> None:
     """
     import asyncio
 
+    from api import notifications
+
     settings = get_settings()
     # Resolved at send time, not at enqueue time: an operator who fixes the mail
     # server in Settings should rescue the messages already queued, not only the
@@ -150,6 +186,18 @@ async def _send_email(db: DbSession, payload: dict) -> None:
         body=payload["body"],
     )
     if not sent:
+        # Told on the first failed attempt, not after the last: the person this most
+        # often fails is somebody locked out and waiting for a reset code, and six
+        # hours of quiet backoff is exactly the "quietly" the forgot-password screen
+        # depends on this not being. Deduplicated while unresolved, so the retries do
+        # not add a line each. The address is not in it — a notification is read by
+        # anybody with `viewer`, and who was sent a reset code is personal data.
+        await notifications.raise_for_installation(
+            db,
+            category="failure",
+            message_key="mail_failed",
+            skip_if_open=True,
+        )
         raise RuntimeError("mail delivery failed")
 
 
