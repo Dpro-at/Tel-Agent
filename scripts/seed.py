@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import datetime as dt
 import sys
 from pathlib import Path
 
@@ -168,6 +169,120 @@ async def seed(reset: bool) -> None:
                         ts_ms=index * 4200,
                         speaker=speaker,
                         text=text,
+                    )
+                )
+
+            # One phone call, so the calls screens have a row: spoken lines carrying
+            # STT confidence and language, a whisper the caller never heard, a human
+            # taking one turn, and the calls row with the metering §B5 demands.
+            phone = Channel(workspace_id=workspace.id, kind="phone", name="Phone line")
+            session.add(phone)
+            await session.flush()
+
+            started = dt.datetime.now(dt.UTC) - dt.timedelta(hours=3)
+            call_conversation = Conversation(
+                workspace_id=workspace.id,
+                channel_id=phone.id,
+                external_id="+43 664 1234567",
+                direction="inbound",
+                started_at=started,
+                ended_at=started + dt.timedelta(seconds=158),
+                summary=(
+                    "Moved the Tuesday 14:00 appointment to Thursday 10:00 and asked "
+                    "whether the quote is still valid. It runs until 30 September."
+                ),
+                intent="appointment",
+                handling="ai",
+                status="closed",
+            )
+            session.add(call_conversation)
+            await session.flush()
+
+            session.add(
+                Call(
+                    conversation_id=call_conversation.id,
+                    workspace_id=workspace.id,
+                    from_e164="+43 664 1234567",
+                    billable_seconds=158,
+                    provider_cost_micros=13_500,
+                )
+            )
+
+            spoken: list[tuple[int, str, str, bool]] = [
+                (
+                    0,
+                    "agent",
+                    "Wagner & Partner, good morning. This call is recorded. "
+                    "How can I help you?",
+                    False,
+                ),
+                (
+                    6_000,
+                    "caller",
+                    "Good morning, Gruber here. I have an appointment on Tuesday "
+                    "and I need to move it.",
+                    False,
+                ),
+                (
+                    13_000,
+                    "agent",
+                    "Of course. I can see your appointment on Tuesday at 14:00. "
+                    "What day would suit you better?",
+                    False,
+                ),
+                (
+                    21_000,
+                    "caller",
+                    "Thursday would be better, in the morning if possible.",
+                    False,
+                ),
+                (26_000, "agent", "One moment, let me check the calendar.", False),
+                (
+                    31_000,
+                    "agent",
+                    "Thursday at 10:00 is free. Should I put you down for that?",
+                    False,
+                ),
+                (
+                    36_000,
+                    "caller",
+                    "Yes please. And I wanted to ask about the quote - is it still valid?",
+                    False,
+                ),
+                (
+                    44_000,
+                    "human",
+                    "The quote is valid until 30 September. Tell her it does not need redoing.",
+                    True,
+                ),
+                (
+                    49_000,
+                    "agent",
+                    "Your agreement runs until the end of September, "
+                    "so nothing needs renewing yet.",
+                    False,
+                ),
+                (62_000, "caller", "Perfect, thank you.", False),
+                (
+                    66_000,
+                    "agent",
+                    "Then you are booked for Thursday at 10:00. Anything else?",
+                    False,
+                ),
+                (74_000, "caller", "No, that is everything. Thank you.", False),
+            ]
+            for ts_ms, speaker, text, is_whisper in spoken:
+                session.add(
+                    Message(
+                        workspace_id=workspace.id,
+                        conversation_id=call_conversation.id,
+                        ts_ms=ts_ms,
+                        speaker=speaker,
+                        text=text,
+                        is_whisper=is_whisper,
+                        # A typed whisper has no recognition to be confident about.
+                        stt_confidence=None if is_whisper else 0.93,
+                        language=None if is_whisper else "de",
                     )
                 )
 

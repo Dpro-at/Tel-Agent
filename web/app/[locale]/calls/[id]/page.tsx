@@ -17,10 +17,12 @@ export default async function CallDetailPage({
 }: {
   params: Promise<{ locale: string; id: string }>;
 }) {
-  const { locale } = await params;
+  const { locale, id } = await params;
   if (!isLocale(locale)) notFound();
+  const conversationId = Number(id);
+  if (!Number.isInteger(conversationId) || conversationId < 1) notFound();
 
   const t = pickDictionary<CallDetailDictionary>(locale, { en, de, ar });
 
-  return <CallDetail locale={locale} t={t} />;
+  return <CallDetail locale={locale} t={t} id={conversationId} />;
 }
