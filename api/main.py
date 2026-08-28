@@ -38,6 +38,7 @@ from api.middleware.auth import AuthenticationMiddleware
 from api.middleware.csrf import CsrfMiddleware
 from api.middleware.request_id import RequestIdMiddleware
 from api.middleware.ws_auth import WebSocketAuthMiddleware
+from api.routes import apps as apps_routes
 from api.routes import auth as auth_routes
 from api.routes import backup as backup_routes
 from api.routes import notifications as notification_routes
@@ -253,6 +254,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         expose_headers=["X-Request-Id"],
     )
 
+    app.include_router(apps_routes.router)
     app.include_router(auth_routes.router)
     app.include_router(notification_routes.router)
     app.include_router(system_routes.router)

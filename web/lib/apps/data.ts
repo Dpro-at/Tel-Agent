@@ -118,31 +118,10 @@ export const CATALOGUE: App[] = [
   { id: "grafana", category: "analytics", mark: "Gr", nameText: "Grafana", origin: "official", version: "v1.4.0 · 2.1 MB", desc: "app_grafana_desc", install: "install" },
 ];
 
-export type Installed = {
-  id: string;
-  mark: string;
-  name?: Key;
-  nameText?: string;
-  version: string;
-  /** "Community · tg-bridge" is one translated word and one project name. */
-  author: Key;
-  authorId?: string;
-};
-
-export const CHANNEL_APPS: (Installed & { detail: Key; breaksWhenOffline: boolean })[] = [
-  { id: "phone_line", mark: "☎", name: "app_phone_line_name", version: "v2.4.0", author: "author_telagent", detail: "ch_phone_line_detail", breaksWhenOffline: true },
-  { id: "whatsapp", mark: "W", nameText: "WhatsApp", version: "v1.8.2", author: "author_telagent", detail: "ch_whatsapp_detail", breaksWhenOffline: true },
-  { id: "web_chat", mark: "◍", name: "app_web_chat_name", version: "v1.6.3", author: "author_telagent", detail: "ch_web_chat_detail", breaksWhenOffline: false },
-  { id: "telegram", mark: "T", nameText: "Telegram", version: "v0.9.1", author: "author_community", authorId: "tg-bridge", detail: "ch_telegram_detail", breaksWhenOffline: false },
-];
-
-export const INSTALLED_OTHER: (Installed & { role: Key; active: boolean })[] = [
-  { id: "caldav", mark: "◷", nameText: "CalDAV", version: "v2.3.0", author: "author_telagent", role: "inst_caldav_role", active: true },
-  { id: "local_transcription", mark: "◰", name: "app_local_transcription_name", version: "v3.0.2", author: "author_telagent", role: "inst_local_transcription_role", active: true },
-  { id: "generic_sip_trunk", mark: "SIP", name: "app_generic_sip_trunk_name", version: "v3.0.0", author: "author_telagent", role: "inst_generic_sip_trunk_role", active: true },
-  { id: "easybell_presets", mark: "eb", name: "app_easybell_presets_name", version: "v1.2.0", author: "author_telagent", role: "inst_easybell_presets_role", active: true },
-  { id: "spam_list", mark: "⛉", name: "app_spam_list_name", version: "v4.7.1", author: "author_community", authorId: "nuisance-db", role: "inst_spam_list_role", active: false },
-];
+// The installed tab reads `/api/apps` — the manifests the registry actually loaded.
+// The fixture lists that used to sit here claimed WhatsApp and Telegram were
+// installed, which was a drawing of extensions that do not exist; they went when the
+// tab was wired. The store catalogue above stays: it is a roadmap and says so.
 
 /**
  * A stable colour per app. Keyed on the id, never the displayed name — a name

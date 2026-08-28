@@ -6,18 +6,12 @@ import { useState } from "react";
 import { BrandMark, brandSlug } from "@/components/brands/brand-mark";
 import { Sidebar } from "@/components/shell/sidebar";
 import { StatePreview, type ScreenState } from "@/components/state-preview";
-import {
-  CATALOGUE,
-  CATEGORIES,
-  CHANNEL_APPS,
-  INSTALLED_OTHER,
-  tintFor,
-  type App,
-  type Installed,
-} from "@/lib/apps/data";
+import { appsOverview, type AppsOverview, type InstalledApp } from "@/lib/api";
+import { CATALOGUE, CATEGORIES, tintFor, type App } from "@/lib/apps/data";
 import { interpolate } from "@/lib/i18n";
 import { EXTERNAL } from "@/lib/links";
 import type { Locale } from "@/lib/locales";
+import { useResource, type Resource } from "@/lib/use-resource";
 
 import type { AppsDictionary } from "./page";
 
@@ -73,40 +67,25 @@ function Mark({
   );
 }
 
-function LinkButton({ label, tone }: { label: string; tone?: "strong" | "danger" }) {
-  return (
-    <button
-      type="button"
-      className="cursor-pointer border-none bg-transparent p-0 text-start text-[13px] hover:underline"
-      style={{
-        color:
-          tone === "danger"
-            ? "var(--od-red-text-4)"
-            : tone === "strong"
-              ? "var(--od-text-3)"
-              : "var(--od-muted-4)",
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
 export function Apps({ locale, t }: { locale: Locale; t: AppsDictionary }) {
   const [state, setState] = useState<ScreenState>("default");
   const [tab, setTab] = useState<"installed" | "store">("installed");
   const [category, setCategory] = useState("all");
   const [packageFile, setPackageFile] = useState<string | null>(null);
 
-  /** An installed entry names itself in copy or keeps a product's own name. */
-  const nameOf = (entry: Installed | App) =>
-    entry.name ? t[entry.name] : (entry.nameText ?? "");
+  // The installed tab is real: the manifests the registry loaded, and what it
+  // refused. The store below stays a drawing — there is nothing to download yet,
+  // and its cards say "Planned" rather than pretending otherwise.
+  const overview = useResource<AppsOverview>(() => appsOverview());
 
   const offline = state === "offline";
   const empty = state === "empty";
   const showBody = state === "default" || empty || offline;
 
-  const channels = empty ? CHANNEL_APPS.slice(0, 1) : CHANNEL_APPS;
+  const installedCount =
+    overview.data === null
+      ? null
+      : overview.data.installed.length + overview.data.refused.length;
   const storeApps = CATALOGUE.filter((entry) => entry.install !== "installed");
   const shown = storeApps.filter((entry) => category === "all" || entry.category === category);
   const sections = CATEGORIES.filter((entry) => category === "all" || category === entry.id)
@@ -210,7 +189,7 @@ export function Apps({ locale, t }: { locale: Locale; t: AppsDictionary }) {
             <div className="border-od-border mt-[22px] flex flex-wrap gap-1 border-b">
               {(
                 [
-                  ["installed", "tab_installed", channels.length + INSTALLED_OTHER.length],
+                  ["installed", "tab_installed", installedCount ?? "…"],
                   ["store", "tab_store", storeApps.length],
                 ] as const
               ).map(([id, label, count]) => {
@@ -244,138 +223,7 @@ export function Apps({ locale, t }: { locale: Locale; t: AppsDictionary }) {
             </div>
 
             {tab === "installed" ? (
-              <section className="mt-[22px]">
-                <div className="flex flex-col gap-3">
-                  {channels.map((channel) => {
-                    const live = !(offline && channel.breaksWhenOffline);
-                    return (
-                      <div
-                        key={channel.id}
-                        className="rounded-[10px] border p-4"
-                        style={{
-                          borderColor: live ? "var(--od-line)" : "var(--od-red-border-3)",
-                          background: live ? "var(--od-panel-deep-3)" : "var(--od-red-bg-4)",
-                        }}
-                      >
-                        <div className="flex flex-wrap items-start gap-x-5 gap-y-[14px]">
-                          <Mark id={channel.id} glyph={channel.mark} size={38} />
-                          <div className="min-w-[240px] flex-[1_1_300px]">
-                            <div className="flex flex-wrap items-center gap-[10px]">
-                              <span className="text-od-text text-[16px] font-semibold">
-                                {nameOf(channel)}
-                              </span>
-                              <span
-                                className="rounded-md border p-[3px_10px] text-[12.5px] font-medium whitespace-nowrap"
-                                style={{
-                                  borderColor: live
-                                    ? "var(--od-green-border)"
-                                    : "var(--od-red-border)",
-                                  background: live
-                                    ? "rgba(63,185,132,.11)"
-                                    : "rgba(240,96,94,.11)",
-                                  color: live
-                                    ? "var(--od-green-text)"
-                                    : "var(--od-red-text-4)",
-                                }}
-                              >
-                                {live ? t.live : t.disconnected}
-                              </span>
-                            </div>
-                            <div className="text-od-faint mt-1 text-[12.5px]">
-                              <span dir="ltr" className="mono ltr-data">
-                                {channel.version}
-                              </span>
-                              <span>
-                                {" · "}
-                                {interpolate(t.by_author, {
-                                  author: channel.authorId
-                                    ? `${t[channel.author]} · ${channel.authorId}`
-                                    : t[channel.author],
-                                })}
-                              </span>
-                            </div>
-                            <div className="text-od-muted-5 mt-[6px] text-[13px] text-pretty">
-                              {t[channel.detail]}
-                            </div>
-                          </div>
-                          <div className="ms-auto flex flex-wrap items-center justify-end gap-[10px]">
-                            <LinkButton label={t.settings} />
-                            <LinkButton label={live ? t.deactivate : t.reconnect} tone="strong" />
-                            <LinkButton label={t.delete} tone="danger" />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {empty ? (
-                  <div className="border-od-border-6 bg-od-panel-deep-2 mt-3 rounded-[10px] border border-dashed p-[34px_28px]">
-                    <h3 className="m-0 text-[18px] font-semibold">{t.empty_title}</h3>
-                    <p className="text-od-muted mt-[10px] max-w-[60ch] text-pretty">{t.empty_body}</p>
-                    <button
-                      type="button"
-                      onClick={() => setTab("store")}
-                      className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 mt-[18px] cursor-pointer rounded-md border p-[9px_16px] font-medium"
-                    >
-                      {t.empty_browse}
-                    </button>
-                  </div>
-                ) : null}
-
-                <div className="mt-3 flex flex-col gap-3">
-                  {INSTALLED_OTHER.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="border-od-line bg-od-panel-deep-3 flex flex-wrap items-center gap-x-[18px] gap-y-3 rounded-[10px] border p-4"
-                    >
-                      <Mark id={entry.id} glyph={entry.mark} size={38} />
-                      <div className="min-w-[220px] flex-[1_1_280px]">
-                        <div className="flex flex-wrap items-center gap-[9px]">
-                          <span className="text-od-text text-[15px] font-semibold">
-                            {nameOf(entry)}
-                          </span>
-                          <span
-                            className="rounded-md border p-[2px_9px] text-[12px] font-medium"
-                            style={{
-                              borderColor: entry.active
-                                ? "var(--od-green-border)"
-                                : "var(--od-border-7)",
-                              background: entry.active
-                                ? "rgba(63,185,132,.11)"
-                                : "var(--od-raise-5)",
-                              color: entry.active ? "var(--od-green-text)" : "var(--od-faint)",
-                            }}
-                          >
-                            {entry.active ? t.active : t.inactive}
-                          </span>
-                        </div>
-                        <div className="text-od-faint mt-1 text-[12.5px]">
-                          <span dir="ltr" className="mono ltr-data">
-                            {entry.version}
-                          </span>
-                          <span>
-                            {" · "}
-                            {interpolate(t.by_author, {
-                              author: entry.authorId
-                                ? `${t[entry.author]} · ${entry.authorId}`
-                                : t[entry.author],
-                            })}
-                          </span>
-                        </div>
-                        <div className="text-od-muted-5 mt-[6px] text-[13px] text-pretty">
-                          {t[entry.role]}
-                        </div>
-                      </div>
-                      <div className="ms-auto flex flex-wrap items-center justify-end gap-[10px]">
-                        <LinkButton label={t.settings} />
-                        <LinkButton label={entry.active ? t.deactivate : t.activate} tone="strong" />
-                        <LinkButton label={t.delete} tone="danger" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
+              <InstalledTab t={t} overview={overview} onBrowse={() => setTab("store")} />
             ) : null}
 
             {tab === "store" ? (
@@ -465,6 +313,196 @@ export function Apps({ locale, t }: { locale: Locale; t: AppsDictionary }) {
                 {t.write_link}
               </a>
             </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The installed tab, wired to `/api/apps` — the manifests the registry actually
+ * loaded, and what it refused at start.
+ *
+ * What went, and why: the fixture rows claiming WhatsApp and Telegram were installed
+ * were drawings of extensions that do not exist, and their Settings / Deactivate /
+ * Delete links had no endpoint behind them. A control with no endpoint is removed,
+ * not drawn — the write half arrives when the runtime consults per-workspace
+ * enablement, which nothing does yet.
+ */
+function InstalledTab({
+  t,
+  overview,
+  onBrowse,
+}: {
+  t: AppsDictionary;
+  overview: Resource<AppsOverview>;
+  onBrowse: () => void;
+}) {
+  if (overview.data === null && overview.loading) {
+    return (
+      <section className="mt-[22px] flex flex-col gap-3">
+        {[0, 1, 2].map((index) => (
+          <div
+            key={index}
+            className="border-od-raise-12 h-24 rounded-[10px] border"
+            style={{
+              background:
+                "linear-gradient(90deg,var(--od-panel),var(--od-raise-7),var(--od-panel))",
+              backgroundSize: "420px 100%",
+              animation: "od-shimmer 1.4s linear infinite",
+            }}
+          />
+        ))}
+      </section>
+    );
+  }
+
+  if (overview.data === null) {
+    return (
+      <section className="border-od-line bg-od-panel-deep-3 mt-[22px] rounded-[10px] border p-[18px]">
+        <p className="m-0 text-[13px] text-[color:var(--od-red-text-6)]">
+          {overview.error?.message ?? t.installed_failed}
+        </p>
+        <button
+          type="button"
+          onClick={overview.reload}
+          className="border-od-stroke bg-od-raise-10 text-od-text-2 mt-3 cursor-pointer rounded-[7px] border p-[7px_13px] text-[12.5px]"
+        >
+          {t.installed_retry}
+        </button>
+      </section>
+    );
+  }
+
+  const { installed, refused } = overview.data;
+
+  if (installed.length === 0 && refused.length === 0) {
+    return (
+      <section className="border-od-border-6 bg-od-panel-deep-2 mt-[22px] rounded-[10px] border border-dashed p-[34px_28px]">
+        <h3 className="m-0 text-[18px] font-semibold">{t.empty_title}</h3>
+        <p className="text-od-muted mt-[10px] max-w-[60ch] text-pretty">{t.empty_body}</p>
+        <button
+          type="button"
+          onClick={onBrowse}
+          className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 mt-[18px] cursor-pointer rounded-md border p-[9px_16px] font-medium"
+        >
+          {t.empty_browse}
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mt-[22px] flex flex-col gap-3">
+      {installed.map((entry) => (
+        <InstalledRow key={entry.slug} t={t} entry={entry} />
+      ))}
+
+      {refused.length > 0 ? (
+        <div className="mt-2">
+          <div className="border-od-border mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-[10px] border-b pb-[10px]">
+            <h2 className="text-od-text m-0 text-[16px] font-semibold">{t.refused_title}</h2>
+            <span className="text-od-faint text-[12.5px] text-pretty">{t.refused_note}</span>
+          </div>
+          <div className="flex flex-col gap-3">
+            {refused.map((entry) => (
+              <div
+                key={entry.slug}
+                className="border-od-red-border-3 bg-od-red-bg-4 flex flex-wrap items-center gap-x-[18px] gap-y-3 rounded-[10px] border p-4"
+              >
+                <div className="min-w-[220px] flex-[1_1_280px]">
+                  <div className="flex flex-wrap items-center gap-[9px]">
+                    {/* A refused module has no manifest to name it - the module path
+                        is all that is known, and it is machine data. */}
+                    <span dir="ltr" className="mono ltr-data text-od-text text-[14px] font-semibold">
+                      {entry.slug}
+                    </span>
+                    <span className="border-od-red-border bg-od-red-bg-5 rounded-md border p-[2px_9px] text-[12px] font-medium text-[color:var(--od-red-text-5)]">
+                      {t.refused_badge}
+                    </span>
+                  </div>
+                  <div
+                    dir="ltr"
+                    className="mono ltr-data text-od-muted-5 mt-[6px] text-start text-[12.5px] [overflow-wrap:anywhere]"
+                  >
+                    {entry.reason}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function InstalledRow({ t, entry }: { t: AppsDictionary; entry: InstalledApp }) {
+  // The catalogue's presentation for the same slug: the drawn mark and, for our own
+  // applications, the name and description as copy in the reader's language. A slug
+  // the catalogue does not know keeps its manifest's own words verbatim - a community
+  // extension describes itself, and its words are content, not our copy.
+  const drawn = CATALOGUE.find((app) => app.id === entry.slug);
+  const categoryLabel = CATEGORIES.find((section) => section.id === entry.category)?.label;
+  const originKey =
+    entry.origin in ORIGIN_LABEL ? ORIGIN_LABEL[entry.origin as keyof typeof ORIGIN_LABEL] : null;
+
+  return (
+    <div className="border-od-line bg-od-panel-deep-3 flex flex-wrap items-start gap-x-5 gap-y-[14px] rounded-[10px] border p-4">
+      <Mark
+        id={entry.slug}
+        glyph={drawn?.mark ?? entry.slug.slice(0, 2)}
+        size={38}
+        brand={BRANDED_CATEGORIES.includes(entry.category)}
+      />
+      <div className="min-w-[240px] flex-[1_1_300px]">
+        <div className="flex flex-wrap items-center gap-[10px]">
+          {drawn?.name ? (
+            <span className="text-od-text text-[16px] font-semibold">{t[drawn.name]}</span>
+          ) : (
+            <span dir="ltr" className="text-od-text text-start text-[16px] font-semibold">
+              {entry.name}
+            </span>
+          )}
+          <span
+            className="rounded-md border p-[2px_9px] text-[12px] font-medium whitespace-nowrap"
+            style={{
+              borderColor: entry.running ? "var(--od-green-border)" : "var(--od-border-7)",
+              background: entry.running ? "rgba(63,185,132,.11)" : "var(--od-raise-5)",
+              color: entry.running ? "var(--od-green-text)" : "var(--od-faint)",
+            }}
+          >
+            {entry.running ? t.active : t.inactive}
+          </span>
+        </div>
+        <div className="text-od-faint mt-1 text-[12.5px]">
+          {categoryLabel ? <span>{t[categoryLabel]}</span> : null}
+          {originKey ? <span>{`${categoryLabel ? " · " : ""}${t[originKey]}`}</span> : null}
+          {entry.version ? (
+            <>
+              {" · "}
+              <span dir="ltr" className="mono ltr-data">
+                {entry.version}
+              </span>
+            </>
+          ) : null}
+        </div>
+        <div className="text-od-muted-5 mt-[6px] text-[13px] text-pretty">
+          {drawn?.desc ? (
+            t[drawn.desc]
+          ) : (
+            <span dir="ltr" className="block text-start">
+              {entry.description}
+            </span>
+          )}
+        </div>
+        {entry.scopes.length > 0 ? (
+          <div className="text-od-faint mt-[6px] text-[12px]">
+            <span>{t.asks_for}</span>{" "}
+            <span dir="ltr" className="mono ltr-data">
+              {entry.scopes.join(" · ")}
+            </span>
           </div>
         ) : null}
       </div>
