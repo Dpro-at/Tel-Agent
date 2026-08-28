@@ -426,6 +426,35 @@ export function saveSettings(
   return api("/api/settings", { method: "PATCH", json: { values } });
 }
 
+// --- Apps: the extension registry ---------------------------------------------
+
+export type InstalledApp = {
+  slug: string;
+  /** From the manifest. Our own applications are renamed into copy on the screen;
+   *  anything else keeps the name its author declared. */
+  name: string;
+  version: string | null;
+  origin: string;
+  category: string;
+  description: string;
+  /** What the extension asked to be allowed to do — the reviewable claim. */
+  scopes: string[];
+  hooks: string[];
+  /** Live in this process right now. In the table and not running is a real state. */
+  running: boolean;
+};
+
+export type RefusedApp = { slug: string; reason: string };
+
+export type AppsOverview = {
+  installed: InstalledApp[];
+  refused: RefusedApp[];
+};
+
+export function appsOverview(): Promise<AppsOverview> {
+  return api<AppsOverview>("/api/apps");
+}
+
 // --- Notifications -----------------------------------------------------------
 
 export type NotificationCategory = "failure" | "review" | "missed" | "system";
