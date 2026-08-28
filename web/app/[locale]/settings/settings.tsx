@@ -16,7 +16,9 @@ import {
   currentUser,
   membersList,
   removeMember,
+  sendTestMail,
   signOutEverywhereElse,
+  updateMyLocale,
   type AccountEvent,
   type Member,
 } from "@/lib/api";
@@ -338,6 +340,7 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
                       <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border">
                         <SectionHead title={t.smtp_title} note={t.live_note} />
                         <LiveSettings fields={mailFields(t)} labels={liveLabels(t)} />
+                        <MailTestRow t={t} />
                       </div>
                     ) : null}
                     {tab === "recording" ? (
@@ -357,21 +360,27 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
                       </div>
                     ) : null}
 
-                    <div className="flex flex-wrap items-center justify-end gap-[10px]">
-                      <button
-                        type="button"
-                        className="border-od-border-2 text-od-muted hover:text-od-text-2 cursor-pointer rounded-md border bg-transparent p-[9px_15px]"
-                      >
-                        {t.discard}
-                      </button>
-                      <button
-                        type="button"
-                        className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 inline-flex cursor-pointer items-center gap-[9px] rounded-md border p-[9px_16px] font-medium whitespace-nowrap"
-                      >
-                        {t.save_changes}{" "}
-                        <span className="mono ltr-data text-od-faint text-[11.5px]">⌘↵</span>
-                      </button>
-                    </div>
+                    {/* The drawn Save/Discard pair belongs to the tabs whose forms
+                        are still drawings. A wired tab saves through its own
+                        controls, and a second pair that saves nothing would undo
+                        the honesty the wiring bought. */}
+                    {["profile", "users", "notifications"].includes(tab) ? null : (
+                      <div className="flex flex-wrap items-center justify-end gap-[10px]">
+                        <button
+                          type="button"
+                          className="border-od-border-2 text-od-muted hover:text-od-text-2 cursor-pointer rounded-md border bg-transparent p-[9px_15px]"
+                        >
+                          {t.discard}
+                        </button>
+                        <button
+                          type="button"
+                          className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 inline-flex cursor-pointer items-center gap-[9px] rounded-md border p-[9px_16px] font-medium whitespace-nowrap"
+                        >
+                          {t.save_changes}{" "}
+                          <span className="mono ltr-data text-od-faint text-[11.5px]">⌘↵</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -380,6 +389,80 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
         )}
       </div>
 
+    </div>
+  );
+}
+
+/** A language is named in itself, never translated. */
+const LANGUAGES: { id: "en" | "de" | "ar"; endonym: string }[] = [
+  { id: "en", endonym: "English" },
+  { id: "de", endonym: "Deutsch" },
+  { id: "ar", endonym: "العربية" },
+];
+
+/**
+ * The mail panel's proof: send a test to the signed-in admin's own address.
+ * Never a typed one — a form that mails an arbitrary address is a spam relay.
+ */
+function MailTestRow({ t }: { t: SettingsDictionary }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ text: string; address?: string; bad?: boolean } | null>(
+    null,
+  );
+
+  async function run() {
+    setBusy(true);
+    setResult(null);
+    try {
+      const outcome = await sendTestMail();
+      setResult({ text: t.mail_test_sent, address: outcome.to });
+    } catch (thrown) {
+      if (thrown instanceof ApiError) {
+        if (thrown.code === "mail_not_configured") {
+          setResult({ text: t.mail_test_not_configured, bad: true });
+        } else if (thrown.code === "no_email_on_account") {
+          setResult({ text: t.mail_test_no_email, bad: true });
+        } else if (thrown.code === "mail_failed") {
+          setResult({ text: t.mail_test_failed, bad: true });
+        } else {
+          setResult({ text: thrown.message, bad: true });
+        }
+      } else {
+        setResult({ text: thrown instanceof Error ? thrown.message : String(thrown), bad: true });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-[18px] gap-y-3 border-t border-[color:var(--od-raise-6)] p-[14px_18px]">
+      <div
+        className="max-w-[60ch] text-[13px] text-pretty"
+        style={{ color: result?.bad ? "var(--od-red-text-6)" : "var(--od-muted-5)" }}
+      >
+        {result ? (
+          <>
+            {result.text}
+            {result.address ? (
+              <>
+                {" "}
+                <span dir="ltr" className="mono ltr-data">
+                  {result.address}
+                </span>
+              </>
+            ) : null}
+          </>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void run()}
+        className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-md border p-[8px_14px] text-[13px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {busy ? t.mail_test_sending : t.smtp_send_test}
+      </button>
     </div>
   );
 }
@@ -394,10 +477,12 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
  * profile-update endpoint yet, and this component does not touch it.
  */
 function ProfilePanels({ t }: { t: SettingsDictionary }) {
+  const router = useRouter();
   const me = useResource(() => currentUser());
   const events = useResource(() => accountEvents());
   const [changeOpen, setChangeOpen] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [switching, setSwitching] = useState<string | null>(null);
   // The one line of feedback under the security panel: what the last action did.
   const [outcome, setOutcome] = useState<{ text: string; bad?: boolean } | null>(null);
 
@@ -431,6 +516,21 @@ function ProfilePanels({ t }: { t: SettingsDictionary }) {
     (entry) => entry.event === "password_changed" || entry.event === "password_reset",
   );
 
+  async function switchLanguage(next: "en" | "de" | "ar") {
+    if (switching !== null || next === account.locale) return;
+    setSwitching(next);
+    setOutcome(null);
+    try {
+      await updateMyLocale(next);
+      // The dictionary is rendered per locale on the server, so the change is a
+      // navigation into the same screen under the new prefix.
+      router.push(`/${next}/settings`);
+    } catch (thrown) {
+      setOutcome({ text: thrown instanceof Error ? thrown.message : String(thrown), bad: true });
+      setSwitching(null);
+    }
+  }
+
   async function endOtherSessions() {
     setEnding(true);
     setOutcome(null);
@@ -463,6 +563,42 @@ function ProfilePanels({ t }: { t: SettingsDictionary }) {
               {account.email}
             </div>
           ) : null}
+        </div>
+      </div>
+
+      <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border p-[18px]">
+        <div className="flex flex-wrap items-center gap-x-[18px] gap-y-3">
+          <div className="min-w-[220px] flex-[1_1_260px]">
+            <div className="text-od-text-3 font-medium">{t.f_lang}</div>
+            <div className="text-od-muted-5 mt-[3px] text-[13px] text-pretty">
+              {t.f_lang_help_profile}
+            </div>
+          </div>
+          <div className="ms-auto flex flex-wrap gap-2">
+            {LANGUAGES.map((language) => {
+              const on = account.locale === language.id;
+              const pending = switching === language.id;
+              return (
+                <button
+                  key={language.id}
+                  type="button"
+                  disabled={switching !== null}
+                  onClick={() => void switchLanguage(language.id)}
+                  className="cursor-pointer rounded-full border p-[7px_13px] text-[13px] whitespace-nowrap disabled:cursor-not-allowed"
+                  style={{
+                    borderColor:
+                      on || pending ? "var(--od-violet-border)" : "var(--od-border-7)",
+                    background: on || pending ? "rgba(139,124,255,.14)" : "transparent",
+                    color: on || pending ? "var(--od-violet-3)" : "var(--od-muted-4)",
+                    fontWeight: on ? 500 : 400,
+                    opacity: switching !== null && !pending ? 0.5 : 1,
+                  }}
+                >
+                  {language.endonym}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

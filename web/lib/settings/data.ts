@@ -51,26 +51,10 @@ export type Field = { id: string; label: Key; help?: Key; control: Control };
 export type Section = { title: Key; body: Key; fields: Field[] };
 
 export const SECTIONS: Record<string, Section> = {
-  profile: {
-    title: "sec_profile_title",
-    body: "sec_profile_body",
-    fields: [
-      { id: "name", label: "f_name", help: "f_name_help", control: { kind: "input", valueText: "Mohamed" } },
-      {
-        id: "email",
-        label: "f_email",
-        help: "f_email_help",
-        control: { kind: "input", valueText: "mohamed@wagner-partner.at", mono: true },
-      },
-      {
-        id: "lang",
-        label: "f_lang",
-        help: "f_lang_help_profile",
-        // A language is named in itself, never translated.
-        control: { kind: "select", valueText: "Deutsch (Österreich)" },
-      },
-    ],
-  },
+  // No fields: the identity card and the language panel are wired, the name field
+  // had no column behind it, and editing the email needs the current password (it
+  // is where reset codes go) - that confirmation flow is its own future piece.
+  profile: { title: "sec_profile_title", body: "sec_profile_body", fields: [] },
   general: {
     title: "sec_general_title",
     body: "sec_general_body",
@@ -208,44 +192,6 @@ export const HOST_FIELDS: Field[] = [
     label: "f_ports",
     help: "f_ports_help",
     control: { kind: "input", valueText: "8443 · 5061 · 16384–16584", mono: true },
-  },
-];
-
-export const SMTP_FIELDS: Field[] = [
-  {
-    id: "host",
-    label: "f_smtp_host",
-    help: "f_smtp_host_help",
-    control: { kind: "input", valueText: "smtp.easyname.com", mono: true },
-  },
-  {
-    id: "port",
-    label: "f_smtp_port",
-    help: "f_smtp_port_help",
-    control: { kind: "select", valueText: "587 · STARTTLS" },
-  },
-  {
-    id: "user",
-    label: "f_smtp_user",
-    control: { kind: "input", valueText: "office@wagner-partner.at", mono: true },
-  },
-  {
-    id: "pass",
-    label: "f_smtp_pass",
-    help: "f_smtp_pass_help",
-    control: { kind: "input", valueText: "••••••••••••", mono: true },
-  },
-  {
-    id: "sendas",
-    label: "f_send_as",
-    help: "f_send_as_help",
-    control: { kind: "input", valueText: "Tel-Agent <office@wagner-partner.at>" },
-  },
-  {
-    id: "replyto",
-    label: "f_reply_to",
-    help: "f_reply_to_help",
-    control: { kind: "input", value: "v_not_set" },
   },
 ];
 

@@ -294,3 +294,33 @@ async def test_sign_out_everywhere_keeps_this_session(
     assert await migrated.scalar(select(func.count()).select_from(Session)) == 1
     # This browser is still signed in.
     assert (await signed_up.get("/api/auth/me")).status_code == 200
+
+
+# --- PATCH /me: the language, and deliberately nothing else -------------------
+
+
+async def test_the_language_is_changed_and_comes_back_in_me(signed_up: AsyncClient) -> None:
+    await _login(signed_up)
+
+    response = await signed_up.patch("/api/auth/me", json={"locale": "ar"})
+
+    assert response.status_code == 200
+    assert response.json()["locale"] == "ar"
+    # And it stuck: the next read agrees.
+    assert (await signed_up.get("/api/auth/me")).json()["locale"] == "ar"
+
+
+async def test_an_unregistered_locale_is_refused(signed_up: AsyncClient) -> None:
+    """The committed tier only. A community locale becomes selectable when it is
+    registered at 100%, not before - a language picker that offers an empty
+    translation ships English to somebody who asked for their own language."""
+    await _login(signed_up)
+
+    response = await signed_up.patch("/api/auth/me", json={"locale": "fr"})
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "unsupported_locale"
+
+
+async def test_updating_me_needs_a_session(signed_up: AsyncClient) -> None:
+    assert (await signed_up.patch("/api/auth/me", json={"locale": "de"})).status_code == 401
