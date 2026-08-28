@@ -474,6 +474,46 @@ async def test_staging_a_restore_changes_nothing_yet(
     assert (await clients["mohamed"].get("/api/backup")).status_code == 200
 
 
+async def test_staging_a_restore_tells_every_workspace(
+    clients, seeded: AsyncSession, settings: Settings, tmp_path, monkeypatch
+) -> None:
+    """The restart this asks for drops the phone line for everybody, and the restore
+    deletes every workspace's data since that date - not only the owner's."""
+    from sqlalchemy import select
+
+    from api.models import Notification
+    from api.routes import backup as backup_routes
+
+    monkeypatch.setattr(backup_routes, "RESTORE_REQUEST", tmp_path / "restore-request.json")
+    await store.set_value(seeded, service.TARGET_KEY, str(tmp_path / "share"))
+    await seeded.commit()
+    row = await service.run_backup(seeded, kind="manual", settings=settings)
+    # Read before `expire_all`: an expired attribute refreshes lazily, which the
+    # async session refuses outside an await.
+    taken_at = row.started_at.date().isoformat()
+
+    response = await clients["mohamed"].post(
+        f"/api/backup/{row.id}/restore",
+        json={"confirm_date": taken_at},
+    )
+    assert response.status_code == 200
+
+    seeded.expire_all()
+    raised = (
+        (
+            await seeded.execute(
+                select(Notification).where(Notification.message_key == "restore_staged")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [item.params for item in raised] == [{"taken_at": taken_at}]
+    # Informational, not a decision: the decision was the owner's and has been taken,
+    # and there is no button on the screen that could undo it.
+    assert raised[0].needs_decision is False
+
+
 # --- The restore itself -------------------------------------------------------
 
 

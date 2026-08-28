@@ -17,7 +17,7 @@ from api.config import Settings
 from api.db import create_engine, create_sessionmaker
 from api.jobs import runner
 from api.jobs.builtin import CORE_SCHEDULE
-from api.models import BackgroundJob, ScheduledTask
+from api.models import BackgroundJob, Notification, ScheduledTask, Workspace
 
 
 @pytest.fixture
@@ -309,6 +309,176 @@ async def test_a_job_with_no_handler_fails_rather_than_looping(
     assert row is not None
     assert row.status == "failed"
     assert "no handler" in (row.last_error or "")
+
+
+# --- Failures reach the notifications screen ---------------------------------
+#
+# The catalogue in `api/notifications.py` declared six messages and, until these
+# callers existed, not one of them was ever raised. A declared message with no caller
+# is the same defect as a cleanup function nothing calls - which is the failure this
+# module's own docstring opens with.
+
+
+async def test_a_failing_task_tells_the_operator_once(
+    migrated: AsyncSession, sessionmaker: async_sessionmaker
+) -> None:
+    """A scheduled task fails with nobody watching - that is what "scheduled" means.
+    The log is read after somebody already knows something is wrong; this is how they
+    come to know."""
+    migrated.add(Workspace(name="W"))
+    await migrated.commit()
+
+    @runner.task("broken_loudly")
+    async def broken(db) -> None:
+        raise RuntimeError("the disk is full")
+
+    migrated.add(ScheduledTask(name="broken_loudly", interval_seconds=60, next_run_at=_now()))
+    await migrated.commit()
+
+    await runner.run_due_tasks(sessionmaker)
+
+    migrated.expire_all()
+    rows = (
+        (
+            await migrated.execute(
+                select(Notification).where(Notification.message_key == "task_failed")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 1
+    assert rows[0].params == {"task": "broken_loudly"}
+    assert "disk is full" in (rows[0].detail or "")
+    assert rows[0].needs_decision is False  # the log, not a decision
+
+    # The next failure, while the first is still on the screen, adds nothing.
+    row = await migrated.scalar(
+        select(ScheduledTask).where(ScheduledTask.name == "broken_loudly")
+    )
+    row.next_run_at = _now() - dt.timedelta(seconds=1)
+    await migrated.commit()
+    await runner.run_due_tasks(sessionmaker)
+
+    migrated.expire_all()
+    count = len(
+        (
+            await migrated.execute(
+                select(Notification).where(Notification.message_key == "task_failed")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert count == 1
+
+
+async def test_a_nightly_backup_that_fails_raises_backup_failed(
+    migrated: AsyncSession, tmp_path
+) -> None:
+    """The one an installation most needs to hear about, because a nightly job failing
+    is silent by nature. Raised even though the task record also fails."""
+    from api.jobs.builtin import _backup_nightly
+    from api.settings import store
+
+    migrated.add(Workspace(name="W"))
+    await migrated.flush()
+    # A target that looks like a path and is not usable: a file where the directory
+    # should be - the shape of a share that went away.
+    blocker = tmp_path / "not-a-directory"
+    blocker.write_text("i am a file")
+    await store.set_value(migrated, "backup.target_path", str(blocker / "backups"))
+    await migrated.commit()
+
+    with pytest.raises(RuntimeError):
+        await _backup_nightly(migrated)
+
+    rows = (
+        (
+            await migrated.execute(
+                select(Notification).where(Notification.message_key == "backup_failed")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 1
+    assert rows[0].needs_decision is True
+    assert rows[0].category == "failure"
+
+
+async def test_a_nightly_backup_with_no_target_says_so_once(
+    migrated: AsyncSession,
+) -> None:
+    """Not a failed task - the early return stands - but it is the situation
+    `backup_no_target` exists for, and two nights are still one situation."""
+    from api.jobs.builtin import _backup_nightly
+
+    migrated.add(Workspace(name="W"))
+    await migrated.commit()
+
+    await _backup_nightly(migrated)  # tonight
+    await _backup_nightly(migrated)  # tomorrow night, still unconfigured
+
+    rows = (
+        (
+            await migrated.execute(
+                select(Notification).where(Notification.message_key == "backup_no_target")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 1
+    assert rows[0].needs_decision is True
+
+
+async def test_failed_mail_reaches_the_screen_before_the_backoff_does(
+    migrated: AsyncSession,
+    sessionmaker: async_sessionmaker,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The person this fails is locked out, waiting for a reset code. Six hours of
+    quiet backoff is exactly the "quietly" the forgot screen depends on this not
+    being - so the first failed attempt says so, and the retries add nothing."""
+    from api import mail
+
+    migrated.add(Workspace(name="W"))
+    await migrated.commit()
+
+    def refused(config, *, to: str, subject: str, body: str) -> bool:
+        return False
+
+    monkeypatch.setattr(mail, "send", refused)
+
+    await runner.enqueue(
+        migrated, "send_email", {"to": "sabine@example.test", "subject": "s", "body": "b"}
+    )
+    await migrated.commit()
+
+    await runner.run_due_jobs(sessionmaker)
+
+    migrated.expire_all()
+    rows = (
+        (
+            await migrated.execute(
+                select(Notification).where(Notification.message_key == "mail_failed")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 1
+    # And the address stayed out of it: a notification is read by anybody with
+    # `viewer`, and who was sent a reset code is personal data.
+    assert rows[0].params == {}
+    assert "sabine" not in (rows[0].detail or "")
+
+    # The job itself still failed and is back in the queue - the notification is a
+    # report, not a rescue.
+    job_row = await migrated.scalar(select(BackgroundJob))
+    assert job_row is not None
+    assert job_row.status == "queued"
 
 
 # --- The core schedule -------------------------------------------------------
