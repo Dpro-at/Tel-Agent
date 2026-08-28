@@ -325,3 +325,32 @@ async def test_an_unregistered_locale_is_refused(signed_up: AsyncClient) -> None
 
 async def test_updating_me_needs_a_session(signed_up: AsyncClient) -> None:
     assert (await signed_up.patch("/api/auth/me", json={"locale": "de"})).status_code == 401
+
+
+async def test_only_the_two_invite_routes_are_public(client) -> None:
+    """`PUBLIC_PREFIXES` opens a whole path prefix, and nothing was watching it.
+
+    `/api/invites/` is public because the person holding the link has no account yet.
+    The consequence is easy to miss: **any route added under that prefix later is
+    public the moment it is written**, and the closed-by-default walk cannot catch it,
+    because that walk skips whatever `is_public()` says is public. A private
+    `DELETE /api/invites/{id}` for admins would be open to the internet and every
+    existing test would still pass.
+
+    So the prefix's contents are pinned. Adding a third route under it fails here,
+    which forces the question to be answered on purpose rather than by default.
+    """
+    from api.dependencies import PUBLIC_PREFIXES, served_paths
+
+    under_the_prefix = {
+        path for path in served_paths(client._transport.app) if path.startswith(PUBLIC_PREFIXES)
+    }
+
+    assert under_the_prefix == {
+        "/api/invites/{token}",
+        "/api/invites/{token}/accept",
+    }, (
+        "A route was added under a public prefix. If it is meant to be public, add it "
+        "here; if it is not, it needs a different prefix - it is currently reachable "
+        "without a session."
+    )
