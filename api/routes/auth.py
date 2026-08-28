@@ -192,6 +192,50 @@ async def me(request: Request, user: CurrentUser) -> Me:
     )
 
 
+class ProfileUpdate(BaseModel):
+    locale: str | None = Field(default=None, max_length=12)
+
+
+# The committed tier (locales/README.md): the three languages a release blocks on.
+# A community locale becomes selectable here when it is registered, not before.
+SUPPORTED_LOCALES = ("en", "de", "ar")
+
+
+@router.patch("/me", summary="Update the signed-in account", response_model=Me)
+async def update_me(request: Request, payload: ProfileUpdate, user: CurrentUser) -> object:
+    """The language, and deliberately nothing else yet.
+
+    The email is where reset codes go, so changing it is an account-takeover lever
+    from any unlocked browser - it needs the current password, the same way changing
+    the password does, and that confirmation flow arrives as its own piece rather
+    than as one more field here. There is no display name to edit: `users` has no
+    such column, and the screens that would show one (whispers, notes) do not exist.
+    """
+    db: DbSession = request.state.db
+
+    if payload.locale is not None:
+        if payload.locale not in SUPPORTED_LOCALES:
+            return envelope_response(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                code="unsupported_locale",
+                message=f"The interface languages are {list(SUPPORTED_LOCALES)}.",
+            )
+        user.locale = payload.locale
+
+    # Read before the commit expires the row.
+    answer = Me(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        locale=payload.locale or user.locale,
+        theme=user.theme,
+        workspaces=[],
+    )
+    await db.commit()
+    answer.workspaces = await _workspaces_for(db, answer.id)
+    return answer
+
+
 @router.post("/logout", summary="End this session", response_model=SignedOut)
 async def logout(request: Request, response: Response, session: CurrentSession) -> SignedOut:
     """Delete the row, then clear the cookie.

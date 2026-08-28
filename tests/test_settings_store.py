@@ -375,3 +375,87 @@ async def test_storing_a_secret_without_a_key_is_answered_not_crashed(
     body = response.json()["error"]
     assert body["code"] == "encryption_key_missing"
     assert "ENCRYPTION_KEY" in body["message"]
+
+
+# --- The mail test button -----------------------------------------------------
+
+
+async def test_the_mail_test_refuses_before_anything_is_configured(clients) -> None:
+    """Told immediately, rather than by a message that never arrives."""
+    response = await clients["admin"].post("/api/settings/mail/test")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "mail_not_configured"
+
+
+async def test_the_mail_test_needs_an_address_on_the_account(clients) -> None:
+    save = await clients["admin"].patch(
+        "/api/settings",
+        json={"values": {"smtp.host": "mail.example.test", "smtp.from": "t@example.test"}},
+    )
+    assert save.status_code == 200
+
+    response = await clients["admin"].post("/api/settings/mail/test")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "no_email_on_account"
+
+
+async def test_the_mail_test_goes_to_the_admins_own_address(
+    clients, migrated: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Never a typed one: a form that mails an arbitrary address is a spam relay."""
+    from sqlalchemy import update
+
+    from api import mail
+
+    await migrated.execute(
+        update(User).where(User.username == "admin").values(email="admin@example.test")
+    )
+    await migrated.commit()
+    save = await clients["admin"].patch(
+        "/api/settings",
+        json={"values": {"smtp.host": "mail.example.test", "smtp.from": "t@example.test"}},
+    )
+    assert save.status_code == 200
+
+    delivered: list[str] = []
+
+    def fake_send(config, *, to: str, subject: str, body: str) -> bool:
+        delivered.append(to)
+        return True
+
+    monkeypatch.setattr(mail, "send", fake_send)
+
+    response = await clients["admin"].post("/api/settings/mail/test")
+
+    assert response.status_code == 200
+    assert response.json() == {"sent": True, "to": "admin@example.test"}
+    assert delivered == ["admin@example.test"]
+
+
+async def test_a_refused_delivery_is_a_designed_answer(
+    clients, migrated: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sqlalchemy import update
+
+    from api import mail
+
+    await migrated.execute(
+        update(User).where(User.username == "admin").values(email="admin@example.test")
+    )
+    await migrated.commit()
+    await clients["admin"].patch(
+        "/api/settings",
+        json={"values": {"smtp.host": "mail.example.test", "smtp.from": "t@example.test"}},
+    )
+    monkeypatch.setattr(mail, "send", lambda config, *, to, subject, body: False)
+
+    response = await clients["admin"].post("/api/settings/mail/test")
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "mail_failed"
+
+
+async def test_a_viewer_may_not_send_the_test(clients) -> None:
+    assert (await clients["viewer"].post("/api/settings/mail/test")).status_code == 403

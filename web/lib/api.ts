@@ -148,6 +148,11 @@ export function currentUser(): Promise<Me> {
   return api<Me>("/api/auth/me");
 }
 
+/** The interface language of the signed-in account — the committed tier only. */
+export function updateMyLocale(locale: "en" | "de" | "ar"): Promise<Me> {
+  return api<Me>("/api/auth/me", { method: "PATCH", json: { locale } });
+}
+
 /** When a `rate_limited` error says the lock lifts, or null if it did not say. */
 export function lockedUntil(error: ApiError): Date | null {
   const raw = error.details?.[0]?.locked_until;
@@ -425,6 +430,11 @@ export type SettingRow = {
 
 export function allSettings(): Promise<SettingRow[]> {
   return api<SettingRow[]>("/api/settings");
+}
+
+/** To the signed-in admin's own address, never a typed one. */
+export function sendTestMail(): Promise<{ sent: boolean; to: string }> {
+  return api("/api/settings/mail/test", { method: "POST" });
 }
 
 export function saveSettings(
