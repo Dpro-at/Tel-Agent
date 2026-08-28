@@ -568,6 +568,96 @@ export function appsOverview(): Promise<AppsOverview> {
   return api<AppsOverview>("/api/apps");
 }
 
+// --- Conversations: the transcript archive, read ------------------------------
+
+export type ThreadStatus = "open" | "closed";
+export type ThreadHandling = "ai" | "human" | "blocked";
+
+export type Thread = {
+  id: number;
+  /** The channel's kind — `web`, `phone`, `whatsapp`, … `ChannelMark` knows them. */
+  channel: string;
+  direction: "inbound" | "outbound";
+  status: ThreadStatus;
+  handling: ThreadHandling | null;
+  intent: string | null;
+  started_at: string;
+  ended_at: string | null;
+  /** Whoever is on the other end, as the channel knows them — a caller's number, a
+   *  chat id. Null for an anonymous web visitor; the screen has a word for that. */
+  who: string | null;
+  preview: string | null;
+  message_count: number;
+  is_call: boolean;
+};
+
+export type ThreadPage = {
+  threads: Thread[];
+  /** Said by the server rather than inferred from a short page. */
+  has_more: boolean;
+};
+
+export type ThreadMessage = {
+  id: number;
+  /** Milliseconds from the start of the conversation, not a clock. */
+  ts_ms: number;
+  speaker: "caller" | "agent" | "human";
+  text: string;
+  /** An operator's instruction to the agent mid-conversation — part of the record,
+   *  flagged because the customer never saw it. */
+  is_whisper: boolean;
+  stt_confidence: number | null;
+  language: string | null;
+};
+
+export type ThreadCall = {
+  from_e164: string | null;
+  billable_seconds: number | null;
+  provider_cost_micros: number | null;
+  /** Whether audio exists — never where it is. */
+  has_recording: boolean;
+};
+
+export type ThreadDetail = Thread & {
+  summary: string | null;
+  messages: ThreadMessage[];
+  call: ThreadCall | null;
+};
+
+/** One list page must agree with the server's cap in `api/conversations.py`. */
+export const THREADS_PAGE = 50;
+
+export function conversationList(filters: {
+  channel?: string;
+  status?: ThreadStatus;
+  q?: string;
+  offset?: number;
+}): Promise<ThreadPage> {
+  const query = new URLSearchParams();
+  if (filters.channel) query.set("channel", filters.channel);
+  if (filters.status) query.set("status", filters.status);
+  if (filters.q) query.set("q", filters.q);
+  if (filters.offset) query.set("offset", String(filters.offset));
+  const suffix = query.size > 0 ? `?${query}` : "";
+  return api<ThreadPage>(`/api/conversations${suffix}`);
+}
+
+export function conversationDetail(id: number): Promise<ThreadDetail> {
+  return api<ThreadDetail>(`/api/conversations/${id}`);
+}
+
+export type ConversationChannel = {
+  id: number;
+  kind: string;
+  name: string | null;
+  thread_count: number;
+};
+
+/** What the filter chips should offer — the channels this workspace has used. */
+export function conversationChannels(): Promise<ConversationChannel[]> {
+  return api<ConversationChannel[]>("/api/conversations/meta/channels");
+}
+
 // --- Notifications -----------------------------------------------------------
 
 export type NotificationCategory = "failure" | "review" | "missed" | "system";
