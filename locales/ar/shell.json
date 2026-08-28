@@ -18,6 +18,11 @@
   "on_the_line_many": "{count} مكالمات على الخط",
   "workspace_heading": "مساحة العمل",
   "workspace_new": "مساحة عمل جديدة",
+  "role_owner": "المالك",
+  "role_admin": "مدير",
+  "role_reception": "استقبال",
+  "role_viewer": "قراءة فقط",
+  "role_invited": "مدعو",
   "account_menu": "الحساب ومساحة العمل",
   "settings": "الإعدادات",
   "sign_out": "تسجيل الخروج"

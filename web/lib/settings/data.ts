@@ -135,11 +135,9 @@ export const SECTIONS: Record<string, Section> = {
       { id: "daily", label: "f_daily", help: "f_daily_help", control: { kind: "switch", on: false } },
     ],
   },
-  users: {
-    title: "sec_users_title",
-    body: "sec_users_body",
-    fields: [{ id: "2fa", label: "f_2fa", help: "f_2fa_help", control: { kind: "switch", on: true } }],
-  },
+  // No fields: the team list is wired and the old two-factor switch was a drawing
+  // of an enforcement that exists nowhere.
+  users: { title: "sec_users_title", body: "sec_users_body", fields: [] },
   api: { title: "sec_api_title", body: "sec_api_body", fields: [] },
   mcp: { title: "sec_mcp_title", body: "sec_mcp_body", fields: [] },
   integrations: {
@@ -313,65 +311,15 @@ export const EVENT_LABEL: Record<string, Key> = {
   backup_downloaded: "ev_backup_downloaded",
   backup_deleted: "ev_backup_deleted",
   restore_staged: "ev_restore_staged",
+  role_changed: "ev_role_changed",
+  member_removed: "ev_member_removed",
+  workspace_created: "ev_workspace_created",
 };
 
 export type Role = "owner" | "admin" | "reception" | "viewer" | "invited";
 
-export const MEMBERS: {
-  name: string;
-  email: string;
-  role: Role;
-  access: Key;
-  elsewhere: Key;
-  hasPhone: boolean;
-  removable: boolean;
-}[] = [
-  {
-    name: "Georg Wagner",
-    email: "wagner@wagner-partner.at",
-    role: "owner",
-    access: "acc_all_ext11",
-    elsewhere: "else_wolf",
-    hasPhone: true,
-    removable: false,
-  },
-  {
-    name: "Mohamed",
-    email: "mohamed@wagner-partner.at",
-    role: "admin",
-    access: "acc_all_ext21",
-    elsewhere: "else_nachbetreuung",
-    hasPhone: true,
-    removable: true,
-  },
-  {
-    name: "Sabine",
-    email: "sabine@wagner-partner.at",
-    role: "reception",
-    access: "acc_main_partner_ext10",
-    elsewhere: "else_this_only",
-    hasPhone: true,
-    removable: true,
-  },
-  {
-    name: "Lukas",
-    email: "lukas@wagner-partner.at",
-    role: "reception",
-    access: "acc_main_no_phone",
-    elsewhere: "else_this_only",
-    hasPhone: false,
-    removable: true,
-  },
-  {
-    name: "Julia",
-    email: "julia@wagner-partner.at",
-    role: "invited",
-    access: "acc_main_once_accepted",
-    elsewhere: "else_this_only",
-    hasPhone: false,
-    removable: true,
-  },
-];
+// The team list reads `/api/members` - the fixture members that sat here described
+// phones, extensions and cross-workspace visibility that do not exist.
 
 export const ROLE_LABEL: Record<Role, Key> = {
   owner: "role_owner",
@@ -395,8 +343,3 @@ export const ROLE_MATRIX: { role: Role; note: Key; cells: boolean[] }[] = [
   { role: "viewer", note: "role_viewer_note", cells: [false, true, false, false] },
 ];
 
-export const INVITE_ROLES: { id: string; label: Key; note: Key }[] = [
-  { id: "admin", label: "role_admin", note: "inv_admin_note" },
-  { id: "reception", label: "role_reception", note: "inv_reception_note" },
-  { id: "viewer", label: "role_viewer", note: "inv_viewer_note" },
-];

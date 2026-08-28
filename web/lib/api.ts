@@ -11,6 +11,8 @@
  * would show English to a German or Arabic user.
  */
 
+import { activeWorkspaceId } from "./workspace";
+
 /** Where `api/` is. Same-origin in production, a separate port in development. */
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -58,6 +60,10 @@ export async function api<T>(
 ): Promise<T> {
   const { json, ...rest } = init;
 
+  // Which workspace this browser is acting in. Absent, the server assumes the
+  // user's first workspace — the common case of belonging to one.
+  const workspaceId = typeof window === "undefined" ? null : activeWorkspaceId();
+
   let response: Response;
   try {
     response = await fetch(`${API_URL}${path}`, {
@@ -68,6 +74,7 @@ export async function api<T>(
       credentials: "include",
       headers: {
         ...(json === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(workspaceId === null ? {} : { "X-Workspace-Id": String(workspaceId) }),
         ...rest.headers,
       },
       body: json === undefined ? rest.body : JSON.stringify(json),
@@ -424,6 +431,49 @@ export function saveSettings(
   values: Record<string, string | number | boolean | null>,
 ): Promise<{ written: string[]; ignored_masked: string[] }> {
   return api("/api/settings", { method: "PATCH", json: { values } });
+}
+
+// --- Members and workspaces ----------------------------------------------------
+
+export type MemberRole = "owner" | "admin" | "reception" | "viewer" | "invited";
+
+/** What an admin may set a member to. Ownership moves by transfer, not a picker,
+ *  and an invitation is a pending fact, not a rank. */
+export const ASSIGNABLE_ROLES = ["admin", "reception", "viewer"] as const;
+
+export type Member = {
+  user_id: number;
+  username: string;
+  email: string | null;
+  role: MemberRole;
+  joined_at: string;
+};
+
+export function membersList(): Promise<Member[]> {
+  return api<Member[]>("/api/members");
+}
+
+export function changeMemberRole(
+  userId: number,
+  role: (typeof ASSIGNABLE_ROLES)[number],
+): Promise<Member> {
+  return api<Member>(`/api/members/${userId}`, { method: "PATCH", json: { role } });
+}
+
+/** Removes the membership, never the person. On an invited row this is
+ *  "Cancel invite" — one action, one list. */
+export function removeMember(userId: number): Promise<void> {
+  return api<void>(`/api/members/${userId}`, { method: "DELETE" });
+}
+
+export function createWorkspace(
+  name: string,
+  includeTeam: boolean,
+): Promise<{ id: number; name: string; members: number }> {
+  return api("/api/workspaces", {
+    method: "POST",
+    json: { name, include_team: includeTeam },
+  });
 }
 
 // --- Apps: the extension registry ---------------------------------------------

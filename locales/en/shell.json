@@ -18,6 +18,11 @@
   "on_the_line_many": "{count} calls on the line",
   "workspace_heading": "Workspace",
   "workspace_new": "New workspace",
+  "role_owner": "Owner",
+  "role_admin": "Admin",
+  "role_reception": "Reception",
+  "role_viewer": "Read only",
+  "role_invited": "Invited",
   "account_menu": "Account and workspace",
   "settings": "Settings",
   "sign_out": "Sign out"

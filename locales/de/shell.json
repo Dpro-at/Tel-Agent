@@ -18,6 +18,11 @@
   "on_the_line_many": "{count} Anrufe in der Leitung",
   "workspace_heading": "Arbeitsbereich",
   "workspace_new": "Neuer Arbeitsbereich",
+  "role_owner": "Inhaber",
+  "role_admin": "Admin",
+  "role_reception": "Rezeption",
+  "role_viewer": "Nur lesen",
+  "role_invited": "Eingeladen",
   "account_menu": "Konto und Arbeitsbereich",
   "settings": "Einstellungen",
   "sign_out": "Abmelden"
