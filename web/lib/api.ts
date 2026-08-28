@@ -658,6 +658,40 @@ export function conversationChannels(): Promise<ConversationChannel[]> {
   return api<ConversationChannel[]>("/api/conversations/meta/channels");
 }
 
+// --- Numbers: the registry ----------------------------------------------------
+
+export type PhoneNumber = {
+  id: number;
+  e164: string;
+  provider: string;
+  /** §B5 decision 3 — who holds the number. Everything added from this dashboard is
+   *  `customer`; a `platform` number belongs to Tel-Agent Cloud and cannot be
+   *  released here. */
+  owner: "customer" | "platform";
+  status: "active" | "disabled";
+  created_at: string;
+};
+
+export function numbersList(): Promise<PhoneNumber[]> {
+  return api<PhoneNumber[]>("/api/numbers");
+}
+
+export function addNumber(e164: string, provider: string): Promise<PhoneNumber> {
+  return api<PhoneNumber>("/api/numbers", { method: "POST", json: { e164, provider } });
+}
+
+export function setNumberStatus(
+  id: number,
+  status: "active" | "disabled",
+): Promise<PhoneNumber> {
+  return api<PhoneNumber>(`/api/numbers/${id}`, { method: "PATCH", json: { status } });
+}
+
+/** Removes the record here — the provider contract is the customer's own affair. */
+export function releaseNumber(id: number): Promise<void> {
+  return api<void>(`/api/numbers/${id}`, { method: "DELETE" });
+}
+
 // --- Notifications -----------------------------------------------------------
 
 export type NotificationCategory = "failure" | "review" | "missed" | "system";

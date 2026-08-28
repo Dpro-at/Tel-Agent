@@ -49,6 +49,12 @@ EVENTS = (
     "backup_downloaded",
     "backup_deleted",
     "restore_staged",
+    # The numbers registry. A number is how customers reach the business, so adding
+    # one, disabling one, and above all releasing one need a name attached to them
+    # afterwards. Recorded against the acting account.
+    "number_added",
+    "number_status_changed",
+    "number_released",
 )
 
 
