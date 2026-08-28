@@ -179,6 +179,17 @@ async def seed(reset: bool) -> None:
             session.add(phone)
             await session.flush()
 
+            session.add(
+                Number(
+                    workspace_id=workspace.id,
+                    channel_id=phone.id,
+                    provider="easybell",
+                    owner="customer",
+                    e164="+43720123456",
+                    status="active",
+                )
+            )
+
             started = dt.datetime.now(dt.UTC) - dt.timedelta(hours=3)
             call_conversation = Conversation(
                 workspace_id=workspace.id,

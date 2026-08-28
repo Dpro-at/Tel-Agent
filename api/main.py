@@ -44,6 +44,7 @@ from api.routes import backup as backup_routes
 from api.routes import conversations as conversation_routes
 from api.routes import invites as invite_routes
 from api.routes import notifications as notification_routes
+from api.routes import numbers as number_routes
 from api.routes import recovery as recovery_routes
 from api.routes import settings as settings_routes
 from api.routes import system as system_routes
@@ -267,6 +268,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(recovery_routes.router)
     app.include_router(workspace_routes.router)
     app.include_router(invite_routes.router)
+    app.include_router(number_routes.router)
 
     @app.get(
         "/health",
