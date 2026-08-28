@@ -7,10 +7,19 @@ import { useState } from "react";
 import { LiveSettings, type FieldCopy } from "@/components/settings/live-settings";
 import { Sidebar } from "@/components/shell/sidebar";
 import { StatePreview, type ScreenState } from "@/components/state-preview";
+import {
+  ApiError,
+  accountEvents,
+  changePassword,
+  currentUser,
+  signOutEverywhereElse,
+  type AccountEvent,
+} from "@/lib/api";
 import { interpolate } from "@/lib/i18n";
 import type { Locale } from "@/lib/locales";
 import {
   API_KEYS,
+  EVENT_LABEL,
   HOST_FIELDS,
   INVITE_ROLES,
   MEMBERS,
@@ -24,7 +33,9 @@ import {
   WEBHOOKS,
   type Control,
   type Field,
+  type Role,
 } from "@/lib/settings/data";
+import { useResource, type Resource } from "@/lib/use-resource";
 
 import type { SettingsDictionary } from "./page";
 
@@ -166,6 +177,15 @@ function backupFields(t: SettingsDictionary): FieldCopy[] {
       help: t.f_backup_recordings_help,
     },
   ];
+}
+
+/**
+ * The one recording setting that exists (`recording.announce`, per workspace). The
+ * retention rows below it are still drawings — nothing stores audio yet, so a
+ * retention period would be a promise about data that cannot be kept or broken.
+ */
+function announceFields(t: SettingsDictionary): FieldCopy[] {
+  return [{ key: "recording.announce", label: t.f_announce, help: t.f_announce_help }];
 }
 
 export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary }) {
@@ -326,6 +346,12 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
                         <LiveSettings fields={mailFields(t)} labels={liveLabels(t)} />
                       </div>
                     ) : null}
+                    {tab === "recording" ? (
+                      <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border">
+                        <SectionHead title={t.announce_title} note={t.live_note} />
+                        <LiveSettings fields={announceFields(t)} labels={liveLabels(t)} />
+                      </div>
+                    ) : null}
 
                     {section.fields.length > 0 ? (
                       <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border">
@@ -365,32 +391,85 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
   );
 }
 
+/**
+ * The profile tab's identity and security panels, wired to `api/routes/auth.py`.
+ *
+ * What went, and why: the avatar upload and the two-factor row were fixture controls
+ * with no endpoint behind them, and the 2FA note claimed an enforcement ("required to
+ * change routing rules") that exists nowhere. A control with no endpoint is removed,
+ * not drawn. The name/email/language form below stays a drawing — there is no
+ * profile-update endpoint yet, and this component does not touch it.
+ */
 function ProfilePanels({ t }: { t: SettingsDictionary }) {
+  const me = useResource(() => currentUser());
+  const events = useResource(() => accountEvents());
+  const [changeOpen, setChangeOpen] = useState(false);
+  const [ending, setEnding] = useState(false);
+  // The one line of feedback under the security panel: what the last action did.
+  const [outcome, setOutcome] = useState<{ text: string; bad?: boolean } | null>(null);
+
+  if (me.data === null && me.loading) {
+    return <p className="text-od-muted-5 p-[14px_18px] text-[13px]">{t.live_loading}</p>;
+  }
+  if (me.data === null) {
+    return (
+      <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border p-[14px_18px]">
+        <p className="m-0 text-[13px] text-[color:var(--od-red-text-6)]">
+          {me.error?.message ?? t.live_failed}
+        </p>
+        <button
+          type="button"
+          onClick={me.reload}
+          className="border-od-stroke bg-od-raise-10 text-od-text-2 mt-3 cursor-pointer rounded-[7px] border p-[7px_13px] text-[12.5px]"
+        >
+          {t.live_retry}
+        </button>
+      </div>
+    );
+  }
+
+  const account = me.data;
+  const roleKey = account.workspaces[0]
+    ? ROLE_LABEL[account.workspaces[0].role as Role]
+    : undefined;
+  // The server returns most recent first, so `find` is "the last time it happened".
+  // A reset by code and a signed-in change are the same fact to this line.
+  const lastChange = events.data?.find(
+    (entry) => entry.event === "password_changed" || entry.event === "password_reset",
+  );
+
+  async function endOtherSessions() {
+    setEnding(true);
+    setOutcome(null);
+    try {
+      await signOutEverywhereElse();
+      setOutcome({ text: t.p_signout_done });
+      events.reload();
+    } catch (thrown) {
+      setOutcome({ text: thrown instanceof Error ? thrown.message : String(thrown), bad: true });
+    } finally {
+      setEnding(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="border-od-line bg-od-panel-deep-3 flex flex-wrap items-center gap-[18px] rounded-[10px] border p-[18px]">
         <span className="border-od-border-9 text-od-text-3 inline-flex size-16 flex-none items-center justify-center rounded-full border bg-[var(--od-raise-5)] text-[22px] font-semibold">
-          M
+          {account.username.charAt(0).toUpperCase()}
         </span>
         <div className="min-w-[200px] flex-[1_1_240px]">
-          <div className="text-od-text text-[16px] font-semibold">Mohamed</div>
-          <div className="text-od-muted-5 mt-[3px] text-[13px]">
-            {interpolate(t.p_signed_in, { role: t.role_admin })}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-[10px]">
-          <button
-            type="button"
-            className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-md border p-[8px_14px] text-[13px] font-medium whitespace-nowrap"
-          >
-            {t.p_upload}
-          </button>
-          <button
-            type="button"
-            className="border-od-border-7 text-od-muted hover:text-od-text-2 cursor-pointer rounded-md border bg-transparent p-[8px_14px] text-[13px] whitespace-nowrap hover:bg-[var(--od-raise-4)]"
-          >
-            {t.p_remove}
-          </button>
+          <div className="text-od-text text-[16px] font-semibold">{account.username}</div>
+          {roleKey ? (
+            <div className="text-od-muted-5 mt-[3px] text-[13px]">
+              {interpolate(t.p_signed_in, { role: t[roleKey] })}
+            </div>
+          ) : null}
+          {account.email ? (
+            <div dir="ltr" className="mono ltr-data text-od-muted-5 mt-[3px] text-start text-[12.5px] [overflow-wrap:anywhere]">
+              {account.email}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -402,48 +481,258 @@ function ProfilePanels({ t }: { t: SettingsDictionary }) {
         <div className="border-od-border flex flex-wrap items-center gap-x-[18px] gap-y-3 border-b py-[13px]">
           <div className="min-w-[220px] flex-[1_1_260px]">
             <div className="text-od-text-3 font-medium">{t.p_password}</div>
-            <div className="text-od-muted-5 mt-[3px] text-[13px]">{t.p_password_last}</div>
+            {/* Read from the account's own trail. When no change is in the last 50
+                events the line is absent — "4 months ago" with nothing behind it is
+                exactly the kind of drawing this panel stopped being. */}
+            {lastChange ? (
+              <div className="text-od-muted-5 mt-[3px] text-[13px]">
+                {interpolate(t.p_password_last_on, {
+                  date: lastChange.created_at.slice(0, 10),
+                })}
+              </div>
+            ) : null}
           </div>
           <button
             type="button"
+            onClick={() => setChangeOpen(true)}
             className="border-od-border-7 text-od-text-3 ms-auto cursor-pointer rounded-md border bg-transparent p-[8px_14px] text-[13px] whitespace-nowrap hover:bg-[var(--od-raise-4)]"
           >
             {t.p_change_password}
           </button>
         </div>
 
-        <div className="border-od-border flex flex-wrap items-center gap-x-[18px] gap-y-3 border-b py-[13px]">
-          <div className="min-w-[220px] flex-[1_1_260px]">
-            <div className="flex flex-wrap items-center gap-[9px]">
-              <span className="text-od-text-3 font-medium">{t.p_2fa}</span>
-              <span className="border-od-amber-border bg-od-amber-bg rounded-md border p-[2px_9px] text-[12px] font-medium text-[color:var(--od-amber-text)]">
-                {t.p_off}
-              </span>
-            </div>
-            <div className="text-od-muted-5 mt-[3px] text-[13px] text-pretty">
-              {t.p_2fa_note}
-            </div>
-          </div>
-          <button
-            type="button"
-            className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 ms-auto cursor-pointer rounded-md border p-[8px_14px] text-[13px] font-medium whitespace-nowrap"
-          >
-            {t.p_setup}
-          </button>
-        </div>
-
         <div className="flex flex-wrap items-center gap-x-[18px] gap-y-3 py-[13px]">
           <div className="min-w-[220px] flex-[1_1_260px]">
             <div className="text-od-text-3 font-medium">{t.p_devices}</div>
-            <div className="text-od-muted-5 mt-[3px] text-[13px]">{t.p_devices_note}</div>
+            <div className="text-od-muted-5 mt-[3px] text-[13px] text-pretty">
+              {t.p_devices_note}
+            </div>
           </div>
           <button
             type="button"
-            className="ms-auto cursor-pointer border-none bg-transparent p-0 text-[13px] text-[color:var(--od-red-text-4)] hover:underline"
+            disabled={ending}
+            onClick={endOtherSessions}
+            className="ms-auto cursor-pointer border-none bg-transparent p-0 text-[13px] text-[color:var(--od-red-text-4)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t.p_signout_all}
           </button>
         </div>
+
+        {outcome ? (
+          <div
+            className="mt-[6px] text-[13px] text-pretty"
+            style={{ color: outcome.bad ? "var(--od-red-text-6)" : "var(--od-muted-5)" }}
+          >
+            {outcome.text}
+          </div>
+        ) : null}
+      </div>
+
+      <ActivityPanel t={t} events={events} />
+
+      {changeOpen ? (
+        <ChangePasswordDialog
+          t={t}
+          onClose={() => setChangeOpen(false)}
+          onChanged={() => {
+            setChangeOpen(false);
+            setOutcome({ text: t.p_changed_done });
+            events.reload();
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ActivityPanel({
+  t,
+  events,
+}: {
+  t: SettingsDictionary;
+  events: Resource<AccountEvent[]>;
+}) {
+  return (
+    <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border p-[18px]">
+      <h3 className="text-od-muted-4 mt-0 mb-1 text-[13px] font-semibold tracking-[.07em] uppercase">
+        {t.act_title}
+      </h3>
+      <div className="text-od-faint mb-2 text-[12.5px] text-pretty">{t.act_note}</div>
+
+      {events.data === null && events.loading ? (
+        <p className="text-od-muted-5 m-0 py-[10px] text-[13px]">{t.live_loading}</p>
+      ) : events.data === null ? (
+        <div className="py-[10px]">
+          <p className="m-0 text-[13px] text-[color:var(--od-red-text-6)]">
+            {events.error?.message ?? t.live_failed}
+          </p>
+          <button
+            type="button"
+            onClick={events.reload}
+            className="border-od-stroke bg-od-raise-10 text-od-text-2 mt-3 cursor-pointer rounded-[7px] border p-[7px_13px] text-[12.5px]"
+          >
+            {t.live_retry}
+          </button>
+        </div>
+      ) : events.data.length === 0 ? (
+        <p className="text-od-muted-5 m-0 py-[10px] text-[13px]">{t.act_empty}</p>
+      ) : (
+        <div className="flex flex-col">
+          {events.data.slice(0, 10).map((entry, index) => {
+            const label = EVENT_LABEL[entry.event];
+            return (
+              <div
+                key={`${entry.created_at}-${index}`}
+                className={`flex flex-wrap items-baseline gap-x-4 gap-y-1 py-[9px] ${
+                  index === 0 ? "" : "border-t border-[color:var(--od-raise-6)]"
+                }`}
+              >
+                <div className="min-w-[180px] flex-[1_1_220px]">
+                  {label ? (
+                    <span className="text-od-text-3 text-[13.5px]">{t[label]}</span>
+                  ) : (
+                    // Outside the known vocabulary: machine output, shown as such.
+                    <span dir="ltr" className="mono ltr-data text-od-text-3 text-[13px]">
+                      {entry.event}
+                    </span>
+                  )}
+                  {entry.ip ? (
+                    <span dir="ltr" className="mono ltr-data text-od-faint ms-[10px] text-[12px]">
+                      {entry.ip}
+                    </span>
+                  ) : null}
+                </div>
+                <span dir="ltr" className="mono ltr-data text-od-faint-2 flex-none text-[12px] whitespace-nowrap">
+                  {entry.created_at.slice(0, 16).replace("T", " ")}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChangePasswordDialog({
+  t,
+  onClose,
+  onChanged,
+}: {
+  t: SettingsDictionary;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [current, setCurrent] = useState("");
+  const [fresh, setFresh] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    // The one check the browser can make. Everything else — the current password,
+    // the policy, the history — is the server's answer, mapped by `code` below.
+    if (fresh !== repeat) {
+      setError(t.pw_mismatch);
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      await changePassword(current, fresh);
+      onChanged();
+    } catch (thrown) {
+      if (thrown instanceof ApiError) {
+        if (thrown.code === "unauthenticated") setError(t.pw_wrong_current);
+        else if (thrown.code === "password_reused") setError(t.pw_reused);
+        else if (thrown.code === "password_too_short") setError(t.pw_too_short);
+        else if (thrown.code === "rate_limited") setError(t.pw_locked);
+        else setError(thrown.message);
+      } else {
+        setError(thrown instanceof Error ? thrown.message : String(thrown));
+      }
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const field =
+    "border-od-border-6 bg-od-canvas-2 text-od-text-2 mt-[6px] w-full rounded-[7px] border p-[10px_12px] text-[13.5px]";
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-start justify-center overflow-auto p-[60px_24px]"
+      style={{ background: "var(--od-scrim-3)" }}
+    >
+      <div className="border-od-border-9 bg-od-panel w-full max-w-[460px] rounded-xl border">
+        <div className="border-od-line flex flex-wrap items-start justify-between gap-x-5 gap-y-3 border-b p-[20px_22px]">
+          <div className="min-w-0">
+            <h2 className="text-od-text m-0 text-[19px] font-semibold">{t.p_change_password}</h2>
+            <p className="text-od-muted-4 mt-[6px] max-w-[50ch] text-pretty">{t.pw_hint}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="border-od-border-7 text-od-muted hover:text-od-text-2 cursor-pointer rounded-md border bg-transparent p-[6px_10px] hover:bg-[var(--od-raise-6)]"
+          >
+            {t.close}
+          </button>
+        </div>
+
+        <form
+          className="flex flex-col gap-[16px] p-[20px_22px]"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <label className="block">
+            <span className="text-od-muted-5 text-[12.5px]">{t.pw_current}</span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={current}
+              onChange={(event) => setCurrent(event.target.value)}
+              className={field}
+            />
+          </label>
+          <label className="block">
+            <span className="text-od-muted-5 text-[12.5px]">{t.pw_new}</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={fresh}
+              onChange={(event) => setFresh(event.target.value)}
+              className={field}
+            />
+          </label>
+          <label className="block">
+            <span className="text-od-muted-5 text-[12.5px]">{t.pw_repeat}</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={repeat}
+              onChange={(event) => setRepeat(event.target.value)}
+              className={field}
+            />
+          </label>
+
+          {error ? (
+            <p className="m-0 text-[13px] text-pretty text-[color:var(--od-red-text-6)]">
+              {error}
+            </p>
+          ) : null}
+
+          <div className="flex items-center justify-end gap-[10px]">
+            <button
+              type="submit"
+              disabled={pending || !current || !fresh || !repeat}
+              className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-md border p-[9px_16px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {pending ? t.live_saving : t.p_change_password}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

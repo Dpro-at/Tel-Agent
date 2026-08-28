@@ -149,6 +149,47 @@ export function lockedUntil(error: ApiError): Date | null {
   return Number.isNaN(when.getTime()) ? null : when;
 }
 
+// --- Account security: the settings profile tab -------------------------------
+
+export type PasswordChanged = {
+  changed: boolean;
+  /** Every other session is ended when a password changes; the screen says so. */
+  other_sessions_ended: number;
+};
+
+export function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<PasswordChanged> {
+  return api<PasswordChanged>("/api/auth/password", {
+    method: "POST",
+    json: { current_password: currentPassword, new_password: newPassword },
+  });
+}
+
+export function signOutEverywhereElse(): Promise<{
+  signed_out: boolean;
+  other_sessions_ended: number;
+}> {
+  return api("/api/auth/logout-all", { method: "POST" });
+}
+
+export type AccountEvent = {
+  /** From the closed vocabulary in `api/models/audit.py`. The screen translates the
+   *  names it knows and shows an unknown one verbatim, as machine output — a new
+   *  event must degrade to something readable, not to a blank row. */
+  event: string;
+  ip: string | null;
+  user_agent: string | null;
+  created_at: string;
+  details: Record<string, unknown> | null;
+};
+
+/** The signed-in account's own trail — most recent first, capped by the server. */
+export function accountEvents(): Promise<AccountEvent[]> {
+  return api<AccountEvent[]>("/api/auth/events");
+}
+
 // --- Recovery: the code, the key, and the new password -----------------------
 
 export type ForgotResult = {
