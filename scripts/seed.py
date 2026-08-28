@@ -35,6 +35,7 @@ from api.models import (
     AppInstall,
     Call,
     Channel,
+    Contact,
     Conversation,
     Membership,
     Message,
@@ -69,6 +70,7 @@ async def _wipe(session: AsyncSession) -> None:
         Conversation,
         Number,
         Rule,
+        Contact,
         Channel,
         AppInstall,
         App,
@@ -190,6 +192,26 @@ async def seed(reset: bool) -> None:
                     e164="+43720123456",
                     status="active",
                 )
+            )
+
+            # Two contacts, so the phonebook has rows and the calls screens can put a
+            # name above the seeded call's number.
+            session.add_all(
+                [
+                    Contact(
+                        workspace_id=workspace.id,
+                        e164="+436641234567",
+                        name="Anna Gruber",
+                        tags=["customer"],
+                        notes="Prefers Thursday mornings.",
+                    ),
+                    Contact(
+                        workspace_id=workspace.id,
+                        e164="+4314028811",
+                        name="Elisabeth Mayr",
+                        tags=["customer"],
+                    ),
+                ]
             )
 
             # One rule per column, so the rules screen has all three to draw - and

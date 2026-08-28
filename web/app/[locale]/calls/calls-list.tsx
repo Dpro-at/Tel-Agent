@@ -214,9 +214,22 @@ export function CallsList({ locale, t }: { locale: Locale; t: CallsDictionary })
                     </div>
                   </div>
                   <div className="min-w-0">
-                    {/* The caller as the channel knows them - a number. Names arrive
-                        with the contacts table, and are not invented before it. */}
-                    {row.who ? (
+                    {/* The phonebook's name when it has one; the number stays visible
+                        underneath, because the name is an annotation on the record,
+                        not a replacement for it. */}
+                    {row.who_name ? (
+                      <>
+                        <div className="text-od-text font-medium text-pretty">
+                          {row.who_name}
+                        </div>
+                        <div
+                          dir="ltr"
+                          className="mono ltr-data text-od-muted-5 mt-[2px] text-start text-[12.5px]"
+                        >
+                          {row.who}
+                        </div>
+                      </>
+                    ) : row.who ? (
                       <div dir="ltr" className="mono ltr-data text-od-text text-start font-medium">
                         {row.who}
                       </div>

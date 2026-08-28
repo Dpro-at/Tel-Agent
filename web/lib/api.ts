@@ -586,6 +586,9 @@ export type Thread = {
   /** Whoever is on the other end, as the channel knows them — a caller's number, a
    *  chat id. Null for an anonymous web visitor; the screen has a word for that. */
   who: string | null;
+  /** And as the phonebook knows them, when it does. Null for a caller nobody has
+   *  named yet — the number stays the honest headline. */
+  who_name: string | null;
   preview: string | null;
   message_count: number;
   is_call: boolean;
@@ -690,6 +693,55 @@ export function setNumberStatus(
 /** Removes the record here — the provider contract is the customer's own affair. */
 export function releaseNumber(id: number): Promise<void> {
   return api<void>(`/api/numbers/${id}`, { method: "DELETE" });
+}
+
+// --- Contacts: the phonebook ---------------------------------------------------
+
+export type Contact = {
+  id: number;
+  e164: string;
+  name: string;
+  tags: string[];
+  notes: string | null;
+  created_at: string;
+  /** When this number last reached the business, out of the archive. */
+  last_heard_at: string | null;
+};
+
+export type ContactPage = { contacts: Contact[]; has_more: boolean };
+
+/** One list page must agree with the server's cap in `api/routes/contacts.py`. */
+export const CONTACTS_PAGE = 50;
+
+export function contactsList(filters: { q?: string; offset?: number }): Promise<ContactPage> {
+  const query = new URLSearchParams();
+  if (filters.q) query.set("q", filters.q);
+  if (filters.offset) query.set("offset", String(filters.offset));
+  const suffix = query.size > 0 ? `?${query}` : "";
+  return api<ContactPage>(`/api/contacts${suffix}`);
+}
+
+export function addContact(contact: {
+  e164: string;
+  name: string;
+  tags?: string[];
+  notes?: string;
+}): Promise<Contact> {
+  return api<Contact>("/api/contacts", { method: "POST", json: contact });
+}
+
+/** The name, the tags, the note — never the number. A different number is a
+ *  different contact. */
+export function changeContact(
+  id: number,
+  contact: { name: string; tags?: string[]; notes?: string | null },
+): Promise<Contact> {
+  return api<Contact>(`/api/contacts/${id}`, { method: "PATCH", json: contact });
+}
+
+/** Removes the name, not the history — conversations keep their rows. */
+export function removeContact(id: number): Promise<void> {
+  return api<void>(`/api/contacts/${id}`, { method: "DELETE" });
 }
 
 // --- Routing rules ------------------------------------------------------------

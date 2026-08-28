@@ -130,8 +130,9 @@ class Conversation(Base):
     channel_id: Mapped[int] = mapped_column(
         ForeignKey("channels.id", ondelete="RESTRICT"), nullable=False, index=True
     )
-    # FK arrives with the `contacts` table.
-    contact_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    contact_id: Mapped[int | None] = mapped_column(
+        ForeignKey("contacts.id", ondelete="SET NULL"), nullable=True
+    )
     # The identifier the channel itself uses — a Telegram chat id, an email thread id.
     # Indexed because every inbound message arrives with one and has to find its thread.
     external_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)

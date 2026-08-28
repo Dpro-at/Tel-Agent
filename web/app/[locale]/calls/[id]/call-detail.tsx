@@ -149,9 +149,18 @@ function Loaded({
     <div>
       <header className="border-od-border flex flex-wrap items-start justify-between gap-x-10 gap-y-6 border-b pb-[22px]">
         <div className="min-w-[240px] flex-[1_1_300px]">
-          {/* The caller as the channel knows them. Names arrive with the contacts
-              table, and are not invented before it. */}
-          {thread.call?.from_e164 ?? thread.who ? (
+          {/* The phonebook's name when it has one; the number stays underneath -
+              an annotation on the record, not a replacement for it. */}
+          {thread.who_name ? (
+            <>
+              <h1 className="text-od-text m-0 text-[26px] font-semibold tracking-[-0.015em]">
+                {thread.who_name}
+              </h1>
+              <div dir="ltr" className="mono ltr-data text-od-muted mt-[6px] text-start text-[13.5px]">
+                {thread.call?.from_e164 ?? thread.who}
+              </div>
+            </>
+          ) : thread.call?.from_e164 ?? thread.who ? (
             <h1
               dir="ltr"
               className="text-od-text mono ltr-data m-0 text-start text-[26px] font-semibold tracking-[-0.015em]"
