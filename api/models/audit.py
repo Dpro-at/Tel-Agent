@@ -55,6 +55,11 @@ EVENTS = (
     "number_added",
     "number_status_changed",
     "number_released",
+    # Routing rules. Blocking a caller, or unblocking one, changes who can reach the
+    # business - a fact worth a name afterwards. Recorded against the acting account.
+    "rule_added",
+    "rule_changed",
+    "rule_removed",
 )
 
 

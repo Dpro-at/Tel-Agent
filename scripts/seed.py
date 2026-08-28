@@ -39,6 +39,7 @@ from api.models import (
     Membership,
     Message,
     Number,
+    Rule,
     User,
     Workspace,
 )
@@ -67,6 +68,7 @@ async def _wipe(session: AsyncSession) -> None:
         Call,
         Conversation,
         Number,
+        Rule,
         Channel,
         AppInstall,
         App,
@@ -190,11 +192,33 @@ async def seed(reset: bool) -> None:
                 )
             )
 
+            # One rule per column, so the rules screen has all three to draw - and
+            # the pass rule names the seeded call's number, so its "last called"
+            # line has something true to say.
+            session.add_all(
+                [
+                    Rule(
+                        workspace_id=workspace.id,
+                        e164_or_pattern="+436641234567",
+                        action="pass",
+                        note="Staff",
+                    ),
+                    Rule(workspace_id=workspace.id, e164_or_pattern="+43720*", action="block"),
+                    Rule(
+                        workspace_id=workspace.id,
+                        e164_or_pattern="+4314028811",
+                        action="ai",
+                        note="Regular customer",
+                    ),
+                ]
+            )
+
             started = dt.datetime.now(dt.UTC) - dt.timedelta(hours=3)
             call_conversation = Conversation(
                 workspace_id=workspace.id,
                 channel_id=phone.id,
-                external_id="+43 664 1234567",
+                # E.164 is stored bare - formatting for the eye is the screen's job.
+                external_id="+436641234567",
                 direction="inbound",
                 started_at=started,
                 ended_at=started + dt.timedelta(seconds=158),
@@ -213,7 +237,7 @@ async def seed(reset: bool) -> None:
                 Call(
                     conversation_id=call_conversation.id,
                     workspace_id=workspace.id,
-                    from_e164="+43 664 1234567",
+                    from_e164="+436641234567",
                     billable_seconds=158,
                     provider_cost_micros=13_500,
                 )

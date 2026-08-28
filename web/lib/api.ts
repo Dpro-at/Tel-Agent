@@ -692,6 +692,54 @@ export function releaseNumber(id: number): Promise<void> {
   return api<void>(`/api/numbers/${id}`, { method: "DELETE" });
 }
 
+// --- Routing rules ------------------------------------------------------------
+
+export type RuleAction = "pass" | "block" | "ai";
+
+export type RoutingRule = {
+  id: number;
+  /** An exact E.164, or a prefix ending in `*` — the only two shapes a rule takes. */
+  e164_or_pattern: string;
+  action: RuleAction;
+  note: string | null;
+  created_at: string;
+  /** The latest phone call from a matching number, out of the archive. Null when
+   *  none is stored — which for a blocked number is the good outcome. */
+  last_called_at: string | null;
+  last_handling: string | null;
+};
+
+export function rulesList(): Promise<RoutingRule[]> {
+  return api<RoutingRule[]>("/api/rules");
+}
+
+export function addRule(
+  pattern: string,
+  action: RuleAction,
+  note?: string,
+): Promise<RoutingRule> {
+  return api<RoutingRule>("/api/rules", {
+    method: "POST",
+    json: { e164_or_pattern: pattern, action, note: note || null },
+  });
+}
+
+/** Moving a rule to another column is changing its action. */
+export function changeRule(
+  id: number,
+  action: RuleAction,
+  note?: string | null,
+): Promise<RoutingRule> {
+  return api<RoutingRule>(`/api/rules/${id}`, {
+    method: "PATCH",
+    json: { action, note: note ?? null },
+  });
+}
+
+export function removeRule(id: number): Promise<void> {
+  return api<void>(`/api/rules/${id}`, { method: "DELETE" });
+}
+
 // --- Notifications -----------------------------------------------------------
 
 export type NotificationCategory = "failure" | "review" | "missed" | "system";
