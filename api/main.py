@@ -41,6 +41,7 @@ from api.middleware.ws_auth import WebSocketAuthMiddleware
 from api.routes import apps as apps_routes
 from api.routes import auth as auth_routes
 from api.routes import backup as backup_routes
+from api.routes import conversations as conversation_routes
 from api.routes import invites as invite_routes
 from api.routes import notifications as notification_routes
 from api.routes import recovery as recovery_routes
@@ -261,6 +262,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(notification_routes.router)
     app.include_router(system_routes.router)
     app.include_router(backup_routes.router)
+    app.include_router(conversation_routes.router)
     app.include_router(settings_routes.router)
     app.include_router(recovery_routes.router)
     app.include_router(workspace_routes.router)
