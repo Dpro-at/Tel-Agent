@@ -39,12 +39,21 @@ PUBLIC_PATHS: frozenset[str] = frozenset(
         # Guarded by the reset ticket rather than a session: the whole point is that
         # the caller has no session yet.
         "/api/auth/password/reset",
+        # Guarded by the invite token (D-034): the caller has no account worth the
+        # name yet. Listed by their patterns so the route-table walk knows they are
+        # deliberate; matched at request time by the prefix below.
+        "/api/invites/{token}",
+        "/api/invites/{token}/accept",
     }
 )
 
+# Parameterised public routes carry a token in the path, so the request-time URL
+# never equals its pattern. The prefix is the runtime half of the two entries above.
+PUBLIC_PREFIXES: tuple[str, ...] = ("/api/invites/",)
+
 
 def is_public(path: str) -> bool:
-    return path in PUBLIC_PATHS
+    return path in PUBLIC_PATHS or path.startswith(PUBLIC_PREFIXES)
 
 
 def served_paths(app: object) -> set[str]:

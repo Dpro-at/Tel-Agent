@@ -13,10 +13,11 @@ const SIGNED_IN_HINT = "telagent_signed_in";
 
 /**
  * Reachable signed out. `login` and its children are where signing in happens;
- * `install` runs before any account exists; `screens` is the design gallery.
- * Everything else is the dashboard.
+ * `install` runs before any account exists; `screens` is the design gallery;
+ * `invite` is where an invitation becomes an account (D-034) — the visitor has
+ * no session yet by definition. Everything else is the dashboard.
  */
-const PUBLIC_SEGMENTS = new Set(["login", "install", "screens"]);
+const PUBLIC_SEGMENTS = new Set(["login", "install", "screens", "invite"]);
 
 /**
  * Every page lives under a locale segment. A request without one is redirected to

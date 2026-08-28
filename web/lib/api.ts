@@ -476,6 +476,59 @@ export function removeMember(userId: number): Promise<void> {
   return api<void>(`/api/members/${userId}`, { method: "DELETE" });
 }
 
+// Invitations - D-034. The admin half issues one-time links; the public half turns
+// a link into an account with a self-chosen name.
+
+export type InviteLink = {
+  user_id: number;
+  username: string;
+  email: string;
+  role: string;
+  /** The path only; the dashboard prepends its own origin. */
+  invite_path: string;
+  expires_at: string;
+  /** Whether a copy was also queued by email. */
+  mailed: boolean;
+};
+
+export function createInvite(
+  email: string,
+  role: (typeof ASSIGNABLE_ROLES)[number],
+): Promise<InviteLink> {
+  return api<InviteLink>("/api/members/invites", { method: "POST", json: { email, role } });
+}
+
+/** "Resend invite": a fresh link and a fresh week; the old link dies. */
+export function regenerateInvite(userId: number): Promise<InviteLink> {
+  return api<InviteLink>(`/api/members/${userId}/invite-link`, { method: "POST" });
+}
+
+export type InvitePreview = {
+  workspace: string;
+  role: string;
+  email: string | null;
+  suggested_username: string;
+  expires_at: string;
+};
+
+export function readInvite(token: string): Promise<InvitePreview> {
+  return api<InvitePreview>(`/api/invites/${token}`);
+}
+
+export async function acceptInvite(
+  token: string,
+  username: string,
+  password: string,
+): Promise<Me> {
+  const me = await api<Me>(`/api/invites/${token}/accept`, {
+    method: "POST",
+    json: { username, password },
+  });
+  // Accepting IS a sign-in: the response set the session cookie.
+  setSignedInHint(true);
+  return me;
+}
+
 export function createWorkspace(
   name: string,
   includeTeam: boolean,
