@@ -327,7 +327,7 @@ async def test_updating_me_needs_a_session(signed_up: AsyncClient) -> None:
     assert (await signed_up.patch("/api/auth/me", json={"locale": "de"})).status_code == 401
 
 
-async def test_only_the_two_invite_routes_are_public(client) -> None:
+async def test_every_route_under_a_public_prefix_is_pinned(client) -> None:
     """`PUBLIC_PREFIXES` opens a whole path prefix, and nothing was watching it.
 
     `/api/invites/` is public because the person holding the link has no account yet.
@@ -349,6 +349,15 @@ async def test_only_the_two_invite_routes_are_public(client) -> None:
     assert under_the_prefix == {
         "/api/invites/{token}",
         "/api/invites/{token}/accept",
+        # The web chat widget - §B14. Public on purpose: the address travels in the
+        # HTML of the customer's page, so there is no session to ask for. It is
+        # guarded instead by a per-channel origin allowlist, and it is the one route
+        # in the product that is also exempt from CSRF - safe only because it opens
+        # no session, which `tests/test_csrf.py` pins separately.
+        #
+        # A second route under `/public/` is a decision, not an addition. Read
+        # `api/routes/public_chat.py`'s docstring before adding one.
+        "/public/chat/{path}/messages",
     }, (
         "A route was added under a public prefix. If it is meant to be public, add it "
         "here; if it is not, it needs a different prefix - it is currently reachable "

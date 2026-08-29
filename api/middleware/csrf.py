@@ -45,6 +45,23 @@ logger = logging.getLogger("api.csrf")
 
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
+# The one family of routes this check does not apply to, and why it is safe.
+#
+# Read the rule above again: CSRF exists because the browser attaches the session
+# cookie to a request another site triggered. `/public/` carries no cookie and opens no
+# session - there is nothing for a malicious page to make the browser attach, so there
+# is nothing to forge. The check would not protect it; it would only make it
+# unreachable, because the origin it must accept is the *customer's own site*, which
+# can never appear in this installation's `cors_origins`.
+#
+# What guards it instead is stricter than this: a per-channel allowlist, where an
+# unconfigured channel refuses everything (§B14, `api/security/embed.py`).
+#
+# **The exemption holds only while these routes stay session-less.** A `/public/` route
+# that ever reads a session would be exempt from CSRF *and* authenticated, which is the
+# one combination this file exists to prevent. `tests/test_csrf.py` asserts it.
+CSRF_EXEMPT_PREFIXES: tuple[str, ...] = ("/public/",)
+
 
 def _header(scope: Scope, name: bytes) -> str | None:
     for key, value in scope.get("headers", []):
@@ -109,6 +126,11 @@ class CsrfMiddleware:
         # method to classify, and its handshake both carries cookies and escapes
         # CORS entirely - it is checked unconditionally.
         if scope["type"] == "http" and scope.get("method") not in UNSAFE_METHODS:
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path") or ""
+        if path.startswith(CSRF_EXEMPT_PREFIXES):
             await self.app(scope, receive, send)
             return
 

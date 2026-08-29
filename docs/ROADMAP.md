@@ -83,12 +83,19 @@ Six checks, in order:
 
 | # | Check | Done when |
 |---|---|---|
+| 0 | **Refuse** | A message from an origin the channel does not allow is refused, and nothing is stored |
 | 1 | Arrive | A message typed in a browser reaches the agent process |
 | 2 | Answer | It replies with a hardcoded greeting |
 | 3 | Understand | The model's reply appears in the page, in the visitor's language |
 | 4 | **Full loop** | Visitor writes → model replies → visitor writes again, thread intact |
 | 5 | **Stream and cancel** | Tokens appear as they are produced, and stop instantly when cancelled |
 | 6 | Take a message | It asks for name and reason, prints a structured result |
+
+**Step 0 comes before step 1 for a reason.** This endpoint is the only public,
+unauthenticated one in the product (§B14): anybody who reads the customer's page has its
+address. Built in that order the guard is a condition of the first message arriving;
+built afterwards it is a change to something already working, which is the change that
+gets postponed. The order is the whole protection.
 
 Steps 1–2 are plumbing. **Step 4 is the product. Step 5 is what protects Milestone 11.**
 

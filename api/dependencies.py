@@ -44,12 +44,16 @@ PUBLIC_PATHS: frozenset[str] = frozenset(
         # deliberate; matched at request time by the prefix below.
         "/api/invites/{token}",
         "/api/invites/{token}/accept",
+        # The web chat widget - §B14. Public because the address travels in the HTML
+        # of the customer's page; guarded by the origin allowlist instead of a
+        # session. Listed by pattern so the route-table walk knows it is deliberate.
+        "/public/chat/{path}/messages",
     }
 )
 
 # Parameterised public routes carry a token in the path, so the request-time URL
 # never equals its pattern. The prefix is the runtime half of the two entries above.
-PUBLIC_PREFIXES: tuple[str, ...] = ("/api/invites/",)
+PUBLIC_PREFIXES: tuple[str, ...] = ("/api/invites/", "/public/chat/")
 
 
 def is_public(path: str) -> bool:

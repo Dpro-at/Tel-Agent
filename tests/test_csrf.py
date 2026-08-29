@@ -252,3 +252,23 @@ def test_a_websocket_handshake_from_the_dashboard_completes(ws_app) -> None:
         "/ws-probe", headers={"Origin": "http://localhost:3000", "Host": "localhost"}
     ) as websocket:
         assert websocket.receive_text() == "hello"
+
+
+def test_nothing_exempt_from_csrf_may_require_a_session() -> None:
+    """The invariant that makes `CSRF_EXEMPT_PREFIXES` safe rather than a hole.
+
+    CSRF exists because the browser attaches the session cookie to a request another
+    site triggered. A route with no session has nothing to attach and nothing to forge,
+    which is why `/public/` is exempt.
+
+    A route that is exempt *and* authenticated would be the one combination the
+    middleware exists to prevent - so the exemption is checked against the list of
+    session-less paths rather than trusted to stay true.
+    """
+    from api.dependencies import PUBLIC_PREFIXES
+    from api.middleware.csrf import CSRF_EXEMPT_PREFIXES
+
+    for exempt in CSRF_EXEMPT_PREFIXES:
+        assert any(
+            exempt.startswith(public) or public.startswith(exempt) for public in PUBLIC_PREFIXES
+        ), f"{exempt} is exempt from CSRF but is not a public, session-less prefix"
