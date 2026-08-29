@@ -484,3 +484,187 @@ async def test_a_refused_origin_never_costs_a_call_to_google(stage, monkeypatch)
     )
     assert answer.status_code == 403
     assert called == []
+
+
+# --- Milestone 0 step 2: the reply ------------------------------------------
+
+
+def _events(body: str) -> list[dict]:
+    """The payloads out of an SSE body."""
+    import json as _json
+
+    return [
+        _json.loads(line[len("data: ") :])
+        for line in body.splitlines()
+        if line.startswith("data: ")
+    ]
+
+
+async def test_the_reply_arrives_in_pieces_and_is_stored_whole(stage) -> None:
+    """Rule 3's shape, and the archive's.
+
+    Chunks on the wire so a caller never waits on a whole paragraph; one row in the
+    transcript, because a half-written reply is indistinguishable from one the agent
+    actually gave.
+    """
+    from agent.reply import GREETING
+
+    http, paths, db = stage
+    first = (
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "Do you open on Saturday?"},
+            headers={"Origin": ALLOWED},
+        )
+    ).json()
+
+    answer = await http.get(
+        f"/public/chat/{paths['ours']}/stream",
+        params={"conversation": first["conversation"]},
+        headers={"Origin": ALLOWED},
+    )
+    assert answer.status_code == 200
+    assert answer.headers["content-type"].startswith("text/event-stream")
+    assert answer.headers["cache-control"] == "no-store"
+
+    events = _events(answer.text)
+    deltas = [event["delta"] for event in events if "delta" in event]
+    # More than one, or it is not streaming.
+    assert len(deltas) > 1
+    assert "".join(deltas) == GREETING
+
+    done = [event for event in events if event.get("done")]
+    assert len(done) == 1
+
+    db.expire_all()
+    stored = await db.scalar(select(Message).where(Message.id == done[0]["message_id"]))
+    assert stored is not None
+    assert stored.speaker == "agent"
+    assert stored.text == GREETING
+
+
+async def test_the_reply_answers_the_message_that_was_stored(stage) -> None:
+    """Not one the caller passed in the query string.
+
+    Otherwise anybody could ask for an answer to text the conversation never held.
+    """
+    http, paths, db = stage
+    first = (
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "the real question"},
+            headers={"Origin": ALLOWED},
+        )
+    ).json()
+    await http.get(
+        f"/public/chat/{paths['ours']}/stream",
+        params={"conversation": first["conversation"], "text": "a different question"},
+        headers={"Origin": ALLOWED},
+    )
+
+    db.expire_all()
+    rows = (await db.execute(select(Message).order_by(Message.id))).scalars().all()
+    assert [row.speaker for row in rows] == ["caller", "agent"]
+    assert rows[0].text == "the real question"
+
+
+@pytest.mark.parametrize(
+    ("origin", "conversation", "because"),
+    [
+        ("https://evil.test", None, "a page that is not on the list"),
+        (ALLOWED, "not-a-real-handle", "a thread handle that resolves to nothing"),
+    ],
+)
+async def test_the_stream_is_guarded_like_the_message(
+    stage, origin, conversation, because
+) -> None:
+    http, paths, db = stage
+    first = (
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "hello"},
+            headers={"Origin": ALLOWED},
+        )
+    ).json()
+
+    answer = await http.get(
+        f"/public/chat/{paths['ours']}/stream",
+        params={"conversation": conversation or first["conversation"]},
+        headers={"Origin": origin},
+    )
+    assert answer.status_code == 403, because
+    assert answer.json()["error"]["code"] == "origin_not_allowed"
+
+    db.expire_all()
+    # One message: the visitor's. No agent row from a refused stream.
+    assert await _count(db, Message) == 1
+
+
+async def test_a_thread_with_nothing_in_it_gets_no_reply(stage) -> None:
+    """There is nothing to answer, and inventing one would be the agent talking first."""
+    from api.models import Conversation as Thread
+
+    http, paths, db = stage
+    empty = Thread(
+        workspace_id=1,
+        channel_id=1,
+        direction="inbound",
+        external_id="empty-thread-handle-000000",
+        handling="ai",
+        status="open",
+    )
+    db.add(empty)
+    await db.commit()
+
+    answer = await http.get(
+        f"/public/chat/{paths['ours']}/stream",
+        params={"conversation": "empty-thread-handle-000000"},
+        headers={"Origin": ALLOWED},
+    )
+    assert answer.status_code == 403
+
+
+async def test_the_stream_works_without_an_origin_header(stage) -> None:
+    """The browser found this one, and no test could have.
+
+    `EventSource` issues a GET, and a browser sends no `Origin` on a same-origin GET -
+    so the widget's own reply stream arrives with no header at all. The first version
+    refused it as "no Origin header" and the chat replied to nobody. httpx sends
+    whatever a test tells it to, which is exactly why every test passed.
+
+    A header that *is* present is still checked; the test above covers that.
+    """
+    http, paths, _ = stage
+    first = (
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "hello"},
+            headers={"Origin": ALLOWED},
+        )
+    ).json()
+
+    answer = await http.get(
+        f"/public/chat/{paths['ours']}/stream",
+        params={"conversation": first["conversation"]},
+        # No Origin, deliberately.
+    )
+    assert answer.status_code == 200
+    assert [event for event in _events(answer.text) if "delta" in event]
+
+
+async def test_a_handle_from_another_channel_gets_no_stream(stage) -> None:
+    """What guards the stream instead of the header: the handle is the capability."""
+    http, paths, _ = stage
+    ours = (
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "hello"},
+            headers={"Origin": ALLOWED},
+        )
+    ).json()
+
+    answer = await http.get(
+        f"/public/chat/{paths['theirs']}/stream",
+        params={"conversation": ours["conversation"]},
+    )
+    assert answer.status_code == 403

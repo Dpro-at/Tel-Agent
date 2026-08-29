@@ -19,15 +19,20 @@ endpoint stores and acknowledges, and says nothing that implies otherwise.
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
+import json
 import logging
 import secrets
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Header, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
+from agent.reply import reply as generate_reply
 from api.errors import envelope_response
 from api.models import Channel, Conversation, Message
 from api.security import captcha, quota
@@ -247,3 +252,146 @@ def _new_handle() -> str:
     the business has had, and let them try the one next door.
     """
     return secrets.token_urlsafe(24)
+
+
+def _event(payload: dict[str, object]) -> str:
+    """One server-sent event.
+
+    `json.dumps` guarantees the payload is one line, which is what the format requires -
+    a raw newline inside `data:` would end the event early and the rest would arrive as
+    a field nobody reads.
+    """
+    body = json.dumps(payload, ensure_ascii=False)
+    # Two newlines end an event. Built rather than written inline so no layer between
+    # here and the file can eat one of them - which is exactly how this line first
+    # arrived, as an f-string cut in half.
+    return "data: " + body + "\n\n"
+
+
+async def _reply_stream(
+    request: Request, channel: Channel, conversation: Conversation, text: str
+) -> AsyncIterator[str]:
+    """The agent's answer, forwarded as it arrives, and stored when it is whole.
+
+    **Stored at the end, not at each chunk.** A half-written reply in the archive would
+    be indistinguishable from one the agent actually gave, and the transcript is what
+    somebody reads back later to find out what a customer was told.
+
+    **A visitor who closes the tab cancels it.** The generator's `finally` runs, nothing
+    is stored, and no further tokens are produced - which is what Rule 3 means by
+    `cancel()` not being optional, in the only shape that survives being retrofitted.
+    """
+    pieces: list[str] = []
+    try:
+        async for chunk in generate_reply(text):
+            if await request.is_disconnected():
+                logger.info(
+                    "web chat reply cancelled by the visitor",
+                    extra={"conversation_id": conversation.id},
+                )
+                return
+            pieces.append(chunk)
+            yield _event({"delta": chunk})
+    except asyncio.CancelledError:
+        # The server is shutting down or the connection dropped mid-chunk. Same
+        # outcome: say nothing, store nothing.
+        logger.info("web chat reply cancelled", extra={"conversation_id": conversation.id})
+        raise
+
+    whole = "".join(pieces)
+    if not whole:
+        return
+
+    db: DbSession = request.state.db
+    stored = Message(
+        workspace_id=channel.workspace_id,
+        conversation_id=conversation.id,
+        ts_ms=int(dt.datetime.now(dt.UTC).timestamp() * 1000),
+        speaker="agent",
+        text=whole,
+    )
+    db.add(stored)
+    await db.commit()
+    await db.refresh(stored)
+    yield _event({"done": True, "message_id": stored.id})
+
+
+@router.get("/{path}/stream", summary="The agent's reply, as it is produced")
+async def stream_reply(
+    request: Request,
+    path: str,
+    conversation: str,
+    origin: str | None = Header(default=None),
+) -> object:
+    """Milestone 0 step 2, in the shape step 5 needs.
+
+    A GET rather than the POST's response body, because the visitor's message has to be
+    stored and acknowledged whether or not the reply ever starts - and because a
+    response that carries both is a response nobody can cancel half of.
+
+    The captcha is not repeated here: it was paid when the message was accepted, and
+    asking Google twice for one exchange would double the cost of every conversation to
+    verify a visitor who has not changed.
+    """
+    db: DbSession = request.state.db
+
+    channel = await _channel(db, path)
+    if channel is None:
+        return _refused()
+
+    settings = channel.settings_json or {}
+    # `require_header=False`: this is a GET, and a browser sends no `Origin` on a
+    # same-origin one - so `EventSource` opening the widget's own reply stream has no
+    # header to offer. The thread handle below is what guards it, and it is a better
+    # guard than a header: random, per conversation, scoped to this channel, and only
+    # ever issued to somebody who passed every check on the message that created it.
+    refusal = check_origin(
+        origin,
+        settings.get("allowed_origins"),
+        own=str(request.base_url).rstrip("/"),
+        require_header=False,
+    )
+    if refusal is not None:
+        logger.info("web chat stream refused", extra={"reason": refusal.reason})
+        return _refused()
+
+    thread = await db.scalar(
+        select(Conversation).where(
+            Conversation.external_id == conversation,
+            Conversation.channel_id == channel.id,
+            Conversation.status == "open",
+        )
+    )
+    if thread is None:
+        return _refused()
+
+    # The visitor's last message is what the agent is answering. Read here rather than
+    # taken from the query string: a caller could otherwise ask for a reply to text the
+    # conversation never contained.
+    last = await db.scalar(
+        select(Message)
+        .where(Message.conversation_id == thread.id, Message.speaker == "caller")
+        .order_by(Message.ts_ms.desc(), Message.id.desc())
+        .limit(1)
+    )
+    if last is None:
+        return _refused()
+
+    if not await quota.consume(
+        db, f"webchat:conversation:{conversation}", quota.PER_CONVERSATION
+    ):
+        await db.commit()
+        return _too_many()
+    await db.commit()
+
+    return StreamingResponse(
+        _reply_stream(request, channel, thread, last.text),
+        media_type="text/event-stream",
+        headers={
+            # Without this a proxy buffers the whole stream and delivers it at once,
+            # which is the failure Rule 3 exists to prevent, arriving from outside the
+            # application.
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-store",
+        },
+    )

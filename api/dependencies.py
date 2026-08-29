@@ -48,6 +48,10 @@ PUBLIC_PATHS: frozenset[str] = frozenset(
         # of the customer's page; guarded by the origin allowlist instead of a
         # session. Listed by pattern so the route-table walk knows it is deliberate.
         "/public/chat/{path}/messages",
+        # The reply, streamed. Same guards as the message that asked for it,
+        # minus the captcha - that was paid when the message was accepted, and
+        # asking twice per exchange doubles the cost to verify nobody new.
+        "/public/chat/{path}/stream",
         # The widget: the script a customer pastes and the document it frames. Public
         # for the same reason - both are fetched by a stranger's browser, on a page
         # this installation does not control. Neither reads a session; the page carries

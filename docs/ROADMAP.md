@@ -85,7 +85,7 @@ Six checks, in order:
 |---|---|---|
 | 0 | **Refuse** | A message from an origin the channel does not allow is refused, and nothing is stored |
 | 1 | Arrive | A message typed in a browser reaches the agent process |
-| 2 | Answer | It replies with a hardcoded greeting |
+| 2 | Answer | It replies with a hardcoded greeting — **and streams it**, because an interface that returns one finished answer is the one Rule 3 says cannot be fixed later |
 | 3 | Understand | The model's reply appears in the page, in the visitor's language |
 | 4 | **Full loop** | Visitor writes → model replies → visitor writes again, thread intact |
 | 5 | **Stream and cancel** | Tokens appear as they are produced, and stop instantly when cancelled |
