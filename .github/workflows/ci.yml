@@ -58,6 +58,11 @@ jobs:
   api:
     name: api and agent — format, lint, imports, tests
     runs-on: ubuntu-latest
+    # A hung job otherwise runs to GitHub's six-hour cap. One did: the database never
+    # came up and pytest sat waiting for a connection that was never going to arrive,
+    # holding a pull request for forty minutes before anybody looked. Twenty minutes is
+    # roughly three times the honest runtime, so a real slowdown still passes.
+    timeout-minutes: 20
 
     # D-029 supports two dialects, so the suite runs against both. Without a real
     # server here, "PostgreSQL is supported" is a claim nothing checks — and the two
@@ -71,8 +76,15 @@ jobs:
           POSTGRES_DB: telagent_test
         ports:
           - 5432:5432
+        # `pg_isready` with no arguments connects as the container's own OS user,
+        # `root`, to a database of the same name. Neither exists, so every check logs
+        # `FATAL: role "root" does not exist` - and still reports success, because the
+        # server answered. That is the bug: it answers during initialisation, from a
+        # temporary server that has not yet created `telagent_test`, so the job can
+        # start against a database that is not there and then wait for one forever.
+        # Naming the real user and the real database is what makes readiness mean it.
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U telagent -d telagent_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
