@@ -813,6 +813,46 @@ export function removeAssistant(id: number): Promise<void> {
   return api<void>(`/api/assistants/${id}`, { method: "DELETE" });
 }
 
+// --- Knowledge: what an assistant may read -------------------------------------
+
+export type KnowledgeSource = {
+  id: number;
+  title: string;
+  content: string;
+  /** Null means every assistant in this workspace, which is most knowledge. */
+  assistant_id: number | null;
+  assistant_name: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Mirrors CONTENT_MAX in api/models/knowledge.py, so the counter means refusal. */
+export const KNOWLEDGE_CONTENT_MAX = 20_000;
+
+export function knowledgeList(): Promise<KnowledgeSource[]> {
+  return api<KnowledgeSource[]>("/api/knowledge");
+}
+
+export function addKnowledge(source: {
+  title: string;
+  content: string;
+  assistant_id?: number | null;
+}): Promise<KnowledgeSource> {
+  return api<KnowledgeSource>("/api/knowledge", { method: "POST", json: source });
+}
+
+/** Any subset. An absent key is left alone; `assistant_id: null` is "every one". */
+export function changeKnowledge(
+  id: number,
+  source: Partial<{ title: string; content: string; assistant_id: number | null }>,
+): Promise<KnowledgeSource> {
+  return api<KnowledgeSource>(`/api/knowledge/${id}`, { method: "PATCH", json: source });
+}
+
+export function removeKnowledge(id: number): Promise<void> {
+  return api<void>(`/api/knowledge/${id}`, { method: "DELETE" });
+}
+
 // --- Routing rules ------------------------------------------------------------
 
 export type RuleAction = "pass" | "block" | "ai";

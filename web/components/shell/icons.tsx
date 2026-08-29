@@ -11,6 +11,7 @@ const PATHS: Record<string, string> = {
   users: "M3 20c0-2.8 2.4-4.5 5.5-4.5S14 17.2 14 20 M8.5 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M16 15.6c2.2.4 3.8 1.9 3.8 4.4 M16.5 12a2.7 2.7 0 1 0 0-5.4",
   bot: "M6 8h12v9H6V8Z M9.5 12v1.5 M14.5 12v1.5 M12 5v3 M3.5 11.5v3 M20.5 11.5v3",
   bell: "M6 9a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5h-15S6 13 6 9Z M10 18.5a2 2 0 0 0 4 0",
+  book: "M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4V5Z M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6V5Z",
 };
 
 export function NavIcon({ name, color }: { name: string; color: string }) {

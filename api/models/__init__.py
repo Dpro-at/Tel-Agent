@@ -35,6 +35,7 @@ from api.models.extensions import ORIGINS, App, AppInstall
 from api.models.identity import ROLES, Membership, User, Workspace
 from api.models.invite import INVITE_LIFETIME, INVITE_ROLES, Invite
 from api.models.jobs import JOB_STATUSES, BackgroundJob, ScheduledTask
+from api.models.knowledge import CONTENT_MAX, Knowledge
 from api.models.notification import CATEGORIES, Notification
 from api.models.rule import RULE_ACTIONS, Rule
 from api.models.session import Session
@@ -48,6 +49,7 @@ __all__ = [
     "CATEGORIES",
     "CHANNEL_KINDS",
     "CODE_PURPOSES",
+    "CONTENT_MAX",
     "EVENTS",
     "INVITE_LIFETIME",
     "INVITE_ROLES",
@@ -70,6 +72,7 @@ __all__ = [
     "Conversation",
     "Invite",
     "KeyChallenge",
+    "Knowledge",
     "Membership",
     "Message",
     "Notification",
