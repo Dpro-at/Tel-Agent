@@ -17,6 +17,25 @@ from api.main import create_app
 from api.models import Channel, Conversation, Message, Workspace
 
 ALLOWED = "https://shop.test"
+KEY_HEX = "aa" * 32
+
+
+@pytest.fixture(autouse=True)
+def configured_key(monkeypatch: pytest.MonkeyPatch):
+    """The reCAPTCHA secret lives in an encrypted column, so a key is not optional.
+
+    Autouse: the tests that do not touch it are unaffected, and a test that forgot it
+    would fail inside an INSERT whose parameter dump carries the value.
+    """
+    from api.config import get_settings
+    from api.models.encrypted import reset_key_cache
+
+    monkeypatch.setenv("ENCRYPTION_KEY", KEY_HEX)
+    get_settings.cache_clear()
+    reset_key_cache()
+    yield
+    get_settings.cache_clear()
+    reset_key_cache()
 
 
 @pytest.fixture
@@ -322,3 +341,146 @@ async def test_a_refused_origin_never_reaches_the_counter(stage) -> None:
 
     db.expire_all()
     assert (await db.execute(select(RateCounter))).scalars().all() == []
+
+
+# --- reCAPTCHA, through the endpoint -----------------------------------------
+
+
+async def _with_captcha(db, path: str, *, threshold: float | None = None) -> None:
+    """Switch reCAPTCHA on for a channel, as the settings screen would."""
+    from api.models import Channel
+
+    row = await db.scalar(select(Channel).where(Channel.webhook_path == path))
+    assert row is not None
+    row.credentials_encrypted = "the-channel-secret"
+    settings = dict(row.settings_json or {})
+    if threshold is not None:
+        settings["recaptcha_threshold"] = threshold
+    row.settings_json = settings
+    await db.commit()
+
+
+def _google(monkeypatch, body: dict) -> None:
+    import httpx
+
+    from api.security import captcha
+
+    original = httpx.AsyncClient
+
+    def factory(*args, **kwargs):
+        kwargs["transport"] = httpx.MockTransport(lambda _: httpx.Response(200, json=body))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(captcha.httpx, "AsyncClient", factory)
+
+
+async def test_a_good_token_gets_through(stage, monkeypatch) -> None:
+    from api.security import captcha
+
+    http, paths, db = stage
+    await _with_captcha(db, paths["ours"])
+    _google(monkeypatch, {"success": True, "score": 0.9, "action": captcha.ACTION})
+
+    answer = await http.post(
+        f"/public/chat/{paths['ours']}/messages",
+        json={"text": "hello", "captcha": "a-token"},
+        headers={"Origin": ALLOWED},
+    )
+    assert answer.status_code == 201
+
+
+async def test_a_low_score_is_refused_like_a_wrong_origin(stage, monkeypatch) -> None:
+    """Same status, same code, same sentence.
+
+    A bot that learns it was the captcha that refused it is a bot that starts solving
+    the captcha instead of going away.
+    """
+    from api.security import captcha
+
+    http, paths, db = stage
+    await _with_captcha(db, paths["ours"])
+    _google(monkeypatch, {"success": True, "score": 0.1, "action": captcha.ACTION})
+
+    answer = await http.post(
+        f"/public/chat/{paths['ours']}/messages",
+        json={"text": "hello", "captcha": "a-token"},
+        headers={"Origin": ALLOWED},
+    )
+    assert answer.status_code == 403
+    assert answer.json()["error"]["code"] == "origin_not_allowed"
+
+    db.expire_all()
+    assert await _count(db, Message) == 0
+
+
+async def test_no_token_is_refused_once_it_is_switched_on(stage, monkeypatch) -> None:
+    from api.security import captcha
+
+    http, paths, db = stage
+    await _with_captcha(db, paths["ours"])
+    _google(monkeypatch, {"success": True, "score": 0.9, "action": captcha.ACTION})
+
+    answer = await http.post(
+        f"/public/chat/{paths['ours']}/messages",
+        json={"text": "hello"},
+        headers={"Origin": ALLOWED},
+    )
+    assert answer.status_code == 403
+    assert await _count(db, Message) == 0
+
+
+async def test_a_channel_without_it_never_calls_google(stage, monkeypatch) -> None:
+    """The switched-off case, which is most installations."""
+    called: list[bool] = []
+
+    import httpx
+
+    from api.security import captcha
+
+    original = httpx.AsyncClient
+
+    def factory(*args, **kwargs):
+        called.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(captcha.httpx, "AsyncClient", factory)
+
+    http, paths, _ = stage
+    answer = await http.post(
+        f"/public/chat/{paths['ours']}/messages",
+        json={"text": "hello"},
+        headers={"Origin": ALLOWED},
+    )
+    assert answer.status_code == 201
+    assert called == []
+
+
+async def test_a_refused_origin_never_costs_a_call_to_google(stage, monkeypatch) -> None:
+    """The order of the three checks, made visible.
+
+    The two cheap local ones run first, so a request from a page that was never allowed
+    does not also buy a round trip on somebody else's network.
+    """
+    called: list[bool] = []
+
+    import httpx
+
+    from api.security import captcha
+
+    http, paths, db = stage
+    await _with_captcha(db, paths["ours"])
+    original = httpx.AsyncClient
+
+    def factory(*args, **kwargs):
+        called.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(captcha.httpx, "AsyncClient", factory)
+
+    answer = await http.post(
+        f"/public/chat/{paths['ours']}/messages",
+        json={"text": "hello", "captcha": "a-token"},
+        headers={"Origin": "https://evil.test"},
+    )
+    assert answer.status_code == 403
+    assert called == []

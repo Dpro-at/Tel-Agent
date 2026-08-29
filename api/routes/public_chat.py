@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
 from api.errors import envelope_response
 from api.models import Channel, Conversation, Message
-from api.security import quota
+from api.security import captcha, quota
 from api.security.embed import check_origin, normalise_origin
 
 logger = logging.getLogger("api.public_chat")
@@ -48,6 +48,9 @@ class VisitorMessage(BaseModel):
     # starting again. Unguessable, and checked against the channel below - it is the
     # only handle the widget has on anything.
     conversation: str | None = Field(default=None, max_length=64)
+    # reCAPTCHA v3's token, when the channel has it switched on. Long: Google's are
+    # already several hundred characters and the length is theirs to change.
+    captcha: str | None = Field(default=None, max_length=4000)
 
 
 class Accepted(BaseModel):
@@ -155,6 +158,24 @@ async def post_message(
         )
         await db.commit()
         return _too_many()
+
+    # After the origin check and the ceiling, because it is the only one of the three
+    # that leaves this machine. A request that fails either of the cheap local checks
+    # must not also cost a round trip to Google.
+    verdict = await captcha.verify(
+        channel.credentials_encrypted,
+        payload.captcha,
+        threshold=settings.get("recaptcha_threshold"),
+    )
+    if not verdict.ok:
+        logger.info(
+            "web chat refused",
+            extra={"reason": f"captcha: {verdict.reason}", "channel_id": channel.id},
+        )
+        await db.commit()
+        # The same answer as a wrong origin. A bot that learns it was the captcha that
+        # refused it is a bot that starts solving the captcha.
+        return _refused()
 
     conversation = None
     if payload.conversation is not None:

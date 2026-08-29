@@ -1184,6 +1184,23 @@ Its limits, stated so nobody treats it as the wall:
 - With it off, the rate limit below is the only thing left, and that is a deliberate
   choice the operator makes rather than a gap.
 
+**"Could not ask" and "asked and was told no" are different answers.** A network failure
+means Google was unreachable, which on a self-hosted box behind a firewall that nobody
+opened is ordinary - and taking a business's chat offline for it would be a refusal
+caused by nothing the visitor did. That case **allows**, and logs at warning so the
+operator finds out from their own log rather than from a bill. A verified low score is
+Google answering, and that refuses. Getting the two the wrong way round is the failure
+worth naming: one unplugs the guard with a cable, the other closes the shop.
+
+**The token carries an action name, and it is checked.** reCAPTCHA issues a token for
+one action; without the check, a token minted by the same site's sign-up form would pass
+here. A `success` with no `score` is v2's answer shape, and is refused rather than
+compared against a threshold it does not have.
+
+**The three checks run cheapest first**: origin, then the rate limit, then this. A
+request that fails either local check must not also cost a round trip to somebody
+else's network.
+
 ### Rate limits, which are not optional
 
 Per conversation and per origin, enforced whether or not reCAPTCHA is on. A public
