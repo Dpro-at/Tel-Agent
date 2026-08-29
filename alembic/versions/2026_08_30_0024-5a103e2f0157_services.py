@@ -64,7 +64,12 @@ def upgrade() -> None:
         ),
         sa.Column("price_micros", sa.BigInteger(), nullable=True),
         sa.Column("performed_by", sa.String(length=120), nullable=True),
-        sa.Column("bookable", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        # `sa.true()`, not `sa.text("1")`. Autogenerate froze the literal it saw, and
+        # `1` is a boolean only in SQLite: PostgreSQL refuses the whole CREATE TABLE
+        # with "column is of type boolean but default expression is of type integer".
+        # D-029 means the migration has to render for both, not only the one it was
+        # generated against.
+        sa.Column("bookable", sa.Boolean(), server_default=sa.true(), nullable=False),
         sa.Column("position", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column(
             "created_at",
