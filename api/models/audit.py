@@ -66,6 +66,12 @@ EVENTS = (
     "assistant_added",
     "assistant_changed",
     "assistant_removed",
+    # Knowledge. What the agent is allowed to read is what it will say back to a
+    # customer, so adding or removing a source changes the answers the business
+    # gives. Recorded against the acting account.
+    "knowledge_added",
+    "knowledge_changed",
+    "knowledge_removed",
 )
 
 

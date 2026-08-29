@@ -111,6 +111,8 @@ const NAV: { label: LabelKey; items: Item[] }[] = [
       { id: "calendar", label: "nav_calendar", href: "/calendar", icon: "calendar" },
       { id: "contacts", label: "nav_contacts", href: "/contacts", icon: "users" },
       { id: "assistants", label: "nav_assistants", href: "/assistants", icon: "bot" },
+      // Next to the assistant, because it is the assistant's reading.
+      { id: "knowledge", label: "nav_knowledge", href: "/knowledge", icon: "book" },
     ],
   },
 ];
