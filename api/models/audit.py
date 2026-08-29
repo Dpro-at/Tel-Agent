@@ -72,6 +72,13 @@ EVENTS = (
     "knowledge_added",
     "knowledge_changed",
     "knowledge_removed",
+    # The catalogue. A price is quoted to customers by an agent that cannot check it
+    # against anything, so who changed one and when is the only record of why a caller
+    # was told a number. Same reasoning as knowledge above: this is what the business
+    # says, not how the software is configured.
+    "service_added",
+    "service_changed",
+    "service_removed",
     # Webhooks. A URL that receives conversations is an export of them, and the
     # secret that signs it is a credential - so adding one, changing where it points
     # and removing it all need a name attached afterwards.

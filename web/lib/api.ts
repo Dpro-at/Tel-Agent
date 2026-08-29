@@ -668,6 +668,62 @@ export function homeSummary(since: Date): Promise<HomeSummary> {
   return api<HomeSummary>(`/api/home?since=${encodeURIComponent(since.toISOString())}`);
 }
 
+/**
+ * The catalogue — what the business sells, and the only prices the assistant may
+ * quote. Nothing ships in here.
+ *
+ * `price_micros` is integer micros of `currency`, never a float: a price read back
+ * different from the price entered is a price nobody trusts. It is null exactly when
+ * `price_mode` is `on_request`, which is a real answer and not an empty field.
+ */
+export type PriceMode = "fixed" | "hourly" | "on_request";
+
+export type Service = {
+  id: number;
+  name: string;
+  says: string | null;
+  minutes: number | null;
+  price_mode: PriceMode;
+  price_micros: number | null;
+  /** Null means "any free", which is what most work is. */
+  performed_by: string | null;
+  bookable: boolean;
+  position: number;
+};
+
+export type Catalogue = {
+  services: Service[];
+  /** ISO 4217, so a price can be formatted without a table in the browser. */
+  currency: string;
+};
+
+export type ServiceDraft = {
+  name: string;
+  says?: string | null;
+  minutes?: number | null;
+  price_mode: PriceMode;
+  price_micros?: number | null;
+  performed_by?: string | null;
+  bookable?: boolean;
+};
+
+export function catalogue(): Promise<Catalogue> {
+  return api<Catalogue>("/api/catalogue");
+}
+
+export function addService(draft: ServiceDraft): Promise<Service> {
+  return api<Service>("/api/catalogue", { method: "POST", json: draft });
+}
+
+/** Only what is sent changes; an absent field is left alone. */
+export function changeService(id: number, changes: Partial<ServiceDraft>): Promise<Service> {
+  return api<Service>(`/api/catalogue/${id}`, { method: "PATCH", json: changes });
+}
+
+export function removeService(id: number): Promise<void> {
+  return api<void>(`/api/catalogue/${id}`, { method: "DELETE" });
+}
+
 export function conversationDetail(id: number): Promise<ThreadDetail> {
   return api<ThreadDetail>(`/api/conversations/${id}`);
 }
