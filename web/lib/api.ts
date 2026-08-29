@@ -635,14 +635,37 @@ export function conversationList(filters: {
   status?: ThreadStatus;
   q?: string;
   offset?: number;
+  /** Fewer than a page, for a screen that shows a handful and links to the rest. */
+  limit?: number;
 }): Promise<ThreadPage> {
   const query = new URLSearchParams();
+  if (filters.limit) query.set("limit", String(filters.limit));
   if (filters.channel) query.set("channel", filters.channel);
   if (filters.status) query.set("status", filters.status);
   if (filters.q) query.set("q", filters.q);
   if (filters.offset) query.set("offset", String(filters.offset));
   const suffix = query.size > 0 ? `?${query}` : "";
   return api<ThreadPage>(`/api/conversations${suffix}`);
+}
+
+/**
+ * The two numbers the home screen opens with.
+ *
+ * `since` is sent by the browser because the server has no timezone for a workspace:
+ * midnight in Vienna is not midnight in UTC, and the reader means their own day.
+ *
+ * `by_agent` is null when nothing has recorded who took a conversation - which is not
+ * the same as the agent having taken none, and must not be drawn as a zero.
+ */
+export type HomeSummary = {
+  since: string;
+  conversations: number;
+  by_agent: number | null;
+  waiting: number;
+};
+
+export function homeSummary(since: Date): Promise<HomeSummary> {
+  return api<HomeSummary>(`/api/home?since=${encodeURIComponent(since.toISOString())}`);
 }
 
 export function conversationDetail(id: number): Promise<ThreadDetail> {

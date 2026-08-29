@@ -129,7 +129,11 @@ const ROLE_KEY: Record<string, LabelKey> = {
 export function Sidebar({
   locale,
   active,
-  liveCalls = 3,
+  // No calls are on the line, because the phone is the last channel built. The default
+  // used to be 3, so every screen in the product claimed three live calls - next to a
+  // home screen saying nothing had come in today, which is the screen contradicting
+  // itself. It becomes a real count when there is something real to count.
+  liveCalls = 0,
   incomingCall = false,
 }: {
   locale: Locale;
