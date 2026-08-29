@@ -73,7 +73,11 @@ def normalise_origin(raw: str) -> str | None:
 
 
 def check_origin(
-    sent: str | None, allowed: list[str] | None, *, own: str | None = None
+    sent: str | None,
+    allowed: list[str] | None,
+    *,
+    own: str | None = None,
+    require_header: bool = True,
 ) -> Refusal | None:
     """None when the page may post here. A `Refusal` otherwise.
 
@@ -95,9 +99,18 @@ def check_origin(
 
     Four ways to be refused, one answer to the caller:
 
-    * **No `Origin` header.** A browser sets it on every cross-origin POST and page
-      script cannot forge it. Absent means the request did not come from a page, which
-      a widget request always does.
+    * **No `Origin` header**, when `require_header` is set. A browser sets it on every
+      POST and page script cannot forge it, so on a write, absent means the request did
+      not come from a page - which a widget message always does.
+
+      **`require_header=False` is for a GET**, and it is not a weakening: the browser
+      simply does not send `Origin` on a same-origin GET, so `EventSource` reaching the
+      reply stream has no header to check and refusing it refuses the widget itself. A
+      header that is present is still checked. What guards that request instead is the
+      thread handle - random, per conversation, scoped to its channel, and issued only
+      to somebody who already passed every check on the message that created it. A
+      capability, which is the right shape for a stream a page opens about its own
+      conversation.
     * **Not a well-formed origin.**
     * **The channel has no list.** Not configured is refused, not open: the safe
       reading of an empty list is the one that stores nothing.
@@ -106,7 +119,9 @@ def check_origin(
     if not allowed:
         return Refusal(_REFUSED, "channel has no allowed origins configured")
     if sent is None:
-        return Refusal(_REFUSED, "no Origin header")
+        if require_header:
+            return Refusal(_REFUSED, "no Origin header")
+        return None
 
     origin = normalise_origin(sent)
     if origin is None:

@@ -173,6 +173,7 @@ def _page(path: str) -> str:
   .msg {{ max-width: 85%; padding: 8px 11px; border-radius: 12px; font-size: 14px;
     line-height: 1.45; overflow-wrap: anywhere; }}
   .me {{ align-self: flex-end; background: #4f46e5; color: #fff; }}
+  .them {{ align-self: flex-start; background: rgba(128,128,128,.16); }}
   .note {{ align-self: center; font-size: 12.5px; opacity: .7; text-align: center; }}
   form {{ display: flex; gap: 8px; padding: 10px; border-top: 1px solid rgba(128,128,128,.3); }}
   input {{ flex: 1; min-width: 0; padding: 9px 11px; font: inherit; border-radius: 9px;
@@ -223,6 +224,40 @@ def _page(path: str) -> str:
   bubble.addEventListener("click", function () {{ show(true); }});
   document.getElementById("close").addEventListener("click", function () {{ show(false); }});
 
+  // The reply, as it is produced. A bubble that fills in word by word is the only
+  // shape that survives the phone: an agent that composes a whole answer before
+  // sending it leaves a caller listening to silence (Rule 3).
+  async function listen() {{
+    var line = document.createElement("div");
+    line.className = "msg them";
+    log.appendChild(line);
+
+    var source = new EventSource(
+      "/public/chat/" + encodeURIComponent(PATH) + "/stream?conversation=" +
+      encodeURIComponent(conversation)
+    );
+    await new Promise(function (done) {{
+      source.onmessage = function (event) {{
+        var payload = JSON.parse(event.data);
+        if (payload.delta) {{
+          // textContent again: what the agent says is not markup either, and it will
+          // be a model's output before long.
+          line.textContent += payload.delta;
+          log.scrollTop = log.scrollHeight;
+        }}
+        if (payload.done) {{ source.close(); done(); }}
+      }};
+      source.onerror = function () {{
+        source.close();
+        if (!line.textContent) {{
+          line.className = "msg note";
+          line.textContent = "No reply just now.";
+        }}
+        done();
+      }};
+    }});
+  }}
+
   form.addEventListener("submit", async function (event) {{
     event.preventDefault();
     var body = text.value.trim();
@@ -239,6 +274,7 @@ def _page(path: str) -> str:
       }});
       if (answer.ok) {{
         conversation = (await answer.json()).conversation;
+        await listen();
       }} else {{
         // One sentence for every refusal, because the server gives one. A visitor
         // cannot act on "origin not allowed" and should not be shown it.

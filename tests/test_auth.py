@@ -202,7 +202,7 @@ async def test_every_route_is_protected_unless_it_is_on_the_public_list(
     # guarded by an origin allowlist, a rate limit, a captcha, and a `frame-ancestors`
     # policy the browser enforces. Three at once is the largest jump this list has
     # taken, which is exactly what this number exists to make somebody notice.
-    assert len(PUBLIC_PATHS) <= 17
+    assert len(PUBLIC_PATHS) <= 18
 
 
 async def test_an_expired_session_is_refused_and_deleted(
@@ -365,6 +365,7 @@ async def test_every_route_under_a_public_prefix_is_pinned(client) -> None:
         # A second route under `/public/` is a decision, not an addition. Read
         # `api/routes/public_chat.py`'s docstring before adding one.
         "/public/chat/{path}/messages",
+        "/public/chat/{path}/stream",
         # The widget's own document, §B14. Public for the same reason the message
         # endpoint is - a stranger's browser fetches it, on a page this installation
         # does not control. It opens no session either; what limits it is the
