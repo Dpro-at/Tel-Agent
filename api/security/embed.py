@@ -72,8 +72,26 @@ def normalise_origin(raw: str) -> str | None:
     return f"{parsed.scheme}://{host}:{port}"
 
 
-def check_origin(sent: str | None, allowed: list[str] | None) -> Refusal | None:
+def check_origin(
+    sent: str | None, allowed: list[str] | None, *, own: str | None = None
+) -> Refusal | None:
     """None when the page may post here. A `Refusal` otherwise.
+
+    **`own` is the installation's own origin, and it is accepted.** The widget runs in
+    an iframe served by this installation, so the browser stamps *that* origin on the
+    message it posts - not the site the iframe is embedded on. Checking only the
+    customer's list would refuse the widget on every page including the allowed ones,
+    which is a guard that stops nothing and everything.
+
+    Accepting it costs nothing a browser can abuse: a page on `evil.test` cannot send
+    `Origin: https://telagent.example`, because the browser writes that header and
+    scripts cannot. What may is a client that is not a browser, and the guards for that
+    are the rate limit and the captcha - neither of which an origin check was ever going
+    to provide.
+
+    **What actually decides who may embed the widget is `frame-ancestors`** on the
+    widget page (§B14): the browser refuses to render it inside a page that is not on
+    the list, and unlike a header comparison that cannot be forged at all.
 
     Four ways to be refused, one answer to the caller:
 
@@ -99,6 +117,9 @@ def check_origin(sent: str | None, allowed: list[str] | None) -> Refusal | None:
     # than matching by accident.
     permitted = {normalise_origin(entry) for entry in allowed}
     permitted.discard(None)
+    if own is not None:
+        permitted.add(normalise_origin(own))
+        permitted.discard(None)
     if origin not in permitted:
         return Refusal(_REFUSED, f"origin {origin} not in allowlist")
     return None

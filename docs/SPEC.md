@@ -1150,6 +1150,33 @@ is an **address**, and what protects the address is the next section. Treating i
 secret is the mistake to avoid, because it would mean the guard is a value printed on
 every page that uses it.
 
+### The allowlist is enforced by `frame-ancestors`, not by the `Origin` header
+
+This paragraph replaces an earlier one that had it wrong, and the mistake is worth
+keeping because it is easy to make twice.
+
+The widget runs in an iframe **served by this installation**. When it posts a message
+the browser stamps the request with the *iframe's* origin - `https://telagent.example` -
+and never with the site the iframe is embedded in. An allowlist of customer sites
+compared against that header therefore matches nothing, on every page including the
+allowed ones. The check reads like a guard and refuses everybody.
+
+The embedding decision has to be enforced where the embedding happens: when the browser
+decides whether to render this document inside somebody's page. That is
+`Content-Security-Policy: frame-ancestors`, sent on the widget page and built from the
+same list. A browser obeys it, and unlike a header comparison there is nothing for a
+page to forge - the attacking page never gets to send anything.
+
+So the list does two jobs, and this is the important half:
+
+- **On the widget page, as `frame-ancestors`** - who may embed it at all. An empty list
+  renders `'none'`, and so does an unknown or switched-off address.
+- **On the message, as an `Origin` check** that also accepts the installation's own
+  origin. Accepting it gives a browser nothing: a page on `evil.test` cannot send
+  `Origin: https://telagent.example`, because the browser writes that header and scripts
+  cannot. A client that is not a browser can send anything, and the guards for that are
+  the rate limit and the captcha - which an origin check was never going to be.
+
 ### The origin allowlist is the guard
 
 Each web channel stores the origins allowed to embed it. A request whose `Origin` is not
