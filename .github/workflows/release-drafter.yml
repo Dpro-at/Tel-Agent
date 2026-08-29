@@ -1,0 +1,28 @@
+# Keeps a draft release up to date with everything merged since the last tag, so
+# "where the project is" is answered by GitHub rather than by remembering to write
+# it down. The draft is never published automatically - publishing stays a human
+# act, and the version only becomes real when somebody presses the button.
+name: Release drafter
+
+on:
+  push:
+    branches: [main]
+  # so a pull request gets its version bump recalculated as labels change
+  pull_request_target:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  draft:
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        with:
+          config-name: release-drafter.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,50 @@
+# Drafts the next release from the pull requests merged since the last one.
+#
+# The categories below are chosen for how this repository already works: titles
+# are prose sentences, not `feat:` prefixes, so nothing here reads the commit
+# message. One label on a pull request decides both the section it lands in and
+# how the version moves. A pull request with no label still appears, under
+# "Other changes" - an unlabelled change is never dropped silently.
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+
+# Existing repository labels wherever one already fits - `enhancement`, `bug` and
+# `documentation` were here before this file, and a second label meaning the same
+# thing is how label sets rot.
+categories:
+  - title: "Breaking"
+    labels: ["breaking"]
+  - title: "Features"
+    labels: ["enhancement"]
+  - title: "Fixes"
+    labels: ["bug"]
+  - title: "Documentation"
+    labels: ["documentation"]
+  - title: "Internal"
+    labels: ["chore"]
+  - title: "Other changes"
+    labels: ["*"]
+
+change-template: "- $TITLE (#$NUMBER)"
+# Backticks and underscores in a prose title would otherwise render as markup
+change-title-escapes: '\<*_&`#@'
+
+# The repository has no tags yet, so the first draft has nothing to count from.
+# 0.1.0 is what pyproject.toml already claims.
+initial-version: "0.1.0"
+
+version-resolver:
+  major:
+    labels: ["breaking"]
+  minor:
+    labels: ["enhancement"]
+  patch:
+    labels: ["bug", "documentation", "chore"]
+  default: patch
+
+exclude-labels: ["skip-changelog"]
+
+template: |
+  $CHANGES
+
+  **Full changelog**: https://github.com/Dpro-at/Tel-Agent/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
