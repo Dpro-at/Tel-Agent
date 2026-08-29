@@ -1,5 +1,9 @@
 {
   "account_menu": "الحساب ومساحة العمل",
+  "channel_email": "البريد الإلكتروني",
+  "channel_phone": "الهاتف",
+  "channel_sms": "الرسائل النصية",
+  "channel_web": "دردشة الويب",
   "expand_children": "إظهار العناصر الفرعية",
   "group_overview": "نظرة عامة",
   "nav_archive": "أرشيف المكالمات",

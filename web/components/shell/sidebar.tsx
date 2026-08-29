@@ -10,7 +10,13 @@ import en from "../../../locales/en/shell.json";
 
 import { NavIcon } from "@/components/shell/icons";
 import { IncomingCall } from "@/components/shell/incoming-call";
-import { currentUser, signOut, type Me } from "@/lib/api";
+import {
+  conversationChannels,
+  currentUser,
+  signOut,
+  type ConversationChannel,
+  type Me,
+} from "@/lib/api";
 import { interpolate, pickDictionary } from "@/lib/i18n";
 import type { Locale } from "@/lib/locales";
 import { useResource } from "@/lib/use-resource";
@@ -57,7 +63,6 @@ type Kid = {
   label?: LabelKey;
   name?: string;
   href?: string;
-  count?: number;
   live?: boolean;
   tone: Tone;
 };
@@ -70,52 +75,68 @@ const TONES: Record<Tone, string> = {
   grey: "var(--od-stroke-5)",
 };
 
-/** Channel names - WhatsApp, Telegram - are product names and are never translated. */
-const CHANNELS: { id: string; name: string; count: number; tone: Tone }[] = [
-  { id: "whatsapp", name: "WhatsApp", count: 3, tone: "green" },
-  { id: "telegram", name: "Telegram", count: 1, tone: "grey" },
-  { id: "sms", name: "SMS", count: 1, tone: "grey" },
-  { id: "web chat", name: "Web chat", count: 1, tone: "grey" },
-];
+/** The product's own names for the channels that are not a company. */
+const CHANNEL_LABEL_KEYS: Record<string, LabelKey> = {
+  web: "channel_web",
+  phone: "channel_phone",
+  sms: "channel_sms",
+  email: "channel_email",
+};
 
-const NAV: { label: LabelKey; items: Item[] }[] = [
-  {
-    label: "group_overview",
-    items: [
-      { id: "home", label: "nav_home", href: "/home", icon: "home" },
-      {
-        id: "calls",
-        label: "nav_calls",
-        href: "/calls",
-        icon: "phone",
-        kids: [
-          { id: "live", label: "nav_live", href: "/live", live: true, tone: "violet" },
-          { id: "archive", label: "nav_archive", href: "/calls", tone: "grey" },
-          { id: "campaigns", label: "nav_campaigns", href: "/campaigns", tone: "violet" },
-          { id: "consent", label: "nav_consent", href: "/consent", tone: "grey" },
-        ],
-      },
-      {
-        id: "conversations",
-        label: "nav_channels",
-        href: "/conversations",
-        icon: "message",
-        kids: CHANNELS.map((channel) => ({
-          id: channel.id,
-          name: channel.name,
-          count: channel.count,
-          tone: channel.tone,
-        })),
-      },
-      { id: "notifications", label: "nav_notifications", href: "/notifications", icon: "bell" },
-      { id: "calendar", label: "nav_calendar", href: "/calendar", icon: "calendar" },
-      { id: "contacts", label: "nav_contacts", href: "/contacts", icon: "users" },
-      { id: "assistants", label: "nav_assistants", href: "/assistants", icon: "bot" },
-      // Next to the assistant, because it is the assistant's reading.
-      { id: "knowledge", label: "nav_knowledge", href: "/knowledge", icon: "book" },
-    ],
-  },
-];
+/** WhatsApp is the one channel with a colour of its own; every other row is quiet. */
+const CHANNEL_TONE: Record<string, Tone> = { whatsapp: "green" };
+
+/**
+ * What one channel row is called, in the reader's language.
+ *
+ * A kind the core names has a key. Anything else - a community channel - is shown as
+ * the server named it, capitalised, rather than being dropped from the list.
+ */
+function channelName(t: ShellDictionary, channel: ConversationChannel): string {
+  const key = CHANNEL_LABEL_KEYS[channel.kind];
+  if (key) return t[key];
+  return channel.name ?? channel.kind.charAt(0).toUpperCase() + channel.kind.slice(1);
+}
+
+/** The nav, given the channels this workspace actually has. */
+function navigation(channels: Kid[]): { label: LabelKey; items: Item[] }[] {
+  return [
+    {
+      label: "group_overview",
+      items: [
+        { id: "home", label: "nav_home", href: "/home", icon: "home" },
+        {
+          id: "calls",
+          label: "nav_calls",
+          href: "/calls",
+          icon: "phone",
+          kids: [
+            { id: "live", label: "nav_live", href: "/live", live: true, tone: "violet" },
+            { id: "archive", label: "nav_archive", href: "/calls", tone: "grey" },
+            { id: "campaigns", label: "nav_campaigns", href: "/campaigns", tone: "violet" },
+            { id: "consent", label: "nav_consent", href: "/consent", tone: "grey" },
+          ],
+        },
+        {
+          id: "conversations",
+          label: "nav_channels",
+          href: "/conversations",
+          icon: "message",
+          // Only the channels the workspace has used. Nothing at all while the list
+          // is loading, or if it could not be fetched - the Channels row above still
+          // leads to the screen that says so properly.
+          kids: channels.length > 0 ? channels : undefined,
+        },
+        { id: "notifications", label: "nav_notifications", href: "/notifications", icon: "bell" },
+        { id: "calendar", label: "nav_calendar", href: "/calendar", icon: "calendar" },
+        { id: "contacts", label: "nav_contacts", href: "/contacts", icon: "users" },
+        { id: "assistants", label: "nav_assistants", href: "/assistants", icon: "bot" },
+        // Next to the assistant, because it is the assistant's reading.
+        { id: "knowledge", label: "nav_knowledge", href: "/knowledge", icon: "book" },
+      ],
+    },
+  ];
+}
 
 /** The note under each workspace in the switcher: the reader's role there. */
 const ROLE_KEY: Record<string, LabelKey> = {
@@ -150,6 +171,18 @@ export function Sidebar({
   // The shell renders on every screen, so this is one request per page, answered
   // from the same session cookie every other call already carries.
   const me = useResource<Me>(() => currentUser());
+
+  // The channel rows underneath "Channels" — the channels this workspace has
+  // conversations on, which is the only list that is true. They carry no number:
+  // the endpoint counts every conversation a channel has ever held, and a lifetime
+  // total in a sidebar badge reads as "waiting for you", which it is not.
+  const channels = useResource<ConversationChannel[]>(() => conversationChannels());
+  const channelKids: Kid[] = (channels.data ?? []).map((channel) => ({
+    id: channel.kind,
+    name: channelName(t, channel),
+    tone: CHANNEL_TONE[channel.kind] ?? "grey",
+  }));
+  const nav = navigation(channelKids);
   const workspaces = me.data?.workspaces ?? [];
   const storedId = me.data === null ? null : activeWorkspaceId();
   const current = workspaces.find((entry) => entry.id === storedId) ?? workspaces[0] ?? null;
@@ -223,7 +256,7 @@ export function Sidebar({
         </div>
 
         <nav className="flex min-h-0 flex-[1_1_auto] flex-col gap-[18px] overflow-auto">
-          {NAV.map((group) => (
+          {nav.map((group) => (
             <div key={group.label} className="flex flex-col gap-[2px]">
               <div className="p-[0_11px_6px] text-[10.5px] tracking-[.1em] uppercase text-[color:var(--od-faint-5)]">
                 {t[group.label]}
@@ -268,7 +301,9 @@ export function Sidebar({
                       <div className="my-[3px] flex flex-col gap-px ps-[21px]">
                         {item.kids.map((kid) => {
                           const id = kidId(kid);
-                          const count = kid.live ? liveCalls || null : (kid.count ?? null);
+                          // Only the live row carries a number, and only when
+                          // there is one to carry.
+                          const count = kid.live ? liveCalls || null : null;
                           return (
                             <Link
                               key={id}

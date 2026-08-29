@@ -1,5 +1,9 @@
 {
   "account_menu": "Account and workspace",
+  "channel_email": "Email",
+  "channel_phone": "Phone",
+  "channel_sms": "SMS",
+  "channel_web": "Web chat",
   "expand_children": "Show sub-items",
   "group_overview": "Overview",
   "nav_archive": "Call archive",

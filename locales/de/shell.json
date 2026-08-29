@@ -1,5 +1,9 @@
 {
   "account_menu": "Konto und Arbeitsbereich",
+  "channel_email": "E-Mail",
+  "channel_phone": "Telefon",
+  "channel_sms": "SMS",
+  "channel_web": "Web-Chat",
   "expand_children": "Untereinträge anzeigen",
   "group_overview": "Übersicht",
   "nav_archive": "Anrufarchiv",
