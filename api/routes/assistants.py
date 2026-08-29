@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
 from api.dependencies import CurrentUser
 from api.errors import envelope_response
-from api.models import ASSISTANT_STATUSES, ASSISTANT_TEMPLATES, Assistant
+from api.models import ASSISTANT_STATUSES, ASSISTANT_TEMPLATES, ASSISTANT_TOOLS, Assistant
 from api.security import audit
 from api.security.permissions import WorkspaceContext, require_admin, require_viewer
 
@@ -49,6 +49,7 @@ class AssistantOut(BaseModel):
     instructions: str
     language: str | None
     model: str | None
+    tools: list[str]
     created_at: str
     updated_at: str
 
@@ -64,6 +65,7 @@ def _out(row: Assistant) -> AssistantOut:
         instructions=row.instructions,
         language=row.language,
         model=row.model,
+        tools=list(row.tools or []),
         created_at=row.created_at.isoformat(),
         updated_at=row.updated_at.isoformat(),
     )
@@ -122,6 +124,62 @@ def _taken(name: str) -> object:
     )
 
 
+# What each tool needs before it can do anything, and therefore whether offering it
+# would be a promise. Reported rather than hidden: somebody deciding what their
+# assistant may do should see the whole list and why part of it is greyed.
+_TOOL_NEEDS: dict[str, str | None] = {
+    "take_message": None,
+    "search_knowledge": None,
+    "http_request": None,
+    "send_notification": None,
+    # Each of these waits on a subsystem that is not built. The name is the subsystem,
+    # so the screen can say which one without a second table of excuses.
+    "check_calendar": "calendar",
+    "transfer_call": "phone",
+    "end_call": "phone",
+}
+
+AVAILABLE_TOOLS = tuple(name for name, waiting_on in _TOOL_NEEDS.items() if waiting_on is None)
+
+
+class ToolOut(BaseModel):
+    name: str
+    available: bool
+    # The subsystem it waits for, or null when it is ready.
+    waiting_on: str | None
+
+
+@router.get(
+    "/tools", response_model=list[ToolOut], summary="The tools an assistant can be given"
+)
+async def list_tools(context: Annotated[WorkspaceContext, require_viewer]) -> list[ToolOut]:
+    """Served rather than copied, so the screen cannot drift from §B7."""
+    return [
+        ToolOut(name=name, available=_TOOL_NEEDS[name] is None, waiting_on=_TOOL_NEEDS[name])
+        for name in ASSISTANT_TOOLS
+    ]
+
+
+def _checked_tools(tools: list[str]) -> object | None:
+    unknown = sorted(set(tools) - set(ASSISTANT_TOOLS))
+    if unknown:
+        return envelope_response(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="unknown_tool",
+            message=f"Not a tool this product has: {', '.join(unknown)}.",
+        )
+    # A tool whose subsystem is unbuilt cannot be switched on, because switching it on
+    # would be a setting that silently does nothing on the first call that needs it.
+    unavailable = sorted(set(tools) - set(AVAILABLE_TOOLS))
+    if unavailable:
+        return envelope_response(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="tool_unavailable",
+            message=f"Not built yet, so it cannot be switched on: {', '.join(unavailable)}.",
+        )
+    return None
+
+
 @router.get("", response_model=list[AssistantOut], summary="The assistants in this workspace")
 async def list_assistants(
     request: Request, context: Annotated[WorkspaceContext, require_viewer]
@@ -162,6 +220,7 @@ class NewAssistant(BaseModel):
     instructions: str = Field(default="", max_length=_TEXT_MAX)
     language: str | None = Field(default=None, max_length=12)
     model: str | None = Field(default=None, max_length=80)
+    tools: list[str] = Field(default_factory=list)
 
 
 @router.post(
@@ -191,6 +250,9 @@ async def add_assistant(
         )
     if await _name_taken(db, context.id, name):
         return _taken(name)
+    refused = _checked_tools(payload.tools)
+    if refused is not None:
+        return refused
 
     row = Assistant(
         workspace_id=context.id,
@@ -202,6 +264,7 @@ async def add_assistant(
         instructions=payload.instructions,
         language=payload.language,
         model=payload.model,
+        tools=payload.tools,
     )
     db.add(row)
     await db.flush()
@@ -231,6 +294,7 @@ class EditAssistant(BaseModel):
     instructions: str | None = Field(default=None, max_length=_TEXT_MAX)
     language: str | None = Field(default=None, max_length=12)
     model: str | None = Field(default=None, max_length=80)
+    tools: list[str] | None = None
 
 
 @router.patch("/{assistant_id}", response_model=AssistantOut, summary="Edit an assistant")
@@ -265,7 +329,20 @@ async def edit_assistant(
     # `exclude_unset` rather than a null check: clearing `role` back to nothing is a
     # real edit, and a payload that never mentioned it is not.
     sent = payload.model_dump(exclude_unset=True)
-    for field in ("role", "template", "status", "persona", "instructions", "language", "model"):
+    if "tools" in sent:
+        refused = _checked_tools(sent["tools"] or [])
+        if refused is not None:
+            return refused
+    for field in (
+        "role",
+        "template",
+        "status",
+        "persona",
+        "instructions",
+        "language",
+        "model",
+        "tools",
+    ):
         if field in sent:
             setattr(row, field, sent[field])
 

@@ -9,6 +9,7 @@ migration that drops the table instead. So this module imports all of them, and
 from api.models.assistant import (
     ASSISTANT_STATUSES,
     ASSISTANT_TEMPLATES,
+    ASSISTANT_TOOLS,
     Assistant,
 )
 from api.models.attempt import SCOPES, AuthAttempt
@@ -45,6 +46,7 @@ from api.models.webhook import WEBHOOK_EVENTS, Webhook
 __all__ = [
     "ASSISTANT_STATUSES",
     "ASSISTANT_TEMPLATES",
+    "ASSISTANT_TOOLS",
     "BACKUP_KINDS",
     "BACKUP_STATUSES",
     "CATEGORIES",
