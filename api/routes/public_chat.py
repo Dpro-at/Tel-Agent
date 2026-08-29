@@ -30,7 +30,8 @@ from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
 from api.errors import envelope_response
 from api.models import Channel, Conversation, Message
-from api.security.embed import check_origin
+from api.security import quota
+from api.security.embed import check_origin, normalise_origin
 
 logger = logging.getLogger("api.public_chat")
 
@@ -57,6 +58,20 @@ class Accepted(BaseModel):
 
     conversation: str
     message_id: int
+
+
+def _too_many() -> object:
+    """The one refusal that says what it is.
+
+    Unlike the origin check, this one is safe to be honest about: the caller already
+    passed the allowlist, so it is a page the business chose to let in. Telling it to
+    slow down is how a widget behaves well; telling it nothing would have it retry.
+    """
+    return envelope_response(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        code="too_many_messages",
+        message="Too many messages just now. Wait a moment and try again.",
+    )
 
 
 def _refused() -> object:
@@ -112,6 +127,34 @@ async def post_message(
             extra={"reason": refusal.reason, "channel_id": channel.id},
         )
         return _refused()
+
+    # Counted after the origin check and before anything is written. A refused request
+    # must not have cost the thing it was refused from doing - and counting before the
+    # allowlist would let any site on the internet exhaust a business's budget without
+    # ever being let in.
+    #
+    # The origin is normalised for the key, so `https://Shop.test:443` and
+    # `https://shop.test` are one bucket rather than two halves of one.
+    allowed_origin = normalise_origin(origin or "")
+    if not await quota.consume(
+        db, f"webchat:origin:{channel.id}:{allowed_origin}", quota.PER_ORIGIN
+    ):
+        logger.warning(
+            "web chat rate limited",
+            extra={"bucket": "origin", "channel_id": channel.id},
+        )
+        await db.commit()
+        return _too_many()
+
+    if payload.conversation is not None and not await quota.consume(
+        db, f"webchat:conversation:{payload.conversation}", quota.PER_CONVERSATION
+    ):
+        logger.warning(
+            "web chat rate limited",
+            extra={"bucket": "conversation", "channel_id": channel.id},
+        )
+        await db.commit()
+        return _too_many()
 
     conversation = None
     if payload.conversation is not None:

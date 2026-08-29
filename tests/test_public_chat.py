@@ -240,3 +240,85 @@ async def test_an_empty_or_enormous_message_is_refused_before_the_model_sees_it(
     )
     assert answer.status_code == 422
     assert await _count(db, Message) == 0
+
+
+async def test_a_flood_from_one_page_is_stopped(stage, monkeypatch) -> None:
+    """The ceiling, through the endpoint. §B14 makes it not optional.
+
+    Patched down to three rather than sending six hundred: the number is a judgement
+    that lives in `quota.py`, and what this proves is that the endpoint consults it,
+    refuses with something a widget can act on, and stops storing.
+    """
+    import datetime as dt
+
+    from api.security import quota
+
+    http, paths, db = stage
+    monkeypatch.setattr(
+        quota, "PER_ORIGIN", quota.Limit(count=3, window=dt.timedelta(minutes=5))
+    )
+
+    for _ in range(3):
+        answer = await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "hello"},
+            headers={"Origin": ALLOWED},
+        )
+        assert answer.status_code == 201
+
+    refused = await http.post(
+        f"/public/chat/{paths['ours']}/messages",
+        json={"text": "and again"},
+        headers={"Origin": ALLOWED},
+    )
+    assert refused.status_code == 429
+    # Honest, unlike the origin refusal: this caller already passed the allowlist, so
+    # it is a page the business let in, and telling it to wait is how a widget behaves.
+    assert refused.json()["error"]["code"] == "too_many_messages"
+
+    db.expire_all()
+    assert await _count(db, Message) == 3
+
+
+async def test_a_refused_flood_is_still_remembered(stage, monkeypatch) -> None:
+    """The counter has to survive the refusal, or the next request starts again."""
+    import datetime as dt
+
+    from api.models.quota import RateCounter
+    from api.security import quota
+
+    http, paths, db = stage
+    monkeypatch.setattr(
+        quota, "PER_ORIGIN", quota.Limit(count=1, window=dt.timedelta(minutes=5))
+    )
+
+    for _ in range(4):
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "hello"},
+            headers={"Origin": ALLOWED},
+        )
+
+    db.expire_all()
+    rows = (await db.execute(select(RateCounter))).scalars().all()
+    assert len(rows) == 1
+    # One stored message, and a counter that stayed at its ceiling rather than climbing
+    # with every refusal.
+    assert await _count(db, Message) == 1
+    assert rows[0].count == 1
+
+
+async def test_a_refused_origin_never_reaches_the_counter(stage) -> None:
+    """Counting before the allowlist would let any site exhaust a business's budget."""
+    from api.models.quota import RateCounter
+
+    http, paths, db = stage
+    for _ in range(5):
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "hello"},
+            headers={"Origin": "https://evil.test"},
+        )
+
+    db.expire_all()
+    assert (await db.execute(select(RateCounter))).scalars().all() == []

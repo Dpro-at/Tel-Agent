@@ -25,6 +25,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -80,7 +81,9 @@ class Channel(Base):
     # rotated (E5); this one is read on every inbound message and belongs in a plain
     # index-able JSON. Mixing them would mean decrypting to answer "is this origin
     # allowed", on the hottest path the public endpoint has.
-    settings_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    settings_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict, server_default=text("'{}'")
+    )
     webhook_secret: Mapped[str | None] = mapped_column(String(128), nullable=True)
     webhook_path: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
     default_language: Mapped[str | None] = mapped_column(String(12), nullable=True)
