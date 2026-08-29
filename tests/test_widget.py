@@ -167,3 +167,42 @@ async def test_the_widget_can_reach_the_endpoint_it_points_at(stage) -> None:
         headers={"Origin": "http://localhost"},
     )
     assert answer.status_code == 201
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    [
+        "</script><img src=x onerror=alert(1)>",
+        '" + alert(1) + "',
+        chr(0x2028) + "alert(1)",
+    ],
+)
+def test_the_address_cannot_end_the_script_block(hostile) -> None:
+    """CodeQL found this one, and it was real.
+
+    `json.dumps` escapes quotes and backslashes and stops there - it leaves `<` alone,
+    so a value containing `</script>` closes the block and everything after it parses
+    as markup. The address is matched against the database before it reaches the page,
+    so today it can only be what this product generated; that is not a reason to
+    interpolate it unescaped, it is a reason the bug would have waited for a second
+    caller.
+    """
+    from api.routes.widget import _js_string, _page
+
+    encoded = _js_string(hostile)
+    page = _page(hostile)
+
+    # One closing tag: the one that ends the widget's own script.
+    assert page.count("</script>") == 1
+    # Nothing from the address arrives as markup.
+    assert "<img" not in page
+
+    # And it cannot leave the string it is in. The encoded form is a JSON string whose
+    # only unescaped quotes are its own delimiters - `" + alert(1) + "` stays inside it
+    # rather than being three tokens, which is why asserting on the raw text would have
+    # been the wrong question.
+    assert encoded.startswith('"') and encoded.endswith('"')
+    inner = encoded[1:-1]
+    assert '"' not in inner.replace(chr(92) + '"', "")
+    assert "<" not in inner
+    assert encoded in page

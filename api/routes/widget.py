@@ -109,6 +109,39 @@ async def embed_script(request: Request) -> Response:
     )
 
 
+def _js_string(value: str) -> str:
+    """A JSON string safe to sit inside a `<script>` block.
+
+    `json.dumps` escapes quotes and backslashes and stops there - it does not touch
+    `<`, so a value containing `</script>` ends the block and everything after it is
+    parsed as markup. That is the whole of the reflective-XSS class, and JSON encoding
+    alone is the usual near-miss.
+
+    U+2028 and U+2029 are here too: they are valid inside a JSON string and are
+    line terminators to a JavaScript parser, so an unescaped one truncates the
+    statement.
+
+    This value is a channel address that was matched against the database before
+    reaching here, so today it can only be what this product generated. That is not a
+    reason to interpolate it unescaped - it is a reason the bug would have waited for
+    somebody to add a second caller.
+    """
+    encoded = json.dumps(value)
+    # The right-hand sides are the six-character escape *sequences*, so what lands
+    # in the page is a backslash followed by u003c - not the character itself.
+    # Replacing `<` with `<` is the version of this that reads correctly and does
+    # nothing at all, which is how the first attempt at this went.
+    for raw, escaped in (
+        ("<", "\\u003c"),
+        (">", "\\u003e"),
+        ("&", "\\u0026"),
+        ("\u2028", "\\u2028"),
+        ("\u2029", "\\u2029"),
+    ):
+        encoded = encoded.replace(raw, escaped)
+    return encoded
+
+
 def _page(path: str) -> str:
     """The widget's document. Written here rather than in `web/` on purpose.
 
@@ -160,7 +193,7 @@ def _page(path: str) -> str:
 </div>
 <script>
 (function () {{
-  var PATH = {json.dumps(path)};
+  var PATH = {_js_string(path)};
   var panel = document.getElementById("panel");
   var bubble = document.getElementById("bubble");
   var log = document.getElementById("log");
