@@ -39,21 +39,10 @@ _MASK_PREFIX_CHARACTERS = "•*"
 
 
 def _encryption_available() -> bool:
-    """Whether this installation can encrypt at all.
-
-    Asked before writing rather than discovered inside the INSERT. The failure there
-    surfaced as an unhandled exception whose SQLAlchemy parameter dump carried the
-    plaintext password into the log - so this check is what keeps a missing key from
-    becoming a leaked one.
-    """
-    from api.config import get_settings
+    """Whether this installation can encrypt at all - see `crypto.key_available`."""
     from api.security import crypto
 
-    try:
-        crypto.load_key(get_settings().encryption_key)
-    except crypto.EncryptionKeyError:
-        return False
-    return True
+    return crypto.key_available()
 
 
 def _is_echoed_mask(value: Any) -> bool:

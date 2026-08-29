@@ -52,6 +52,7 @@ from api.routes import recovery as recovery_routes
 from api.routes import rules as rule_routes
 from api.routes import settings as settings_routes
 from api.routes import system as system_routes
+from api.routes import webhooks as webhook_routes
 from api.routes import workspaces as workspace_routes
 
 TAGS_METADATA = [
@@ -275,6 +276,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(number_routes.router)
     app.include_router(assistant_routes.router)
     app.include_router(knowledge_routes.router)
+    app.include_router(webhook_routes.router)
     app.include_router(rule_routes.router)
     app.include_router(contact_routes.router)
 

@@ -75,7 +75,8 @@ export const GROUPS: { id: string; label: Key; note: Key; rows: RailRow[] }[] = 
       { icon: "calendar", title: "row_booking", panel: "booking", enabled: false, hint: "pending_booking" },
       { icon: "forward", title: "row_forward", panel: "forward", enabled: false, hint: "pending_forward" },
       { icon: "plug", title: "row_apps", panel: "apps", enabled: false, hint: "pending_apps" },
-      { icon: "webhook", title: "row_webhooks", panel: "webhooks", enabled: false, hint: "pending_webhooks" },
+      // The one row in this group with a table behind it.
+      { icon: "webhook", title: "row_webhooks", panel: "webhooks" },
     ],
   },
   {
