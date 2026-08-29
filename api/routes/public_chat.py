@@ -123,7 +123,15 @@ async def post_message(
         return _refused()
 
     settings = channel.settings_json or {}
-    refusal = check_origin(origin, settings.get("allowed_origins"))
+    # `own` is this installation's origin: the widget is served from here, inside an
+    # iframe on the customer's page, so the browser stamps this origin on its POST
+    # rather than the site the iframe sits in. See `check_origin` for why accepting it
+    # gives a browser nothing, and for what really decides who may embed.
+    refusal = check_origin(
+        origin,
+        settings.get("allowed_origins"),
+        own=str(request.base_url).rstrip("/"),
+    )
     if refusal is not None:
         logger.info(
             "web chat refused",

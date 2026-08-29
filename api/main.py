@@ -55,6 +55,7 @@ from api.routes import settings as settings_routes
 from api.routes import system as system_routes
 from api.routes import web_channel as web_channel_routes
 from api.routes import webhooks as webhook_routes
+from api.routes import widget as widget_routes
 from api.routes import workspaces as workspace_routes
 
 TAGS_METADATA = [
@@ -280,6 +281,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(knowledge_routes.router)
     app.include_router(public_chat_routes.router)
     app.include_router(web_channel_routes.router)
+    app.include_router(widget_routes.router)
     app.include_router(webhook_routes.router)
     app.include_router(rule_routes.router)
     app.include_router(contact_routes.router)

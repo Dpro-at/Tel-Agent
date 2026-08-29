@@ -48,12 +48,18 @@ PUBLIC_PATHS: frozenset[str] = frozenset(
         # of the customer's page; guarded by the origin allowlist instead of a
         # session. Listed by pattern so the route-table walk knows it is deliberate.
         "/public/chat/{path}/messages",
+        # The widget: the script a customer pastes and the document it frames. Public
+        # for the same reason - both are fetched by a stranger's browser, on a page
+        # this installation does not control. Neither reads a session; the page carries
+        # its own `frame-ancestors` policy instead (§B14).
+        "/embed.js",
+        "/widget/{path}",
     }
 )
 
 # Parameterised public routes carry a token in the path, so the request-time URL
 # never equals its pattern. The prefix is the runtime half of the two entries above.
-PUBLIC_PREFIXES: tuple[str, ...] = ("/api/invites/", "/public/chat/")
+PUBLIC_PREFIXES: tuple[str, ...] = ("/api/invites/", "/public/chat/", "/widget/")
 
 
 def is_public(path: str) -> bool:
