@@ -51,6 +51,15 @@ MESSAGES: dict[str, frozenset[str]] = {
     "task_failed": frozenset({"task"}),
     # Mail - the failure the forgot-password screen depends on not happening quietly.
     "mail_failed": frozenset(),
+    # A stranger wrote in on the web chat. Not a failure and not a decision - a thing
+    # that happened, which somebody has to see. Without it the widget is a box that
+    # swallows messages: they are stored, they are searchable, and nobody is told.
+    #
+    # Only for the first message of a thread. A visitor typing five lines is one
+    # arrival, and five rows in the tray would bury the one that came from somebody
+    # else - the notification is "somebody started talking to you", not "a message
+    # exists".
+    "web_chat_started": frozenset({"preview"}),
 }
 
 # Longer than this and it stops being a hint and starts being a log. The full text is
