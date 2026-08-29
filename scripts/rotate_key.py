@@ -37,6 +37,7 @@ from api.security.crypto import DecryptionFailed, decrypt, encrypt, load_key
 ENCRYPTED_COLUMNS: list[tuple[str, str, str]] = [
     ("channels", "id", "credentials_encrypted"),
     ("settings", "id", "secret_value"),
+    ("webhooks", "id", "secret"),
 ]
 
 

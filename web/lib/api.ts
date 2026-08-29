@@ -853,6 +853,57 @@ export function removeKnowledge(id: number): Promise<void> {
   return api<void>(`/api/knowledge/${id}`, { method: "DELETE" });
 }
 
+// --- Webhooks: how your own software hears what happened -----------------------
+
+export type Webhook = {
+  id: number;
+  name: string | null;
+  url: string;
+  events: string[];
+  enabled: boolean;
+  /** Last four characters. The secret itself is returned once and never again. */
+  secret_preview: string;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Only ever the answer to creating one or rotating one. */
+export type WebhookWithSecret = Webhook & { secret: string };
+
+/** Served rather than copied, so the list cannot drift from the server's. */
+export function webhookEvents(): Promise<string[]> {
+  return api<string[]>("/api/webhooks/events");
+}
+
+export function webhooksList(): Promise<Webhook[]> {
+  return api<Webhook[]>("/api/webhooks");
+}
+
+/** The response carries the signing secret. It is the only time it can be read. */
+export function addWebhook(hook: {
+  url: string;
+  events: string[];
+  name?: string | null;
+}): Promise<WebhookWithSecret> {
+  return api<WebhookWithSecret>("/api/webhooks", { method: "POST", json: hook });
+}
+
+export function changeWebhook(
+  id: number,
+  hook: Partial<{ url: string; events: string[]; name: string | null; enabled: boolean }>,
+): Promise<Webhook> {
+  return api<Webhook>(`/api/webhooks/${id}`, { method: "PATCH", json: hook });
+}
+
+/** Replaces the secret and returns the new one once, on the same terms. */
+export function rotateWebhookSecret(id: number): Promise<WebhookWithSecret> {
+  return api<WebhookWithSecret>(`/api/webhooks/${id}/secret`, { method: "POST" });
+}
+
+export function removeWebhook(id: number): Promise<void> {
+  return api<void>(`/api/webhooks/${id}`, { method: "DELETE" });
+}
+
 // --- Routing rules ------------------------------------------------------------
 
 export type RuleAction = "pass" | "block" | "ai";

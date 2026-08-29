@@ -12,7 +12,19 @@ import {
   type PanelId,
   type RailRow,
 } from "@/lib/editor/data";
-import { assistant as fetchAssistant, changeAssistant, type Assistant } from "@/lib/api";
+import {
+  addWebhook,
+  ApiError,
+  assistant as fetchAssistant,
+  changeAssistant,
+  changeWebhook,
+  removeWebhook,
+  rotateWebhookSecret,
+  webhookEvents,
+  webhooksList,
+  type Assistant,
+  type Webhook,
+} from "@/lib/api";
 import { interpolate } from "@/lib/i18n";
 import type { Locale } from "@/lib/locales";
 import { useResource } from "@/lib/use-resource";
@@ -307,7 +319,9 @@ export function AssistantEditor({
                         onCancel={loaded.reload}
                       />
                     ) : null}
-                    {panel !== "persona" && panel !== "instructions" ? (
+                    {panel === "webhooks" ? <WebhooksPanel t={t} /> : null}
+
+                    {panel !== "persona" && panel !== "instructions" && panel !== "webhooks" ? (
                       <PendingPanel t={t} panel={panel} />
                     ) : null}
                   </div>
@@ -546,6 +560,276 @@ function InstructionsPanel({
       </div>
 
       <PanelFooter t={t} saving={saving} onSave={onSave} onCancel={onCancel} />
+    </div>
+  );
+}
+
+/**
+ * Webhooks are a workspace's, not an assistant's.
+ *
+ * The rail puts the row inside the assistant editor because that is where a person
+ * thinks about what happens after a conversation - but the table has only
+ * `workspace_id`, per §B5, and every assistant in the workspace shares these. Nothing
+ * in the panel implies otherwise, and when a webhooks screen of its own exists this
+ * becomes a link to it.
+ */
+function WebhooksPanel({ t }: { t: EditorDictionary }) {
+  const hooks = useResource<Webhook[]>(() => webhooksList(), []);
+  const vocabulary = useResource<string[]>(() => webhookEvents(), []);
+  const [adding, setAdding] = useState(false);
+  const [url, setUrl] = useState("");
+  const [name, setName] = useState("");
+  const [chosen, setChosen] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  // Held only until the person closes it, and written nowhere else - the whole point
+  // is that the secret ends up in one place: the system that receives the deliveries.
+  const [freshSecret, setFreshSecret] = useState<string | null>(null);
+
+  const describe = (thrown: unknown): string => {
+    if (thrown instanceof ApiError) {
+      if (thrown.code === "invalid_url") return t.w_error_url;
+      if (thrown.code === "no_events" || thrown.code === "unknown_event") {
+        return t.w_error_events;
+      }
+      if (thrown.code === "encryption_key_missing") return t.w_error_no_key;
+      return thrown.message;
+    }
+    return String(thrown);
+  };
+
+  const guard = async (work: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      await work();
+    } catch (thrown) {
+      setProblem(describe(thrown));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const create = () =>
+    guard(async () => {
+      const made = await addWebhook({ url, events: chosen, name: name.trim() || null });
+      setFreshSecret(made.secret);
+      setAdding(false);
+      setUrl("");
+      setName("");
+      setChosen([]);
+      hooks.reload();
+    });
+
+  return (
+    <div className="flex flex-col gap-4 p-[20px_24px_28px]">
+      <p className="text-od-faint-2 m-0 max-w-[62ch] text-pretty text-[12.5px]">
+        {t.w_nothing_sent_yet}
+      </p>
+
+      {freshSecret !== null ? (
+        <div className="border-od-violet-border rounded-[10px] border bg-[rgba(139,124,255,.10)] p-[16px_18px]">
+          <div className="text-od-text-2 text-[13px] font-semibold">{t.w_secret_label}</div>
+          <div
+            dir="ltr"
+            className="mono ltr-data text-od-text-2 border-od-border-6 bg-od-canvas-2 mt-2 rounded-md border p-[9px_11px] text-start text-[12.5px] [overflow-wrap:anywhere]"
+          >
+            {freshSecret}
+          </div>
+          <p className="text-od-muted-4 mt-[10px] max-w-[58ch] text-pretty text-[12.5px]">
+            {t.w_secret_once}
+          </p>
+          <button
+            type="button"
+            onClick={() => setFreshSecret(null)}
+            className="border-od-stroke bg-od-raise-10 text-od-text-2 mt-3 cursor-pointer rounded-[7px] border p-[7px_13px] text-[13px] font-semibold"
+          >
+            {t.w_done}
+          </button>
+        </div>
+      ) : null}
+
+      {hooks.data !== null && hooks.data.length === 0 && !adding ? (
+        <p className="text-od-muted-4 m-0 max-w-[60ch] text-pretty">{t.w_empty}</p>
+      ) : null}
+
+      {(hooks.data ?? []).length > 0 ? (
+        <div className="border-od-line bg-od-panel-deep-3 overflow-hidden rounded-[10px] border">
+          {(hooks.data ?? []).map((hook, index) => (
+            <div
+              key={hook.id}
+              className={`flex flex-wrap items-center gap-x-4 gap-y-3 p-[13px_16px] ${
+                index === 0 ? "" : "border-t border-[color:var(--od-raise-6)]"
+              }`}
+            >
+              <div className="min-w-[180px] flex-[1_1_240px]">
+                <div className="text-od-text-2 font-medium text-pretty">
+                  {hook.name ?? hook.url}
+                </div>
+                <div
+                  dir="ltr"
+                  className="mono ltr-data text-od-faint-2 mt-[3px] text-start text-[12px] [overflow-wrap:anywhere]"
+                >
+                  {hook.url}
+                </div>
+                <div className="text-od-muted-5 mt-[4px] text-[12.5px]">
+                  {hook.events.join(" · ")}
+                </div>
+              </div>
+
+              <span
+                dir="ltr"
+                className="mono ltr-data text-od-faint-2 text-[12px]"
+                title={t.w_secret_label}
+              >
+                {hook.secret_preview}
+              </span>
+
+              <button
+                type="button"
+                onClick={() =>
+                  guard(async () => {
+                    await changeWebhook(hook.id, { enabled: !hook.enabled });
+                    hooks.reload();
+                  })
+                }
+                disabled={busy}
+                className="border-od-line text-od-muted-4 hover:text-od-text-2 cursor-pointer rounded-md border bg-transparent p-[5px_10px] text-[12.5px] disabled:opacity-50"
+              >
+                {hook.enabled ? t.w_enabled : t.w_disabled}
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  guard(async () => {
+                    const rolled = await rotateWebhookSecret(hook.id);
+                    setFreshSecret(rolled.secret);
+                    hooks.reload();
+                  })
+                }
+                disabled={busy}
+                title={t.w_rotate_note}
+                className="border-od-line text-od-muted-4 hover:text-od-text-2 cursor-pointer rounded-md border bg-transparent p-[5px_10px] text-[12.5px] disabled:opacity-50"
+              >
+                {t.w_rotate}
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  guard(async () => {
+                    await removeWebhook(hook.id);
+                    hooks.reload();
+                  })
+                }
+                disabled={busy}
+                className="border-od-line text-od-muted-4 hover:text-od-text-2 cursor-pointer rounded-md border bg-transparent p-[5px_10px] text-[12.5px] disabled:opacity-50"
+              >
+                {t.w_remove}
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {adding ? (
+        <div className="border-od-border-6 flex flex-col gap-3 rounded-[10px] border p-[16px_18px]">
+          <label className="flex flex-col gap-[7px]">
+            <span className="text-od-text-3 text-[13px] font-medium">{t.w_url}</span>
+            <input
+              dir="ltr"
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              placeholder="https://"
+              className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono rounded-[7px] border p-[9px_11px] text-start text-[13px]"
+            />
+          </label>
+
+          <label className="flex flex-col gap-[7px]">
+            <span className="text-od-text-3 text-[13px] font-medium">{t.w_name}</span>
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="border-od-border-6 bg-od-canvas-2 text-od-text-2 rounded-[7px] border p-[9px_11px] text-[13px]"
+            />
+            <span className="text-od-faint-2 text-[12px]">{t.w_name_note}</span>
+          </label>
+
+          <div className="flex flex-col gap-[7px]">
+            <span className="text-od-text-3 text-[13px] font-medium">{t.w_events}</span>
+            <div className="flex flex-wrap gap-2">
+              {(vocabulary.data ?? []).map((event) => {
+                const on = chosen.includes(event);
+                return (
+                  <button
+                    key={event}
+                    type="button"
+                    onClick={() =>
+                      setChosen((current) =>
+                        current.includes(event)
+                          ? current.filter((entry) => entry !== event)
+                          : [...current, event],
+                      )
+                    }
+                    className="mono cursor-pointer rounded-full border p-[6px_12px] text-[12px] whitespace-nowrap"
+                    style={{
+                      borderColor: on ? "var(--od-violet-border)" : "var(--od-border-7)",
+                      background: on ? "rgba(139,124,255,.13)" : "transparent",
+                      color: on ? "var(--od-violet-3)" : "var(--od-muted-4)",
+                    }}
+                  >
+                    {event}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {problem !== null ? (
+            <p className="m-0 text-pretty text-[13px] text-[color:var(--od-red-text)]">
+              {problem}
+            </p>
+          ) : null}
+
+          <div className="flex flex-wrap justify-end gap-[10px]">
+            <button
+              type="button"
+              onClick={() => {
+                setAdding(false);
+                setProblem(null);
+              }}
+              className="border-od-border-2 text-od-muted hover:text-od-text-2 cursor-pointer rounded-[7px] border bg-transparent p-[8px_14px] text-[13px]"
+            >
+              {t.cancel}
+            </button>
+            <button
+              type="button"
+              onClick={create}
+              disabled={busy || url.trim() === "" || chosen.length === 0}
+              className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[8px_14px] text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busy ? t.saving : t.save}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {problem !== null ? (
+            <span className="text-[13px] text-[color:var(--od-red-text)]">{problem}</span>
+          ) : (
+            <span />
+          )}
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="border-od-line text-od-muted-4 hover:text-od-text-2 cursor-pointer rounded-[7px] border bg-transparent p-[8px_14px] text-[13px]"
+          >
+            {t.w_add}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

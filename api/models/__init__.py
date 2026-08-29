@@ -40,6 +40,7 @@ from api.models.notification import CATEGORIES, Notification
 from api.models.rule import RULE_ACTIONS, Rule
 from api.models.session import Session
 from api.models.setting import Setting
+from api.models.webhook import WEBHOOK_EVENTS, Webhook
 
 __all__ = [
     "ASSISTANT_STATUSES",
@@ -58,6 +59,7 @@ __all__ = [
     "ROLES",
     "RULE_ACTIONS",
     "SCOPES",
+    "WEBHOOK_EVENTS",
     "App",
     "AppInstall",
     "Assistant",
@@ -84,6 +86,7 @@ __all__ = [
     "Setting",
     "User",
     "UserKey",
+    "Webhook",
     "Workspace",
     "enum_column",
     "utc_now_column",

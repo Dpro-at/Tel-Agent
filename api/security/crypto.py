@@ -135,3 +135,20 @@ def mask(value: str) -> str:
     if len(value) <= 8:
         return "••••"
     return f"••••{value[-4:]}"
+
+
+def key_available() -> bool:
+    """Whether this installation can encrypt at all.
+
+    Asked *before* a write rather than discovered inside the INSERT. A missing key
+    surfaces there as an unhandled exception whose SQLAlchemy parameter dump carries
+    the plaintext straight into the log - so this check is what keeps a missing key
+    from becoming a leaked one. Every route that writes an encrypted column calls it.
+    """
+    from api.config import get_settings
+
+    try:
+        load_key(get_settings().encryption_key)
+    except EncryptionKeyError:
+        return False
+    return True

@@ -72,6 +72,12 @@ EVENTS = (
     "knowledge_added",
     "knowledge_changed",
     "knowledge_removed",
+    # Webhooks. A URL that receives conversations is an export of them, and the
+    # secret that signs it is a credential - so adding one, changing where it points
+    # and removing it all need a name attached afterwards.
+    "webhook_added",
+    "webhook_changed",
+    "webhook_removed",
 )
 
 
