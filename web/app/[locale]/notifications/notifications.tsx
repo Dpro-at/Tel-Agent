@@ -326,13 +326,17 @@ export function Notifications({ locale, t }: { locale: Locale; t: NotificationsD
                       >
                         {busy === item.id ? t.resolving : t.resolve}
                       </button>
+                      {/* "Open conversation", not "Open call": a call is one kind of
+                          conversation and the web chat is another, and this button is
+                          drawn from `conversation_id`, which every channel has. The
+                          label it used to borrow belonged to a fixture about an SMS. */}
                       {item.conversation_id ? (
                         <Link
                           href={`/${locale}/conversations`}
                           className="cursor-pointer rounded-md border bg-transparent p-[8px_14px] text-[13px] font-medium whitespace-nowrap"
                           style={{ borderColor: tone.primaryBorder, color: tone.primaryColor }}
                         >
-                          {t.open_sms_secondary}
+                          {t.open_conversation}
                         </Link>
                       ) : null}
                     </div>

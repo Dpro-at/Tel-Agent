@@ -99,6 +99,13 @@ gets postponed. The order is the whole protection.
 
 Steps 1–2 are plumbing. **Step 4 is the product. Step 5 is what protects Milestone 11.**
 
+**Where this stands.** Steps 0, 1 and 2 are done and proven in a browser, not only in
+tests: a message from an origin the channel does not allow is refused and nothing is
+stored; a message typed into the embedded widget reaches the agent process, is stored,
+and raises a notification so a person knows a stranger wrote in; and the greeting
+arrives streamed, chunk by chunk, over server-sent events that close when the reply
+ends. Step 3 is the model, and is next.
+
 Step 5 is not a nicety. It is the whole of what the old phone-first order was
 protecting: an agent that composes a complete answer and then sends it is an agent that
 can never be put on a phone. Cancellation is proven here, in the easy case, while it is

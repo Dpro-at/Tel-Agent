@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 from agent.reply import reply as generate_reply
 from api.errors import envelope_response
 from api.models import Channel, Conversation, Message
+from api.notifications import raise_notification
 from api.security import captcha, quota
 from api.security.embed import check_origin, normalise_origin
 
@@ -93,6 +94,24 @@ def _refused() -> object:
         code="origin_not_allowed",
         message="This page is not allowed to use this chat.",
     )
+
+
+# What the tray shows of a message. Long enough to tell one arrival from another, short
+# enough that a row stays a row.
+PREVIEW_MAX = 80
+
+
+def _preview(text: str) -> str:
+    collapsed = " ".join(text.split())
+    if len(collapsed) <= PREVIEW_MAX:
+        return collapsed
+    # Cut on a word where there is one nearby, because a preview that ends mid-word
+    # reads as corrupted rather than as trimmed.
+    cut = collapsed[: PREVIEW_MAX - 1]
+    space = cut.rfind(" ")
+    if space > PREVIEW_MAX - 20:
+        cut = cut[:space]
+    return cut.rstrip() + "…"
 
 
 async def _channel(db: DbSession, path: str) -> Channel | None:
@@ -210,6 +229,7 @@ async def post_message(
                 extra={"channel_id": channel.id},
             )
 
+    started = conversation is None
     if conversation is None:
         conversation = Conversation(
             workspace_id=channel.workspace_id,
@@ -237,6 +257,37 @@ async def post_message(
     db.add(message)
     await db.commit()
     await db.refresh(message)
+
+    if started:
+        # After the commit, and only for the first message of a thread. A visitor
+        # typing five lines is one arrival; five rows in the tray would bury the one
+        # that came from somebody else.
+        #
+        # `raise_notification` commits on its own and swallows its own failures, which
+        # is the behaviour wanted here: a widget that stops accepting messages because
+        # the tray is unhappy is worse than a message nobody was told about.
+        await raise_notification(
+            db,
+            workspace_id=channel.workspace_id,
+            category="review",
+            message_key="web_chat_started",
+            # Trimmed, and it is the visitor's own words - the tray shows it to
+            # somebody deciding whether to open the thread, and a whole paragraph
+            # there is a tray nobody scans.
+            params={"preview": _preview(payload.text)},
+            # A person has to act, because at step 2 nobody else can: the reply is a
+            # greeting that says "somebody will read it", and a promise made to a
+            # visitor is what puts this in the waiting list rather than the log.
+            #
+            # `needs_decision` is fixed at creation and never toggled, so it has to be
+            # true of the moment it was raised. When the agent can answer (step 3) a new
+            # chat becomes informational and this becomes False - and the rows raised
+            # before then stay honest about the product that raised them.
+            needs_decision=True,
+            primary_action="open_conversation",
+            action_payload={"conversation_id": conversation.id},
+            conversation_id=conversation.id,
+        )
 
     logger.info(
         "web chat message stored",

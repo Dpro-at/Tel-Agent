@@ -10,7 +10,6 @@ import {
   CONTACTS_PAGE,
   contactsList,
   removeContact,
-  type Contact,
   type ContactPage,
 } from "@/lib/api";
 import type { Locale } from "@/lib/locales";

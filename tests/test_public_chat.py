@@ -668,3 +668,95 @@ async def test_a_handle_from_another_channel_gets_no_stream(stage) -> None:
         params={"conversation": ours["conversation"]},
     )
     assert answer.status_code == 403
+
+
+# --- Somebody has to be told ------------------------------------------------
+
+
+async def test_a_new_thread_tells_the_operator(stage) -> None:
+    """Otherwise the widget is a box that swallows messages.
+
+    They are stored and searchable, and nobody knows to look.
+    """
+    from api.models import Notification
+
+    http, paths, db = stage
+    await http.post(
+        f"/public/chat/{paths['ours']}/messages",
+        json={"text": "  Do you   open on Saturday?  "},
+        headers={"Origin": ALLOWED},
+    )
+
+    db.expire_all()
+    rows = (await db.execute(select(Notification))).scalars().all()
+    assert len(rows) == 1
+    notice = rows[0]
+    assert notice.message_key == "web_chat_started"
+    # The visitor's own words, with the whitespace they typed collapsed.
+    assert notice.params["preview"] == "Do you open on Saturday?"
+    # And it opens the thread rather than making somebody find it.
+    assert notice.primary_action == "open_conversation"
+    assert notice.conversation_id is not None
+    # Waiting, not filed. At step 2 the reply promises the visitor that somebody will
+    # read it, and that promise is what a person has to keep.
+    assert notice.needs_decision is True
+
+
+async def test_a_talkative_visitor_is_still_one_arrival(stage) -> None:
+    """Five rows in the tray would bury the one that came from somebody else."""
+    from api.models import Notification
+
+    http, paths, db = stage
+    first = (
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "hello"},
+            headers={"Origin": ALLOWED},
+        )
+    ).json()
+    for line in ("and another thing", "and one more"):
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": line, "conversation": first["conversation"]},
+            headers={"Origin": ALLOWED},
+        )
+
+    db.expire_all()
+    assert await _count(db, Notification) == 1
+    assert await _count(db, Message) == 3
+
+
+async def test_a_refused_message_tells_nobody_anything(stage) -> None:
+    """A tray that fills up from refused requests is a denial of service on attention."""
+    from api.models import Notification
+
+    http, paths, db = stage
+    for _ in range(3):
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "hello"},
+            headers={"Origin": "https://evil.test"},
+        )
+
+    db.expire_all()
+    assert await _count(db, Notification) == 0
+
+
+async def test_a_long_message_is_trimmed_for_the_tray(stage) -> None:
+    from api.models import Notification
+    from api.routes.public_chat import PREVIEW_MAX
+
+    http, paths, db = stage
+    await http.post(
+        f"/public/chat/{paths['ours']}/messages",
+        json={"text": "I have a question about " + "something ordinary " * 20},
+        headers={"Origin": ALLOWED},
+    )
+
+    db.expire_all()
+    notice = (await db.execute(select(Notification))).scalars().one()
+    preview = notice.params["preview"]
+    assert len(preview) <= PREVIEW_MAX
+    # Trimmed, not corrupted: it ends on a word and says that it was cut.
+    assert preview.endswith("…")
+    assert not preview[:-1].endswith(" ")
