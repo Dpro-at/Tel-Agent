@@ -37,9 +37,7 @@ async def stage(migrated: AsyncSession, settings: Settings, database_url: str):
             persona="You answer for Wagner & Partner.",
             instructions="Never quote a price that is not in the catalogue.",
         ),
-        "nacht": Assistant(
-            workspace_id=mine.id, name="Nacht", template="ooh", status="paused"
-        ),
+        "nacht": Assistant(workspace_id=mine.id, name="Nacht", template="ooh", status="paused"),
         # The same name next door: the uniqueness is per workspace, and a test that
         # does not prove that is a test that would pass against a global constraint.
         "theirs": Assistant(workspace_id=theirs.id, name="Lena", template="blank"),
@@ -123,9 +121,7 @@ async def test_a_viewer_reads_and_never_writes(stage) -> None:
             f"/api/assistants/{ids['lena']}", json={"persona": "rewritten"}
         )
     ).status_code == 403
-    assert (
-        await clients["lukas"].delete(f"/api/assistants/{ids['lena']}")
-    ).status_code == 403
+    assert (await clients["lukas"].delete(f"/api/assistants/{ids['lena']}")).status_code == 403
 
 
 async def test_creating_one_and_reading_it_back(stage) -> None:
@@ -223,9 +219,7 @@ async def test_pausing_and_deleting(stage) -> None:
     assert (
         await clients["mohamed"].delete(f"/api/assistants/{ids['lena']}")
     ).status_code == 204
-    assert (
-        await clients["mohamed"].get(f"/api/assistants/{ids['lena']}")
-    ).status_code == 404
+    assert (await clients["mohamed"].get(f"/api/assistants/{ids['lena']}")).status_code == 404
 
     # And the name it held is free again, which is the whole reason the delete is
     # real rather than a flag.
