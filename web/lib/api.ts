@@ -919,6 +919,41 @@ export function removeWebhook(id: number): Promise<void> {
   return api<void>(`/api/webhooks/${id}`, { method: "DELETE" });
 }
 
+// --- The web chat channel ------------------------------------------------------
+
+export type WebChannel = {
+  enabled: boolean;
+  /** Empty refuses everything. It is not "unrestricted" - see §B14. */
+  allowed_origins: string[];
+  recaptcha_site_key: string | null;
+  recaptcha_threshold: number;
+  /** Masked, or null. The secret itself never leaves the server after it is saved. */
+  recaptcha_secret_preview: string | null;
+  embed_path: string;
+  embed_snippet: string;
+};
+
+export function webChannel(): Promise<WebChannel> {
+  return api<WebChannel>("/api/channels/web");
+}
+
+/**
+ * Any subset. `recaptcha_secret` is write-only: omit it to leave the stored one
+ * alone, send "" to remove it, and never send back the mask that was displayed -
+ * the server ignores an echoed mask, but not sending it is the honest half.
+ */
+export function saveWebChannel(
+  fields: Partial<{
+    enabled: boolean;
+    allowed_origins: string[];
+    recaptcha_site_key: string | null;
+    recaptcha_secret: string;
+    recaptcha_threshold: number;
+  }>,
+): Promise<WebChannel> {
+  return api<WebChannel>("/api/channels/web", { method: "PUT", json: fields });
+}
+
 // --- Routing rules ------------------------------------------------------------
 
 export type RuleAction = "pass" | "block" | "ai";

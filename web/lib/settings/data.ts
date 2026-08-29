@@ -14,6 +14,9 @@ export const TABS: { id: string; label: Key; href?: string }[] = [
   { id: "profile", label: "tab_profile" },
   { id: "general", label: "tab_general" },
   { id: "numbers", label: "tab_numbers", href: "/numbers" },
+  // §A6.8 item 4. One card per channel; web chat is the only one built, and the
+  // apps screen lists it as an installed extension rather than configuring it.
+  { id: "channels", label: "tab_channels" },
   { id: "catalogue", label: "tab_catalogue", href: "/catalogue" },
   { id: "users", label: "tab_users" },
   { id: "recording", label: "tab_recording" },
@@ -50,11 +53,24 @@ export type Field = { id: string; label: Key; help?: Key; control: Control };
 
 export type Section = { title: Key; body: Key; fields: Field[] };
 
-export const SECTIONS: Record<string, Section> = {
+/**
+ * Every tab that renders here, and this type is what keeps the two lists together.
+ *
+ * `Record<string, Section>` promised a `Section` for any string, so adding a tab id
+ * with no section here type-checked and then crashed on `section.title` the first time
+ * somebody clicked it. The index signature was the lie; `TABS[number]["id"]` is the
+ * truth, and it makes the omission a compile error instead of a blank screen.
+ *
+ * Tabs that navigate elsewhere (`href`) never reach this lookup, so they are optional.
+ */
+export const SECTIONS: Partial<Record<(typeof TABS)[number]["id"], Section>> = {
   // No fields: the identity card and the language panel are wired, the name field
   // had no column behind it, and editing the email needs the current password (it
   // is where reset codes go) - that confirmation flow is its own future piece.
   profile: { title: "sec_profile_title", body: "sec_profile_body", fields: [] },
+  // No fields: the channel card is wired and draws its own controls, because what it
+  // edits is a list and two credentials rather than a row of switches.
+  channels: { title: "sec_channels_title", body: "sec_channels_body", fields: [] },
   general: {
     title: "sec_general_title",
     body: "sec_general_body",

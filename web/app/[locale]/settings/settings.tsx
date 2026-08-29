@@ -8,8 +8,8 @@ import { LiveSettings, type FieldCopy } from "@/components/settings/live-setting
 import { Sidebar } from "@/components/shell/sidebar";
 import { StatePreview, type ScreenState } from "@/components/state-preview";
 import {
-  ApiError,
   ASSIGNABLE_ROLES,
+  ApiError,
   accountEvents,
   changeMemberRole,
   changePassword,
@@ -18,12 +18,15 @@ import {
   membersList,
   regenerateInvite,
   removeMember,
+  saveWebChannel,
   sendTestMail,
   signOutEverywhereElse,
   updateMyLocale,
+  webChannel,
   type AccountEvent,
   type InviteLink,
   type Member,
+  type WebChannel,
 } from "@/lib/api";
 import { interpolate } from "@/lib/i18n";
 import type { Locale } from "@/lib/locales";
@@ -203,7 +206,11 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
 
   const offline = state === "offline";
   const empty = state === "empty";
-  const section = SECTIONS[tab];
+  // Optional now, and honestly so: a tab that links to its own screen has no section
+  // here, and a tab that renders a wired panel may not need a heading either. The
+  // previous type promised one for every string, which is how a tab was added without
+  // one and crashed on `section.title` the first time it was clicked.
+  const section = SECTIONS[tab as keyof typeof SECTIONS];
 
   return (
     <div className="bg-od-canvas text-od-text-2 min-h-dvh text-[14px] leading-[1.45] ps-[224px]">
@@ -311,15 +318,20 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
                   </div>
                 ) : (
                   <div className="flex flex-col gap-4">
-                    <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border p-[18px]">
-                      <h2 className="text-od-text m-0 text-[16px] font-semibold">{t[section.title]}</h2>
-                      <p className="text-od-muted-4 mt-[6px] max-w-[64ch] text-pretty">
-                        {t[section.body]}
-                      </p>
-                    </div>
+                    {section ? (
+                      <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border p-[18px]">
+                        <h2 className="text-od-text m-0 text-[16px] font-semibold">
+                          {t[section.title]}
+                        </h2>
+                        <p className="text-od-muted-4 mt-[6px] max-w-[64ch] text-pretty">
+                          {t[section.body]}
+                        </p>
+                      </div>
+                    ) : null}
 
                     {tab === "profile" ? <ProfilePanels t={t} /> : null}
                     {tab === "users" ? <UsersPanels t={t} /> : null}
+                    {tab === "channels" ? <ChannelsPanels t={t} /> : null}
                     {tab === "api" ? <ApiPanels t={t} /> : null}
                     {tab === "mcp" ? <McpPanels locale={locale} t={t} /> : null}
                     {tab === "advanced" ? (
@@ -353,7 +365,7 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
                       </div>
                     ) : null}
 
-                    {section.fields.length > 0 ? (
+                    {section && section.fields.length > 0 ? (
                       <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border">
                         {section.fields.map((field) => (
                           <div key={field.id} className="border-b border-[color:var(--od-raise-6)]">
@@ -1346,6 +1358,252 @@ function UsersPanels({ t }: { t: SettingsDictionary }) {
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * §A6.8's Channels tab. One card per channel; web chat is the only one built.
+ *
+ * The allowlist is the piece to get right in the interface, because it is the guard
+ * (§B14) and it does not look like one. A person reads "sites allowed to show it" as a
+ * convenience and leaves it empty; the help text under it says what an empty list
+ * actually means, and the switch cannot be turned on until there is an entry - so the
+ * screen refuses the same thing the server refuses, in the same words.
+ */
+function ChannelsPanels({ t }: { t: SettingsDictionary }) {
+  const channel = useResource<WebChannel>(() => webChannel(), []);
+
+  // A textarea, not a tag editor. Somebody with four domains pastes four lines; a chip
+  // control would make them click four times to do it.
+  const [origins, setOrigins] = useState<string | null>(null);
+  const [siteKey, setSiteKey] = useState<string | null>(null);
+  const [secret, setSecret] = useState("");
+  const [threshold, setThreshold] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const row = channel.data;
+  // The saved value until somebody types; then what they typed. `null` is "untouched",
+  // which is why these are not initialised from `row` in an effect.
+  const originsText = origins ?? (row ? row.allowed_origins.join("\n") : "");
+  const siteKeyText = siteKey ?? row?.recaptcha_site_key ?? "";
+  const thresholdText = threshold ?? String(row?.recaptcha_threshold ?? 0.5);
+
+  const lines = originsText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const describe = (thrown: unknown): string => {
+    if (thrown instanceof ApiError) {
+      if (thrown.code === "invalid_origin") return t.wc_error_origin;
+      if (thrown.code === "no_allowed_origins") return t.wc_error_no_origins;
+      if (thrown.code === "encryption_key_missing") return t.wc_error_no_key;
+      return thrown.message;
+    }
+    return String(thrown);
+  };
+
+  const save = async (extra: Partial<Parameters<typeof saveWebChannel>[0]> = {}) => {
+    if (busy) return;
+    setBusy(true);
+    setProblem(null);
+    setSaved(false);
+    try {
+      await saveWebChannel({
+        allowed_origins: lines,
+        recaptcha_site_key: siteKeyText || null,
+        recaptcha_threshold: Number(thresholdText) || 0.5,
+        // Omitted when untouched: the server ignores an echoed mask, and not sending
+        // one is the half that does not rely on it doing so.
+        ...(secret === "" ? {} : { recaptcha_secret: secret }),
+        ...extra,
+      });
+      setSecret("");
+      setSaved(true);
+      channel.reload();
+    } catch (thrown) {
+      setProblem(describe(thrown));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (channel.error !== null && row === null) {
+    return (
+      <div className="border-od-red-border bg-od-red-bg rounded-[10px] border p-[18px]">
+        <p className="m-0 text-pretty text-[color:var(--od-red-text-2)]">
+          {channel.error.message}
+        </p>
+      </div>
+    );
+  }
+  if (row === null) return null;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border p-[18px]">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-[10px]">
+          <h3 className="text-od-muted-4 m-0 text-[13px] font-semibold tracking-[.07em] uppercase">
+            {t.wc_title}
+          </h3>
+          <span className="text-od-faint max-w-[52ch] text-[12.5px] text-pretty">
+            {t.wc_note}
+          </span>
+        </div>
+
+        {/* The snippet first: it is what the person came here for. */}
+        <label className="mt-4 block">
+          <span className="text-od-text-3 text-[13px] font-medium">{t.wc_snippet_label}</span>
+          <div className="mt-2 flex flex-wrap items-start gap-2">
+            <code
+              dir="ltr"
+              className="mono ltr-data border-od-border-6 bg-od-canvas-2 text-od-text-2 min-w-[240px] flex-[1_1_320px] rounded-[7px] border p-[11px_13px] text-start text-[12.5px] [overflow-wrap:anywhere]"
+            >
+              {row.embed_snippet}
+            </code>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(row.embed_snippet);
+                  setCopied(true);
+                } catch {
+                  // A denied clipboard is not an error worth a red box - the snippet
+                  // is on screen and can be selected.
+                  setCopied(false);
+                }
+              }}
+              className="border-od-stroke bg-od-raise-10 text-od-text hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[10px_15px] text-[13px] font-semibold whitespace-nowrap"
+            >
+              {copied ? t.wc_copied : t.wc_copy}
+            </button>
+          </div>
+          <span className="text-od-faint-2 mt-[6px] block text-[12.5px]">
+            {t.wc_snippet_help}
+          </span>
+        </label>
+
+        <label className="mt-5 block">
+          <span className="text-od-text-3 text-[13px] font-medium">{t.wc_origins_label}</span>
+          <textarea
+            dir="ltr"
+            value={originsText}
+            onChange={(event) => setOrigins(event.target.value)}
+            placeholder={t.wc_origins_placeholder}
+            rows={4}
+            className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono mt-2 w-full resize-y rounded-[7px] border p-[11px_13px] text-start text-[13px]"
+          />
+          <span className="text-od-faint-2 mt-[6px] block max-w-[62ch] text-pretty text-[12.5px]">
+            {t.wc_origins_help}
+          </span>
+        </label>
+
+        <div className="border-od-border mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t pt-4">
+          <div className="min-w-[220px] flex-[1_1_320px]">
+            <div className="text-od-text-3 text-[13px] font-medium">{t.wc_enabled}</div>
+            {lines.length === 0 ? (
+              <div className="text-od-faint-2 mt-[3px] text-[12.5px]">
+                {t.wc_enabled_off_help}
+              </div>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            disabled={busy || (lines.length === 0 && !row.enabled)}
+            onClick={() => save({ enabled: !row.enabled })}
+            className="border-od-stroke bg-od-raise-10 text-od-text hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[8px_14px] text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {row.enabled ? t.wc_enabled : t.wc_enabled}
+            {row.enabled ? " ✓" : ""}
+          </button>
+        </div>
+      </div>
+
+      <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border p-[18px]">
+        <h3 className="text-od-muted-4 m-0 text-[13px] font-semibold tracking-[.07em] uppercase">
+          {t.wc_captcha_heading}
+        </h3>
+        <p className="text-od-faint mt-[8px] max-w-[64ch] text-pretty text-[12.5px]">
+          {t.wc_captcha_help}
+        </p>
+
+        <div className="mt-4 flex flex-wrap gap-4">
+          <label className="min-w-[200px] flex-[1_1_260px]">
+            <span className="text-od-text-3 text-[13px] font-medium">{t.wc_site_key}</span>
+            <input
+              dir="ltr"
+              value={siteKeyText}
+              onChange={(event) => setSiteKey(event.target.value)}
+              className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono mt-2 w-full rounded-[7px] border p-[9px_11px] text-start text-[13px]"
+            />
+          </label>
+
+          <label className="min-w-[200px] flex-[1_1_260px]">
+            <span className="text-od-text-3 text-[13px] font-medium">{t.wc_secret}</span>
+            <input
+              dir="ltr"
+              type="password"
+              value={secret}
+              onChange={(event) => setSecret(event.target.value)}
+              placeholder={row.recaptcha_secret_preview ?? ""}
+              className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono mt-2 w-full rounded-[7px] border p-[9px_11px] text-start text-[13px]"
+            />
+            <span className="text-od-faint-2 mt-[6px] block text-[12.5px]">
+              {row.recaptcha_secret_preview ? t.wc_secret_keep : t.wc_secret_help}
+            </span>
+          </label>
+
+          <label className="min-w-[120px] flex-[0_1_160px]">
+            <span className="text-od-text-3 text-[13px] font-medium">{t.wc_threshold}</span>
+            <input
+              dir="ltr"
+              type="number"
+              min={0}
+              max={1}
+              step={0.1}
+              value={thresholdText}
+              onChange={(event) => setThreshold(event.target.value)}
+              className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono mt-2 w-full rounded-[7px] border p-[9px_11px] text-start text-[13px]"
+            />
+            <span className="text-od-faint-2 mt-[6px] block text-[12.5px]">
+              {t.wc_threshold_help}
+            </span>
+          </label>
+        </div>
+
+        {row.recaptcha_secret_preview ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => save({ recaptcha_secret: "" })}
+            className="border-od-line text-od-muted-4 hover:text-od-text-2 mt-3 cursor-pointer rounded-md border bg-transparent p-[6px_11px] text-[12.5px]"
+          >
+            {t.wc_secret_clear}
+          </button>
+        ) : null}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {problem !== null ? (
+          <span className="me-auto max-w-[52ch] text-pretty text-[13px] text-[color:var(--od-red-text)]">
+            {problem}
+          </span>
+        ) : saved ? (
+          <span className="text-od-muted-5 me-auto text-[13px]">{t.wc_saved}</span>
+        ) : null}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => save()}
+          className="border-od-stroke bg-od-raise-10 text-od-text hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[9px_16px] text-[13.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy ? t.wc_saving : t.wc_save}
+        </button>
+      </div>
+    </div>
   );
 }
 
