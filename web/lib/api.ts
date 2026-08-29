@@ -744,6 +744,75 @@ export function removeContact(id: number): Promise<void> {
   return api<void>(`/api/contacts/${id}`, { method: "DELETE" });
 }
 
+// --- Assistants: who answers, and in what words --------------------------------
+
+/** Mirrors ASSISTANT_TEMPLATES in api/models/assistant.py. */
+export type AssistantTemplate = "reception" | "ooh" | "overflow" | "blank";
+export type AssistantStatus = "active" | "paused";
+
+export type Assistant = {
+  id: number;
+  name: string;
+  /** What it is for, in the customer's words - "Reception, weekdays". */
+  role: string | null;
+  template: AssistantTemplate;
+  status: AssistantStatus;
+  /** Who it is. */
+  persona: string;
+  /** What it may and may not do. */
+  instructions: string;
+  language: string | null;
+  model: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export function assistantsList(): Promise<Assistant[]> {
+  return api<Assistant[]>("/api/assistants");
+}
+
+export function assistant(id: number): Promise<Assistant> {
+  return api<Assistant>(`/api/assistants/${id}`);
+}
+
+export function addAssistant(fields: {
+  name: string;
+  role?: string | null;
+  template?: AssistantTemplate;
+  persona?: string;
+  instructions?: string;
+}): Promise<Assistant> {
+  return api<Assistant>("/api/assistants", { method: "POST", json: fields });
+}
+
+/**
+ * Any subset, because the editor saves one panel at a time.
+ *
+ * An absent key is left alone and an explicit `null` clears the field - the server
+ * reads the two apart, so building this object by spreading a whole form would send
+ * panels the person never opened.
+ */
+export function changeAssistant(
+  id: number,
+  fields: Partial<{
+    name: string;
+    role: string | null;
+    template: AssistantTemplate;
+    status: AssistantStatus;
+    persona: string;
+    instructions: string;
+    language: string | null;
+    model: string | null;
+  }>,
+): Promise<Assistant> {
+  return api<Assistant>(`/api/assistants/${id}`, { method: "PATCH", json: fields });
+}
+
+/** Real deletion. The conversations it answered keep their transcripts. */
+export function removeAssistant(id: number): Promise<void> {
+  return api<void>(`/api/assistants/${id}`, { method: "DELETE" });
+}
+
 // --- Routing rules ------------------------------------------------------------
 
 export type RuleAction = "pass" | "block" | "ai";
