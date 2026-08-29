@@ -20,6 +20,7 @@ export type PanelId =
   | "booking"
   | "forward"
   | "apps"
+  | "tools"
   | "webhooks"
   | "email"
   | "sms";
@@ -74,6 +75,7 @@ export const GROUPS: { id: string; label: Key; note: Key; rows: RailRow[] }[] = 
     rows: [
       { icon: "calendar", title: "row_booking", panel: "booking", enabled: false, hint: "pending_booking" },
       { icon: "forward", title: "row_forward", panel: "forward", enabled: false, hint: "pending_forward" },
+      { icon: "spark", title: "row_tools", panel: "tools" },
       { icon: "plug", title: "row_apps", panel: "apps", enabled: false, hint: "pending_apps" },
       // The one row in this group with a table behind it.
       { icon: "webhook", title: "row_webhooks", panel: "webhooks" },
@@ -99,6 +101,7 @@ export const PANEL_META: Record<PanelId, { title: Key; blurb: Key }> = {
   booking: { title: "row_booking", blurb: "blurb_booking" },
   forward: { title: "row_forward", blurb: "blurb_forward" },
   apps: { title: "row_apps", blurb: "blurb_apps" },
+  tools: { title: "row_tools", blurb: "blurb_tools" },
   webhooks: { title: "row_webhooks", blurb: "blurb_webhooks" },
   email: { title: "row_email", blurb: "blurb_email" },
   sms: { title: "row_sms", blurb: "blurb_sms" },

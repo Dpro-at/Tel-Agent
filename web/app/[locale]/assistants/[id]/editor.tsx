@@ -16,6 +16,7 @@ import {
   addWebhook,
   ApiError,
   assistant as fetchAssistant,
+  assistantTools,
   changeAssistant,
   changeWebhook,
   removeWebhook,
@@ -23,6 +24,7 @@ import {
   webhookEvents,
   webhooksList,
   type Assistant,
+  type AssistantTool,
   type Webhook,
 } from "@/lib/api";
 import { interpolate } from "@/lib/i18n";
@@ -319,9 +321,23 @@ export function AssistantEditor({
                         onCancel={loaded.reload}
                       />
                     ) : null}
+                    {panel === "tools" ? (
+                      <ToolsPanel
+                        t={t}
+                        draft={draft}
+                        saving={saving}
+                        onEdit={edit}
+                        onSave={() => save({ tools: draft.tools })}
+                        onCancel={loaded.reload}
+                      />
+                    ) : null}
+
                     {panel === "webhooks" ? <WebhooksPanel t={t} /> : null}
 
-                    {panel !== "persona" && panel !== "instructions" && panel !== "webhooks" ? (
+                    {panel !== "persona" &&
+                    panel !== "instructions" &&
+                    panel !== "tools" &&
+                    panel !== "webhooks" ? (
                       <PendingPanel t={t} panel={panel} />
                     ) : null}
                   </div>
@@ -557,6 +573,131 @@ function InstructionsPanel({
         <span dir="ltr" className="mono ltr-data text-od-faint-2 text-[12px]">
           {draft.instructions.length} / 8000
         </span>
+      </div>
+
+      <PanelFooter t={t} saving={saving} onSave={onSave} onCancel={onCancel} />
+    </div>
+  );
+}
+
+/**
+ * §A6.6's Tools, and the warning it asks for.
+ *
+ * "Show a visible warning when many tools are on: every extra tool raises the chance
+ * the agent uses one at the wrong moment." That sentence is the whole reason this is a
+ * list of cards with plain-language descriptions rather than a row of checkboxes -
+ * somebody switching one on should read what it will do before they do.
+ *
+ * A tool whose subsystem is unbuilt is drawn and disabled rather than hidden, with the
+ * subsystem named. Hiding it would answer "can it check my calendar?" with silence.
+ */
+function ToolsPanel({
+  t,
+  draft,
+  saving,
+  onEdit,
+  onSave,
+  onCancel,
+}: {
+  t: EditorDictionary;
+  draft: Assistant;
+  saving: boolean;
+  onEdit: (fields: Partial<Assistant>) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  const catalogue = useResource<AssistantTool[]>(() => assistantTools(), []);
+  const on = draft.tools;
+
+  const toggle = (name: string) =>
+    onEdit({
+      tools: on.includes(name) ? on.filter((entry) => entry !== name) : [...on, name],
+    });
+
+  return (
+    <div className="flex flex-col gap-4 p-[20px_22px_24px]">
+      {on.length === 0 ? (
+        <p className="text-od-muted-4 m-0 max-w-[60ch] text-pretty">{t.tools_none}</p>
+      ) : null}
+
+      {/* The threshold is a judgement, and it is the point at which a person can no
+          longer hold the whole set in mind while reading the persona. */}
+      {on.length >= 4 ? (
+        <p className="border-od-amber-border m-0 rounded-[8px] border bg-[rgba(251,191,36,.08)] p-[11px_13px] text-pretty text-[12.5px] text-[color:var(--od-amber)]">
+          {interpolate(t.tools_many, { count: on.length })}
+        </p>
+      ) : null}
+
+      <div className="flex flex-col gap-[10px]">
+        {(catalogue.data ?? []).map((tool) => {
+          const enabled = on.includes(tool.name);
+          const label = t[`tool_${tool.name}` as keyof EditorDictionary];
+          const help = t[`tool_${tool.name}_help` as keyof EditorDictionary];
+          return (
+            <div
+              key={tool.name}
+              onClick={() => (tool.available ? toggle(tool.name) : undefined)}
+              className={`flex flex-nowrap items-start gap-3 rounded-[10px] p-[13px_15px] ${
+                tool.available ? "hover:bg-od-raise cursor-pointer" : ""
+              }`}
+              style={{
+                border: enabled
+                  ? "1px solid var(--od-violet-border)"
+                  : tool.available
+                    ? "1px solid var(--od-line)"
+                    : "1px dashed var(--od-border-7)",
+                background: enabled
+                  ? "rgba(139,124,255,.10)"
+                  : tool.available
+                    ? "var(--od-panel-deep-3)"
+                    : "transparent",
+              }}
+            >
+              <div className="min-w-0 flex-[1_1_0]">
+                <div
+                  className="text-[15px] font-semibold text-pretty"
+                  style={{
+                    color: enabled
+                      ? "var(--od-text)"
+                      : tool.available
+                        ? "var(--od-text-3)"
+                        : "var(--od-muted-4)",
+                  }}
+                >
+                  {label}
+                </div>
+                <div className="text-od-muted-5 mt-[4px] text-[12.5px] text-pretty">
+                  {tool.available
+                    ? help
+                    : interpolate(t.tools_waiting, { subsystem: tool.waiting_on ?? "" })}
+                </div>
+                {/* The name the model is given, for anyone reading their own logs. */}
+                <div
+                  dir="ltr"
+                  className="mono ltr-data text-od-faint-2 mt-[5px] text-start text-[11.5px]"
+                >
+                  {tool.name}
+                </div>
+              </div>
+
+              {tool.available ? (
+                <span
+                  className="mt-[2px] inline-flex h-[22px] w-10 flex-none items-center rounded-full border p-[2px]"
+                  style={{
+                    borderColor: enabled ? "var(--od-violet)" : "var(--od-border-7)",
+                    background: enabled ? "var(--od-violet)" : "var(--od-raise)",
+                    justifyContent: enabled ? "flex-end" : "flex-start",
+                  }}
+                >
+                  <span
+                    className="block size-4 rounded-full"
+                    style={{ background: enabled ? "#fff" : "var(--od-stroke-5)" }}
+                  />
+                </span>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
 
       <PanelFooter t={t} saving={saving} onSave={onSave} onCancel={onCancel} />

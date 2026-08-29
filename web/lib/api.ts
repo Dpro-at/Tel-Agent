@@ -750,6 +750,18 @@ export function removeContact(id: number): Promise<void> {
 export type AssistantTemplate = "reception" | "ooh" | "overflow" | "blank";
 export type AssistantStatus = "active" | "paused";
 
+export type AssistantTool = {
+  name: string;
+  available: boolean;
+  /** The subsystem it waits for, or null when it is ready. */
+  waiting_on: string | null;
+};
+
+/** Served rather than copied, so the screen cannot drift from §B7. */
+export function assistantTools(): Promise<AssistantTool[]> {
+  return api<AssistantTool[]>("/api/assistants/tools");
+}
+
 export type Assistant = {
   id: number;
   name: string;
@@ -763,6 +775,8 @@ export type Assistant = {
   instructions: string;
   language: string | null;
   model: string | null;
+  /** Which of §B7's tools it may reach. Empty is a real answer. */
+  tools: string[];
   created_at: string;
   updated_at: string;
 };
@@ -803,6 +817,7 @@ export function changeAssistant(
     instructions: string;
     language: string | null;
     model: string | null;
+    tools: string[];
   }>,
 ): Promise<Assistant> {
   return api<Assistant>(`/api/assistants/${id}`, { method: "PATCH", json: fields });

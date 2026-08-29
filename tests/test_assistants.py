@@ -226,3 +226,72 @@ async def test_pausing_and_deleting(stage) -> None:
     assert (
         await clients["mohamed"].post("/api/assistants", json={"name": "Lena"})
     ).status_code == 201
+
+
+# --- §A6.6 tools -------------------------------------------------------------
+
+
+async def test_the_tool_list_is_served_with_what_each_one_waits_for(stage) -> None:
+    clients, _ = stage
+    tools = (await clients["mohamed"].get("/api/assistants/tools")).json()
+    by_name = {row["name"]: row for row in tools}
+
+    # §B7's seven, whole. A tool is reported rather than hidden, so somebody choosing
+    # what their assistant does sees the shape of the whole answer.
+    assert len(tools) == 7
+    assert by_name["search_knowledge"]["available"] is True
+    assert by_name["search_knowledge"]["waiting_on"] is None
+    # And the ones that are not built say which subsystem they wait for.
+    assert by_name["transfer_call"]["available"] is False
+    assert by_name["transfer_call"]["waiting_on"] == "phone"
+    assert by_name["check_calendar"]["waiting_on"] == "calendar"
+
+
+async def test_an_assistant_starts_with_no_tools(stage) -> None:
+    clients, ids = stage
+    row = (await clients["mohamed"].get(f"/api/assistants/{ids['lena']}")).json()
+    # Empty is a real answer: an assistant that only talks.
+    assert row["tools"] == []
+
+
+async def test_tools_are_given_and_taken_away(stage) -> None:
+    clients, ids = stage
+    given = await clients["mohamed"].patch(
+        f"/api/assistants/{ids['lena']}",
+        json={"tools": ["search_knowledge", "take_message"]},
+    )
+    assert given.status_code == 200
+    assert given.json()["tools"] == ["search_knowledge", "take_message"]
+
+    emptied = await clients["mohamed"].patch(
+        f"/api/assistants/{ids['lena']}", json={"tools": []}
+    )
+    assert emptied.json()["tools"] == []
+
+
+@pytest.mark.parametrize(
+    ("tools", "code"),
+    [
+        (["make_coffee"], "unknown_tool"),
+        # Real in §B7, and its subsystem is not built - switching it on would be a
+        # setting that silently does nothing on the first call that needs it.
+        (["transfer_call"], "tool_unavailable"),
+        (["search_knowledge", "check_calendar"], "tool_unavailable"),
+    ],
+)
+async def test_a_tool_that_cannot_run_cannot_be_switched_on(stage, tools, code) -> None:
+    clients, ids = stage
+    refused = await clients["mohamed"].patch(
+        f"/api/assistants/{ids['lena']}", json={"tools": tools}
+    )
+    assert refused.status_code == 400
+    assert refused.json()["error"]["code"] == code
+
+
+async def test_tools_can_be_set_when_creating_one(stage) -> None:
+    clients, _ = stage
+    created = await clients["mohamed"].post(
+        "/api/assistants", json={"name": "Nachtdienst", "tools": ["take_message"]}
+    )
+    assert created.status_code == 201
+    assert created.json()["tools"] == ["take_message"]

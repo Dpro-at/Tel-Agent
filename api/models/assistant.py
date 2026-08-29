@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import String, Text, UniqueConstraint
+from sqlalchemy import JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.db import Base
@@ -31,6 +31,24 @@ from api.models.common import enum_column, utc_now_column, workspace_fk
 ASSISTANT_TEMPLATES = ("reception", "ooh", "overflow", "blank")
 
 ASSISTANT_STATUSES = ("active", "paused")
+
+# §B7's list, verbatim and short on purpose - "five precise tools beat twenty that
+# confuse the model". Which of them an assistant may reach is per assistant, because
+# an out-of-hours assistant that only takes messages is a different thing from a
+# reception assistant that answers questions.
+#
+# The list is the specification's, not "the ones that work today". A tool whose
+# subsystem is unbuilt is reported as unavailable rather than hidden: a person
+# choosing what their assistant can do should see the whole shape of the answer.
+ASSISTANT_TOOLS = (
+    "take_message",
+    "search_knowledge",
+    "http_request",
+    "send_notification",
+    "check_calendar",
+    "transfer_call",
+    "end_call",
+)
 
 
 class Assistant(Base):
@@ -70,5 +88,9 @@ class Assistant(Base):
     # Free text on purpose. Model names are a moving list owned by three vendors, and
     # a CHECK constraint here would need a migration every time one ships a model.
     model: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # A JSON list rather than a join table, for the reason the webhook events are one:
+    # a vocabulary this codebase pins, read only alongside its own row, never queried
+    # across rows. Empty is a real answer - an assistant that only talks.
+    tools: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[dt.datetime] = utc_now_column()
     updated_at: Mapped[dt.datetime] = utc_now_column()
