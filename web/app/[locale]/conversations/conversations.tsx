@@ -342,7 +342,7 @@ export function Conversations({
                             kind={thread.channel}
                             label={channelLabel(t, thread.channel)}
                           />
-                          <span className="text-od-text font-medium text-pretty">
+                          <span dir="auto" className="text-od-text font-medium text-pretty">
                             {thread.who_name ?? thread.who ?? t.thread_visitor}
                           </span>
                           <span
@@ -353,10 +353,15 @@ export function Conversations({
                           </span>
                         </div>
 
-                        {/* What the customer wrote, verbatim - never translated. */}
+                        {/* What the customer wrote, verbatim - never translated, and
+                            never forced into one direction: `ltr` renders an Arabic
+                            message backwards, and the page's own direction puts an
+                            English sentence's full stop at the front. `auto` reads the
+                            direction off the first strong character, which is the only
+                            rule that is right for text whose language nobody declared. */}
                         {thread.preview ? (
                           <div
-                            dir="ltr"
+                            dir="auto"
                             className="text-od-muted-2 mt-[6px] line-clamp-2 text-start text-[13px] text-pretty"
                           >
                             {thread.preview}
@@ -484,7 +489,12 @@ function ThreadPane({
           <div className="text-od-faint text-[11px] font-semibold tracking-[.09em] uppercase">
             {t.summary_label}
           </div>
-          <p className="text-od-muted m-0 mt-[6px] max-w-[70ch] text-[13.5px] text-pretty">
+          {/* The agent's own words about the conversation, in whatever language it
+              was held in - so the direction is read off the text, not off the page. */}
+          <p
+            dir="auto"
+            className="text-od-muted m-0 mt-[6px] max-w-[70ch] text-[13.5px] text-pretty"
+          >
             {thread.summary}
           </p>
         </div>
