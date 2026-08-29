@@ -15,6 +15,7 @@ from api.models.assistant import (
 from api.models.attempt import SCOPES, AuthAttempt
 from api.models.audit import EVENTS, AuthEvent
 from api.models.backup import BACKUP_KINDS, BACKUP_STATUSES, Backup
+from api.models.catalogue import NAME_MAX, PRICE_MODES, SAYS_MAX, Service
 from api.models.common import enum_column, utc_now_column, workspace_fk
 from api.models.contact import Contact
 from api.models.conversation import (
@@ -58,9 +59,12 @@ __all__ = [
     "INVITE_LIFETIME",
     "INVITE_ROLES",
     "JOB_STATUSES",
+    "NAME_MAX",
     "ORIGINS",
+    "PRICE_MODES",
     "ROLES",
     "RULE_ACTIONS",
+    "SAYS_MAX",
     "SCOPES",
     "WEBHOOK_EVENTS",
     "App",
@@ -86,6 +90,7 @@ __all__ = [
     "RateCounter",
     "Rule",
     "ScheduledTask",
+    "Service",
     "Session",
     "Setting",
     "User",

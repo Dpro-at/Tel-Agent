@@ -757,6 +757,8 @@ POST   /api/apps/{slug}/install
 POST   /api/apps/{slug}/enable        # and /disable
 
 GET    /api/home                      # the two counts §A6.2 opens with
+GET    /api/catalogue                 # services and the workspace's currency
+POST   /api/catalogue   PATCH /api/catalogue/{id}   DELETE /api/catalogue/{id}
 
 GET    /api/conversations             # list + filter, every channel
 GET    /api/conversations/{id}        # detail + messages

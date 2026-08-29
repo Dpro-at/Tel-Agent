@@ -38,6 +38,16 @@ def _define(*definitions: Definition) -> dict[str, Definition]:
 # The mail server, moved out of `.env` because the forgot-password screen says in its
 # own copy: "Configure a mail server in Settings". It could not, until now.
 REGISTRY: dict[str, Definition] = _define(
+    # The catalogue - A6.11. One currency per workspace, not one per service: a
+    # business does not price half its work in euros and half in francs, and a column
+    # that could would have to be checked against itself on every read. ISO 4217, so
+    # the interface can format an amount without a table of its own.
+    Definition(
+        "catalogue.currency",
+        "workspace",
+        default="EUR",
+        description="ISO 4217 code the catalogue's prices are in, for example EUR or CHF.",
+    ),
     Definition("smtp.host", "installation", description="Hostname of the mail server."),
     Definition("smtp.port", "installation", "integer", 587, description="Usually 587."),
     Definition("smtp.username", "installation", description="Leave empty for no auth."),

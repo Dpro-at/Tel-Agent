@@ -42,6 +42,7 @@ from api.routes import apps as apps_routes
 from api.routes import assistants as assistant_routes
 from api.routes import auth as auth_routes
 from api.routes import backup as backup_routes
+from api.routes import catalogue as catalogue_routes
 from api.routes import contacts as contact_routes
 from api.routes import conversations as conversation_routes
 from api.routes import home as home_routes
@@ -287,6 +288,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(rule_routes.router)
     app.include_router(contact_routes.router)
     app.include_router(home_routes.router)
+    app.include_router(catalogue_routes.router)
 
     @app.get(
         "/health",
