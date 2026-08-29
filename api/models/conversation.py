@@ -25,6 +25,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -73,6 +74,16 @@ class Channel(Base):
     # `EncryptedStr` encrypts on write and decrypts on read, so no call site can
     # forget - the model attribute holds the plaintext, the stored column never does.
     credentials_encrypted: Mapped[str | None] = mapped_column(EncryptedStr, nullable=True)
+    # Everything about a channel that is *not* a credential: which origins may embed
+    # the web widget, a reCAPTCHA site key (public by design), a score threshold.
+    #
+    # Apart from `credentials_encrypted` on purpose. That column is encrypted and
+    # rotated (E5); this one is read on every inbound message and belongs in a plain
+    # index-able JSON. Mixing them would mean decrypting to answer "is this origin
+    # allowed", on the hottest path the public endpoint has.
+    settings_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict, server_default=text("'{}'")
+    )
     webhook_secret: Mapped[str | None] = mapped_column(String(128), nullable=True)
     webhook_path: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
     default_language: Mapped[str | None] = mapped_column(String(12), nullable=True)

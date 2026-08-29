@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import JSON, String, Text, UniqueConstraint
+from sqlalchemy import JSON, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.db import Base
@@ -91,6 +91,8 @@ class Assistant(Base):
     # A JSON list rather than a join table, for the reason the webhook events are one:
     # a vocabulary this codebase pins, read only alongside its own row, never queried
     # across rows. Empty is a real answer - an assistant that only talks.
-    tools: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    tools: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list, server_default=text("'[]'")
+    )
     created_at: Mapped[dt.datetime] = utc_now_column()
     updated_at: Mapped[dt.datetime] = utc_now_column()

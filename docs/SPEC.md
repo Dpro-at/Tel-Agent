@@ -739,6 +739,12 @@ GET    /api/auth/key/challenge        # SSH challenge, two minutes, single use
 POST   /api/auth/key/verify           # signature in, no key ever leaves the client
 POST   /api/setup                     # first run only: create the administrator
 
+# Web chat's widget — the only unauthenticated routes in the product. Guarded by
+# origin allowlist, captcha and rate limit rather than by a session. See §B14; the
+# rule there is that every response must be safe to show a stranger.
+POST   /public/chat/{path}/messages   # a visitor's message; creates the conversation
+GET    /public/chat/{path}/stream     # the reply, token by token
+
 # Workspaces — D-028. Every route below is scoped by the active workspace.
 GET    /api/workspaces                # the ones this user is a member of
 POST   /api/workspaces                # create, optionally seeded from another
@@ -1016,7 +1022,7 @@ archive; a different transport.
 
 | Channel | What it needs |
 |---|---|
-| **Web chat** | A script tag on the customer's own site. No account, no review, no approval by anyone. The easiest channel in the product. |
+| **Web chat** | A script tag on the customer's own site. No account, no review, no approval by anyone. The easiest channel in the product — and the only one with a public endpoint, which §B14 is about. |
 | **SMS** | Nothing new — it arrives with the telephony account the phone number already uses. |
 | **Email** | An IMAP/SMTP mailbox the customer already owns. |
 
@@ -1094,6 +1100,110 @@ transcripts.
 Until Milestone 11 the `channels` table holds a single row of kind `phone`. That row
 looks like waste and is not: it is what makes the difference between adding a channel
 and rebuilding the schema underneath a live product.
+
+## B14. Web chat — the embed, and what protects it
+
+§B13 calls web chat the easiest channel in the product, and it is: no platform account,
+no review, nobody's approval. That ease is also the danger. It is the only channel whose
+endpoint is **public and unauthenticated** — anybody who finds the URL can post to it,
+and unlike a webhook there is no provider signature to check.
+
+### What the customer pastes
+
+One script tag, from the settings screen:
+
+```html
+<script src="https://telagent.example/embed.js" data-tel-agent="c7f2…"></script>
+```
+
+The script's only job is to create an **iframe** pointing at the widget, and to size and
+position it. Everything the visitor sees and types lives inside that iframe.
+
+The iframe is the point, not an implementation detail. It isolates in both directions:
+
+- **Their page cannot read the conversation.** A visitor typing a medical complaint into
+  a chat bubble is not typing it into the site's analytics.
+- **Our widget cannot read their page.** Nothing in Tel-Agent can reach the host page's
+  DOM, its cookies, or a half-filled checkout form — so an installation cannot become a
+  liability for the site that installed it.
+- **Their CSS cannot break it, and ours cannot break theirs.** A script-injected div
+  inherits whatever the host page does to `div`, which is how embedded widgets end up
+  unreadable on one customer's site and fine on every other.
+
+A `<script>` that injected markup directly would be faster to write and would give up all
+three.
+
+**On Subresource Integrity.** `embed.js` is served by the same installation that answers
+the chat, so pinning its hash guards against nothing a compromise of that installation
+would not already own. It also cannot be pinned: the file changes with every upgrade, and
+a stale `integrity` would silently stop every customer's widget on the day they update.
+Tel-Agent Cloud is the case where the script does cross an origin, and there it is served
+from a versioned URL so the hash and the file change together.
+
+### The identifier in the tag
+
+`data-tel-agent` is the channel's `webhook_path` (§B5) — long, random, and unique across
+the installation. It is not the workspace id, and not a guessable slug.
+
+It is not a secret: it travels in the HTML of a public page and anybody can read it. It
+is an **address**, and what protects the address is the next section. Treating it as a
+secret is the mistake to avoid, because it would mean the guard is a value printed on
+every page that uses it.
+
+### The origin allowlist is the guard
+
+Each web channel stores the origins allowed to embed it. A request whose `Origin` is not
+on that list is refused before anything is stored.
+
+Without it, the address in the tag is enough for any site to embed somebody else's widget
+and spend their model budget — and the transcripts of those conversations would land in a
+stranger's archive, which is worse than the cost.
+
+- Origins only: scheme, host, optional port. No path, no wildcards in the host.
+- An empty list means the channel is off, not open. The safe reading of "not configured
+  yet" is the one that refuses.
+- `Origin` is set by the browser and cannot be forged by page script. It is absent on
+  non-browser requests, and absent is refused: a widget request always comes from a page.
+
+### reCAPTCHA v3 is the second layer, and only the second
+
+The origin check stops other sites. It does not stop a bot on an allowed site, which is
+the case that costs money — an unauthenticated endpoint that reaches a paid model is
+worth automating against.
+
+reCAPTCHA v3 scores without a puzzle, so a real visitor is never asked to identify a
+bicycle. The site key is public; **the secret key is a credential** and lives in an
+encrypted column (§B9.2), never in `.env`, never returned to a client.
+
+Its limits, stated so nobody treats it as the wall:
+
+- It is Google's, and it sees the visitor. An installation that will not accept that must
+  be able to turn it off — a self-hosted product cannot make a third party mandatory.
+- A score is a probability, not a verdict. The threshold is configurable, and the failure
+  mode of a high one is refusing real customers.
+- With it off, the rate limit below is the only thing left, and that is a deliberate
+  choice the operator makes rather than a gap.
+
+### Rate limits, which are not optional
+
+Per conversation and per origin, enforced whether or not reCAPTCHA is on. A public
+endpoint without them is a bill waiting to happen, and the operator finds out from the
+model vendor rather than from us.
+
+### What the endpoint may do
+
+```
+POST /public/chat/{path}/messages     # no session; Origin + captcha + rate limit
+GET  /public/chat/{path}/stream       # the reply, token by token (Milestone 0 step 5)
+```
+
+It creates a conversation and stores a visitor message. It may not read another
+conversation, list anything, or return workspace data. The widget's whole view of the
+installation is the thread it is having, and a bug that widened that would be a leak of
+other people's conversations.
+
+Nothing about this endpoint is behind a session, so **every response it can produce must
+be safe to show a stranger**. That is the sentence to re-read before adding a field to it.
 
 ---
 

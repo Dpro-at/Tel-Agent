@@ -85,6 +85,43 @@ def _url() -> str:
     return get_settings().database_url
 
 
+def _same_server_default(
+    context: object,
+    inspected_column: object,
+    metadata_column: object,
+    inspected_default: str | None,
+    metadata_default: object,
+    rendered_metadata_default: str | None,
+) -> bool | None:
+    """Whether a server default really changed, or only how the dialect writes it.
+
+    `compare_server_default=True` is wanted (a default that silently disappears is a
+    NOT NULL column that starts rejecting inserts nobody changed). What is not wanted is
+    SQLite, which hands back `'[]'` for a default written as `text("'[]'")` and reports
+    them as different on every single run - so every future autogenerate carried an
+    `alter_column` that set a default the column already had, and applying it rebuilt
+    the table to change nothing.
+
+    Comparing the two as text, unquoted, answers the question the flag is actually for.
+    Returning None for anything this cannot decide hands it back to alembic rather than
+    guessing, which is the half that keeps a real change from being swallowed here.
+    """
+    if inspected_default is None or rendered_metadata_default is None:
+        return None
+
+    def bare(value: str) -> str:
+        stripped = value.strip()
+        while stripped.startswith("(") and stripped.endswith(")"):
+            stripped = stripped[1:-1].strip()
+        if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in "\"'":
+            stripped = stripped[1:-1]
+        return stripped
+
+    if bare(inspected_default) == bare(rendered_metadata_default):
+        return False
+    return None
+
+
 def _configure(connection: Connection) -> None:
     """Options that apply to both offline and online runs."""
     context.configure(
@@ -96,7 +133,7 @@ def _configure(connection: Connection) -> None:
         # Without this a column that only changed type is silently ignored by
         # autogenerate, and the migration looks complete while doing nothing.
         compare_type=True,
-        compare_server_default=True,
+        compare_server_default=_same_server_default,
         include_object=include_object,
         render_item=render_item,
     )

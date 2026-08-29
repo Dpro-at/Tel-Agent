@@ -48,6 +48,7 @@ from api.routes import invites as invite_routes
 from api.routes import knowledge as knowledge_routes
 from api.routes import notifications as notification_routes
 from api.routes import numbers as number_routes
+from api.routes import public_chat as public_chat_routes
 from api.routes import recovery as recovery_routes
 from api.routes import rules as rule_routes
 from api.routes import settings as settings_routes
@@ -276,6 +277,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(number_routes.router)
     app.include_router(assistant_routes.router)
     app.include_router(knowledge_routes.router)
+    app.include_router(public_chat_routes.router)
     app.include_router(webhook_routes.router)
     app.include_router(rule_routes.router)
     app.include_router(contact_routes.router)
