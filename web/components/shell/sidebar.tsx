@@ -2,7 +2,7 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore, type MouseEvent } from "react";
 
 import ar from "../../../locales/ar/shell.json";
 import de from "../../../locales/de/shell.json";
@@ -43,6 +43,31 @@ function readTheme(): "dark" | "light" {
 /** What the server renders, and what hydration matches against. */
 function darkTheme(): "dark" {
   return "dark";
+}
+
+/**
+ * Whether the sidebar is collapsed to a rail of icons, kept on `<html data-od-rail>`
+ * for the same reason the theme is: the inline script in the locale layout sets it
+ * before first paint, so the page never renders wide and then narrows.
+ *
+ * Only the toggle's own wording is read from here. The width, and what a collapsed
+ * rail hides, are CSS in `globals.css` - hovering it must widen it without React
+ * hearing about the mouse at all.
+ */
+const RAIL_EVENT = "od-rail-change";
+
+function subscribeRail(onChange: () => void) {
+  addEventListener(RAIL_EVENT, onChange);
+  return () => removeEventListener(RAIL_EVENT, onChange);
+}
+
+function readRail(): boolean {
+  return document.documentElement.getAttribute("data-od-rail") === "on";
+}
+
+/** The server renders the sidebar open, and hydration matches that. */
+function railOpen(): false {
+  return false;
 }
 
 /**
@@ -164,6 +189,7 @@ export function Sidebar({
 }) {
   const t = pickDictionary<ShellDictionary>(locale, DICTIONARIES);
   const theme = useSyncExternalStore(subscribeTheme, readTheme, darkTheme);
+  const rail = useSyncExternalStore(subscribeRail, readRail, railOpen);
   const [open, setOpen] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -215,6 +241,23 @@ export function Sidebar({
     window.location.assign(`/${locale}/login`);
   }
 
+  function toggleRail(event: MouseEvent<HTMLButtonElement>) {
+    const next = !rail;
+    const root = document.documentElement;
+    if (next) root.setAttribute("data-od-rail", "on");
+    else root.removeAttribute("data-od-rail");
+    try {
+      localStorage.setItem("od-rail", next ? "on" : "off");
+    } catch {
+      // A browser with storage disabled still collapses, it just does not remember.
+    }
+    // The button keeps focus after a click, and focus is what holds a rail open for
+    // somebody reading by keyboard - so without this the collapse would not be
+    // visible until the next click landed somewhere else.
+    event.currentTarget.blur();
+    dispatchEvent(new Event(RAIL_EVENT));
+  }
+
   function toggleTheme() {
     const next = theme === "dark" ? "light" : "dark";
     const root = document.documentElement;
@@ -238,27 +281,47 @@ export function Sidebar({
     <>
       <IncomingCall locale={locale} enabled={incomingCall} />
 
-      <div className="bg-od-canvas-2 text-od-text border-od-border flex h-full flex-col gap-5 border-e p-[18px_12px] text-[14px] leading-[1.45]">
-        <div className="flex items-center justify-between gap-2 p-[4px_11px]">
-          <Link href={href("/home")} className="text-od-text flex items-baseline gap-2 hover:no-underline">
-            <span className="font-semibold tracking-[-0.01em]">Tel-Agent</span>
-            <span className="mono ltr-data text-od-faint text-[11px]">v1.4.2</span>
-          </Link>
-          <button
-            type="button"
-            onClick={toggleTheme}
-            title={theme === "dark" ? t.theme_to_light : t.theme_to_dark}
-            aria-label={theme === "dark" ? t.theme_to_light : t.theme_to_dark}
-            className="border-od-border-2 bg-od-panel text-od-muted-4 hover:bg-od-raise hover:text-od-text inline-flex size-[26px] flex-none cursor-pointer items-center justify-center rounded-[7px] border text-[13px] leading-none"
+      <div className="od-rail bg-od-canvas-2 text-od-text border-od-border flex h-full flex-col gap-5 border-e p-[18px_12px] text-[14px] leading-[1.45]">
+        <div className="od-rail-row flex items-center justify-between gap-2 p-[4px_11px]">
+          <Link
+            href={href("/home")}
+            className="text-od-text flex items-baseline gap-2 whitespace-nowrap hover:no-underline"
           >
-            {theme === "dark" ? "☀" : "☾"}
-          </button>
+            {/* The wordmark does not fit a rail of icons; the mark stands in for it,
+                and is the one thing that appears only while the rail is collapsed. */}
+            <span className="od-rail-narrow border-od-border-2 bg-od-panel size-[26px] items-center justify-center rounded-[7px] border text-[12px] font-semibold">
+              T
+            </span>
+            <span className="od-rail-wide font-semibold tracking-[-0.01em]">Tel-Agent</span>
+            <span className="mono ltr-data text-od-faint od-rail-wide text-[11px]">v1.4.2</span>
+          </Link>
+          <div className="od-rail-wide flex flex-none items-center gap-[6px]">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={theme === "dark" ? t.theme_to_light : t.theme_to_dark}
+              aria-label={theme === "dark" ? t.theme_to_light : t.theme_to_dark}
+              className="border-od-border-2 bg-od-panel text-od-muted-4 hover:bg-od-raise hover:text-od-text inline-flex size-[26px] flex-none cursor-pointer items-center justify-center rounded-[7px] border text-[13px] leading-none"
+            >
+              {theme === "dark" ? "☀" : "☾"}
+            </button>
+            <button
+              type="button"
+              onClick={toggleRail}
+              title={rail ? t.rail_expand : t.rail_collapse}
+              aria-label={rail ? t.rail_expand : t.rail_collapse}
+              aria-pressed={rail}
+              className="border-od-border-2 bg-od-panel text-od-muted-4 hover:bg-od-raise hover:text-od-text inline-flex size-[26px] flex-none cursor-pointer items-center justify-center rounded-[7px] border leading-none"
+            >
+              <NavIcon name="panel" color="currentColor" />
+            </button>
+          </div>
         </div>
 
         <nav className="flex min-h-0 flex-[1_1_auto] flex-col gap-[18px] overflow-auto">
           {nav.map((group) => (
             <div key={group.label} className="flex flex-col gap-[2px]">
-              <div className="p-[0_11px_6px] text-[10.5px] tracking-[.1em] uppercase text-[color:var(--od-faint-5)]">
+              <div className="od-rail-wide p-[0_11px_6px] text-[10.5px] tracking-[.1em] uppercase text-[color:var(--od-faint-5)]">
                 {t[group.label]}
               </div>
               {group.items.map((item) => {
@@ -273,7 +336,7 @@ export function Sidebar({
                     <div className="flex items-center gap-[2px]">
                       <Link
                         href={href(item.href)}
-                        className={`hover:bg-od-raise hover:text-od-text-2 flex min-w-0 flex-[1_1_auto] items-center gap-[10px] rounded-[7px] p-[8px_11px] hover:no-underline ${
+                        className={`od-rail-row hover:bg-od-raise hover:text-od-text-2 flex min-w-0 flex-[1_1_auto] items-center gap-[10px] rounded-[7px] p-[8px_11px] hover:no-underline ${
                           on ? "bg-[var(--od-raise-7)] text-od-text font-medium" : "text-od-muted-4"
                         }`}
                       >
@@ -283,14 +346,14 @@ export function Sidebar({
                             color={on ? "var(--od-text)" : "var(--od-faint-2)"}
                           />
                         </span>
-                        <span>{t[item.label]}</span>
+                        <span className="od-rail-wide">{t[item.label]}</span>
                       </Link>
                       {item.kids ? (
                         <button
                           type="button"
                           onClick={() => setOpen(open === item.id ? "__none" : item.id)}
                           aria-label={t.expand_children}
-                          className="text-od-faint-2 hover:bg-od-raise hover:text-od-text-2 inline-flex h-[30px] w-6 flex-none cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-[12px] leading-none"
+                          className="od-rail-wide text-od-faint-2 hover:bg-od-raise hover:text-od-text-2 inline-flex h-[30px] w-6 flex-none cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-[12px] leading-none"
                         >
                           {expanded ? "⌄" : "›"}
                         </button>
@@ -298,7 +361,7 @@ export function Sidebar({
                     </div>
 
                     {item.kids && expanded ? (
-                      <div className="my-[3px] flex flex-col gap-px ps-[21px]">
+                      <div className="od-rail-wide my-[3px] flex flex-col gap-px ps-[21px]">
                         {item.kids.map((kid) => {
                           const id = kidId(kid);
                           // Only the live row carries a number, and only when
@@ -347,13 +410,13 @@ export function Sidebar({
           {liveCalls > 0 && active !== "live" ? (
             <Link
               href={href("/live")}
-              className="text-od-text-2 hover:bg-od-raise flex items-center gap-[9px] rounded-[9px] border border-[color:var(--od-violet-border)] bg-[var(--od-canvas-violet)] p-[9px_11px] text-[13px] font-medium hover:no-underline"
+              className="od-rail-row text-od-text-2 hover:bg-od-raise flex items-center gap-[9px] rounded-[9px] border border-[color:var(--od-violet-border)] bg-[var(--od-canvas-violet)] p-[9px_11px] text-[13px] font-medium hover:no-underline"
             >
               <span
                 className="size-2 flex-none rounded-full bg-[color:var(--od-violet)]"
                 style={{ animation: "od-ring-violet 1.8s ease-out infinite" }}
               />
-              <span className="min-w-0">
+              <span className="od-rail-wide min-w-0">
                 {liveCalls === 1
                   ? t.on_the_line_one
                   : interpolate(t.on_the_line_many, { count: liveCalls })}
@@ -438,14 +501,14 @@ export function Sidebar({
               type="button"
               onClick={() => setMenuOpen((value) => !value)}
               aria-label={t.account_menu}
-              className={`flex w-full cursor-pointer items-center gap-[9px] rounded-[7px] border-none p-[8px_11px] ${
+              className={`od-rail-row flex w-full cursor-pointer items-center gap-[9px] rounded-[7px] border-none p-[8px_11px] ${
                 menuOpen ? "bg-od-raise" : "bg-transparent"
               }`}
             >
               <span className="border-od-border-9 text-od-text-2 inline-flex size-[26px] flex-none items-center justify-center rounded-full border bg-[var(--od-raise-5)] text-[11.5px] font-semibold">
                 {me.data?.username.slice(0, 1).toUpperCase() ?? "·"}
               </span>
-              <span className="min-w-0 flex-[1_1_auto] text-start">
+              <span className="od-rail-wide min-w-0 flex-[1_1_auto] text-start">
                 <span className="text-od-text-2 block text-[13px]">
                   {me.data?.username ?? "…"}
                 </span>
@@ -453,7 +516,9 @@ export function Sidebar({
                   <span className="text-od-faint block text-[11.5px]">{current.name}</span>
                 ) : null}
               </span>
-              <span className="text-od-faint-2 flex-none text-[10px]">{menuOpen ? "⌄" : "›"}</span>
+              <span className="od-rail-wide text-od-faint-2 flex-none text-[10px]">
+                {menuOpen ? "⌄" : "›"}
+              </span>
             </button>
           </div>
         </div>

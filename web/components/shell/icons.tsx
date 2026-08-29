@@ -12,6 +12,9 @@ const PATHS: Record<string, string> = {
   bot: "M6 8h12v9H6V8Z M9.5 12v1.5 M14.5 12v1.5 M12 5v3 M3.5 11.5v3 M20.5 11.5v3",
   bell: "M6 9a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5h-15S6 13 6 9Z M10 18.5a2 2 0 0 0 4 0",
   book: "M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4V5Z M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6V5Z",
+  // The sidebar toggle. A panel with its rail drawn in, and no arrow: an arrow would
+  // point the wrong way the moment the interface is read right to left.
+  panel: "M4 5h16v14H4V5Z M9.5 5v14",
 };
 
 export function NavIcon({ name, color }: { name: string; color: string }) {

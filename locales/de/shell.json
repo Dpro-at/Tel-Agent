@@ -20,6 +20,8 @@
   "nav_notifications": "Benachrichtigungen",
   "on_the_line_many": "{count} Anrufe in der Leitung",
   "on_the_line_one": "1 Anruf in der Leitung",
+  "rail_collapse": "Seitenleiste einklappen",
+  "rail_expand": "Seitenleiste offen halten",
   "role_admin": "Admin",
   "role_invited": "Eingeladen",
   "role_owner": "Inhaber",

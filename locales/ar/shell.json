@@ -20,6 +20,8 @@
   "nav_notifications": "الإشعارات",
   "on_the_line_many": "{count} مكالمات على الخط",
   "on_the_line_one": "مكالمة واحدة على الخط",
+  "rail_collapse": "طيّ الشريط الجانبي",
+  "rail_expand": "إبقاء الشريط الجانبي مفتوحًا",
   "role_admin": "مدير",
   "role_invited": "مدعو",
   "role_owner": "المالك",

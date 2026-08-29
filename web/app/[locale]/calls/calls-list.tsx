@@ -99,8 +99,8 @@ export function CallsList({ locale, t }: { locale: Locale; t: CallsDictionary })
   };
 
   return (
-    <div className="bg-od-canvas text-od-text-2 min-h-dvh text-[14px] leading-[1.45] ps-[224px]">
-      <div className="fixed inset-y-0 start-0 z-50 h-dvh w-[224px]">
+    <div className="bg-od-canvas text-od-text-2 min-h-dvh text-[14px] leading-[1.45] ps-[var(--od-shell-w)]">
+      <div className="fixed inset-y-0 start-0 z-50 h-dvh w-[var(--od-shell-w)]">
         <Sidebar locale={locale} active="calls" />
       </div>
 

@@ -160,6 +160,49 @@ html[data-od-theme="light"] {
   }
 }
 
+/* The shell's rail.
+
+   `--od-shell-w` is the space every screen leaves for the sidebar, so collapsing it
+   is one attribute on `<html>` rather than an edit to twenty-four screens. The
+   sidebar itself widens back to the open width while it is pointed at or tabbed
+   through, and overflows its own column to do it - a peek lies over the page instead
+   of pushing it sideways, in both directions. */
+:root {
+    --od-shell-open: 224px;
+    --od-shell-rail: 56px;
+    --od-shell-w: var(--od-shell-open);
+}
+:root[data-od-rail="on"] {
+    --od-shell-w: var(--od-shell-rail);
+}
+
+.od-rail {
+    width: var(--od-shell-w);
+    transition: width .14s ease;
+}
+:root[data-od-rail="on"] .od-rail:hover,
+:root[data-od-rail="on"] .od-rail:focus-within {
+    width: var(--od-shell-open);
+    /* A peek covers the page rather than moving it, so it needs an edge to sit on. */
+    box-shadow: 0 0 44px var(--od-scrim-3);
+}
+
+/* Collapsed: the rail is on and nobody is pointing at or tabbing through it. Only
+   the icons survive; `.od-rail-narrow` is the mark that stands in for the wordmark. */
+:root[data-od-rail="on"] .od-rail:not(:hover):not(:focus-within) .od-rail-wide {
+    display: none;
+}
+:root[data-od-rail="on"] .od-rail:not(:hover):not(:focus-within) .od-rail-narrow {
+    display: inline-flex;
+}
+:root[data-od-rail="on"] .od-rail:not(:hover):not(:focus-within) .od-rail-row {
+    justify-content: center;
+    padding-inline: 0;
+}
+.od-rail-narrow {
+    display: none;
+}
+
 /* Animations used by the ported screens. */
 @keyframes od-ring {
   0% { box-shadow: 0 0 0 0 rgba(240, 96, 94, .55); }
