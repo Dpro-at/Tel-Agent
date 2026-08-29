@@ -78,6 +78,10 @@ EVENTS = (
     "webhook_added",
     "webhook_changed",
     "webhook_removed",
+    # The web chat channel. Which sites may embed it and whether it is on decide who
+    # can reach the agent at all, and its reCAPTCHA secret is a credential - so a
+    # change needs a name attached afterwards.
+    "web_channel_changed",
 )
 
 
