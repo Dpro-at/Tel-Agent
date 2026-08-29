@@ -6,6 +6,11 @@ migration that drops the table instead. So this module imports all of them, and
 `alembic/env.py` imports this module.
 """
 
+from api.models.assistant import (
+    ASSISTANT_STATUSES,
+    ASSISTANT_TEMPLATES,
+    Assistant,
+)
 from api.models.attempt import SCOPES, AuthAttempt
 from api.models.audit import EVENTS, AuthEvent
 from api.models.backup import BACKUP_KINDS, BACKUP_STATUSES, Backup
@@ -36,6 +41,8 @@ from api.models.session import Session
 from api.models.setting import Setting
 
 __all__ = [
+    "ASSISTANT_STATUSES",
+    "ASSISTANT_TEMPLATES",
     "BACKUP_KINDS",
     "BACKUP_STATUSES",
     "CATEGORIES",
@@ -51,6 +58,7 @@ __all__ = [
     "SCOPES",
     "App",
     "AppInstall",
+    "Assistant",
     "AuthAttempt",
     "AuthCode",
     "AuthEvent",

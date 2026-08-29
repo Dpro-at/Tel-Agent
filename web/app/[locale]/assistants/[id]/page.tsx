@@ -17,10 +17,15 @@ export default async function AssistantEditorPage({
 }: {
   params: Promise<{ locale: string; id: string }>;
 }) {
-  const { locale } = await params;
+  const { locale, id } = await params;
   if (!isLocale(locale)) notFound();
+
+  // The id is a database key, so a link somebody typed by hand is refused here
+  // rather than becoming a request the API has to answer.
+  const assistantId = Number(id);
+  if (!Number.isInteger(assistantId) || assistantId < 1) notFound();
 
   const t = pickDictionary<EditorDictionary>(locale, { en, de, ar });
 
-  return <AssistantEditor locale={locale} t={t} />;
+  return <AssistantEditor locale={locale} t={t} assistantId={assistantId} />;
 }

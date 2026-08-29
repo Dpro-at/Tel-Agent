@@ -39,6 +39,7 @@ from api.middleware.csrf import CsrfMiddleware
 from api.middleware.request_id import RequestIdMiddleware
 from api.middleware.ws_auth import WebSocketAuthMiddleware
 from api.routes import apps as apps_routes
+from api.routes import assistants as assistant_routes
 from api.routes import auth as auth_routes
 from api.routes import backup as backup_routes
 from api.routes import contacts as contact_routes
@@ -271,6 +272,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(workspace_routes.router)
     app.include_router(invite_routes.router)
     app.include_router(number_routes.router)
+    app.include_router(assistant_routes.router)
     app.include_router(rule_routes.router)
     app.include_router(contact_routes.router)
 

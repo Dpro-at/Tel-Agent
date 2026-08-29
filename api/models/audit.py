@@ -60,6 +60,12 @@ EVENTS = (
     "rule_added",
     "rule_changed",
     "rule_removed",
+    # Assistants. The persona and the instructions are what the business says to its
+    # customers through the agent, so changing them is a change to how the company
+    # speaks - worth a name afterwards. Recorded against the acting account.
+    "assistant_added",
+    "assistant_changed",
+    "assistant_removed",
 )
 
 
