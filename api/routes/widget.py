@@ -275,7 +275,16 @@ async def widget_page(request: Request, path: str) -> Response:
     # The header the browser enforces. `'none'` when there is nothing to allow, which
     # is also what an unknown address gets.
     ancestors = " ".join(allowed) if allowed else "'none'"
-    body = _page(path) if channel and allowed else "<!doctype html><title>Chat</title>"
+    # `channel.webhook_path`, not the `path` from the URL. They are equal - the lookup
+    # matched on exact equality - but they do not come from the same place, and what is
+    # written into a page should be the value this product stored rather than the string
+    # a stranger sent. The escaping in `_js_string` stands either way; this is the half
+    # that makes it unnecessary.
+    body = (
+        _page(channel.webhook_path or "")
+        if channel and allowed
+        else "<!doctype html><title>Chat</title>"
+    )
 
     if not allowed:
         logger.info(
