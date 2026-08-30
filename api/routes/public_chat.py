@@ -73,6 +73,26 @@ class Accepted(BaseModel):
     message_id: int
 
 
+class Line(BaseModel):
+    """One turn of a thread, as a stranger may read it back.
+
+    Three fields, and none of them is an id from this installation: a visitor holding
+    the handle is allowed to see their own conversation, not to learn how many
+    conversations exist or which workspace this is.
+    """
+
+    speaker: str
+    text: str
+    ts_ms: int
+
+
+class Thread(BaseModel):
+    """A conversation as its own visitor sees it after a reload."""
+
+    conversation: str
+    messages: list[Line]
+
+
 def _too_many() -> object:
     """The one refusal that says what it is.
 
@@ -467,6 +487,91 @@ async def _reply_stream(
         message_id = stored.id
 
     yield _event({"done": True, "message_id": message_id})
+
+
+# What a visitor is handed back after a reload. Long enough that a real exchange
+# survives, short enough that the handle is not a way to pull an archive.
+THREAD_MAX = 50
+
+# What a stranger may see of who said what. `human` - a colleague who took the thread
+# over - is folded into the agent on purpose: the visitor was talking to the business,
+# and which desk answered is the business's own business.
+_VISIBLE_SPEAKERS = {"caller": "visitor", "agent": "agent", "human": "agent"}
+
+
+@router.get(
+    "/{path}/messages",
+    response_model=Thread,
+    summary="The thread so far, for a visitor who reloaded the page",
+)
+async def read_thread(
+    request: Request,
+    path: str,
+    conversation: str,
+    origin: str | None = Header(default=None),
+) -> object:
+    """Milestone 0's *thread survives a page reload*, from the visitor's side.
+
+    Without this the widget comes back empty after a refresh while the server still
+    holds the thread - so the visitor asks again, and the agent answers a question it
+    was already asked, referring to things the visitor can no longer see.
+
+    **The handle is the whole of the authorisation, and that is deliberate.** It is
+    unguessable, issued only to somebody who passed every check on the message that
+    created it, and scoped to one channel - the same reasoning that guards the reply
+    stream. What it does not do is widen: the guards below are the stream's own, in the
+    same order, and what comes back carries nothing the stream does not.
+    """
+    db: DbSession = request.state.db
+
+    channel = await _channel(db, path)
+    if channel is None:
+        return _refused()
+
+    settings = channel.settings_json or {}
+    refusal = check_origin(
+        origin,
+        settings.get("allowed_origins"),
+        own=str(request.base_url).rstrip("/"),
+        require_header=False,
+    )
+    if refusal is not None:
+        logger.info("web chat thread refused", extra={"reason": refusal.reason})
+        return _refused()
+
+    thread = await db.scalar(
+        select(Conversation).where(
+            Conversation.external_id == conversation,
+            Conversation.channel_id == channel.id,
+            Conversation.status == "open",
+        )
+    )
+    if thread is None:
+        # A handle that has been closed, or was never on this channel, is a handle that
+        # does not exist. The widget starts a new thread rather than showing an error a
+        # visitor cannot act on.
+        return _refused()
+
+    rows = (
+        (
+            await db.execute(
+                select(Message)
+                .where(Message.conversation_id == thread.id)
+                .order_by(Message.ts_ms.desc(), Message.id.desc())
+                .limit(THREAD_MAX)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return Thread(
+        conversation=conversation,
+        messages=[
+            Line(speaker=_VISIBLE_SPEAKERS[row.speaker], text=row.text, ts_ms=row.ts_ms)
+            for row in reversed(rows)
+            if row.speaker in _VISIBLE_SPEAKERS
+        ],
+    )
 
 
 @router.get("/{path}/stream", summary="The agent's reply, as it is produced")
