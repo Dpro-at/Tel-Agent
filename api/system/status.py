@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
 from api.config import Settings
@@ -142,10 +142,62 @@ def _storage() -> dict[str, Any]:
     }
 
 
-# The four that have no code behind them yet. Named here rather than omitted: a screen
-# that simply does not draw SIP is a screen that cannot tell an owner the phone is not
-# set up, which is the single most useful thing it could say before Milestone 11.
-UNBUILT = ("web_channel", "sip", "llm", "stt", "tts")
+# The ones with no code behind them yet. Named here rather than omitted: a screen that
+# simply does not draw SIP is a screen that cannot tell an owner the phone is not set
+# up, which is the single most useful thing it could say before Milestone 11.
+#
+# `web_channel` and `llm` have left this list, because they now have something to
+# report. A row that says `not_configured` about a part that is running is the same
+# lie as a green dot on a part that is not.
+UNBUILT = ("sip", "stt", "tts")
+
+
+async def _web_channel(db: DbSession) -> Service:
+    """Whether anybody can actually reach the chat.
+
+    A channel with no address is a channel nobody can embed, and a disabled one refuses
+    every message - so neither counts as configured. This asks the question the owner
+    is asking, which is not "does a row exist" but "is the bubble on my site working".
+    """
+    from api.models import Channel
+
+    live = await db.scalar(
+        select(func.count())
+        .select_from(Channel)
+        .where(
+            Channel.kind == "web",
+            Channel.status == "active",
+            Channel.webhook_path.is_not(None),
+        )
+    )
+    if not live:
+        return Service("web_channel", "not_configured")
+    return Service("web_channel", "ok", detail=f"{live} live")
+
+
+def _llm(settings: Settings) -> Service:
+    """The model, as the environment describes it.
+
+    Not called here. A health screen that spends a model request every time it is
+    opened is a health screen with a bill, and the thing an owner needs to know from
+    this row - whether this installation has a model at all - is answerable without
+    one. A model that is configured and refusing shows up where it matters, in a
+    conversation, and lands in the tray.
+    """
+    from agent.config import ConfigurationError, llm_settings
+
+    try:
+        configured = llm_settings()
+    except ConfigurationError as broken:
+        # Half a configuration is worse than none: the agent refuses to answer and the
+        # owner has no way to see why from the outside. This row is that way.
+        return Service("llm", "down", detail=str(broken))
+
+    if configured is None:
+        return Service("llm", "not_configured")
+    # The model and where it lives. Never the key - this endpoint is admin-only, and
+    # that is not a reason to hand one back.
+    return Service("llm", "ok", detail=f"{configured.model} at {configured.base_url}")
 
 
 async def collect(db: DbSession, settings: Settings) -> dict[str, Any]:
@@ -161,6 +213,7 @@ async def collect(db: DbSession, settings: Settings) -> dict[str, Any]:
     # as down every time the mail check happened to overlap it.
     database = await _database(db)
     mail_service = await _mail(db, settings)
+    web_channel = await _web_channel(db)
 
     services = [
         # The API answered this request, so it is up by construction. Said explicitly
@@ -168,6 +221,8 @@ async def collect(db: DbSession, settings: Settings) -> dict[str, Any]:
         Service("api", "ok"),
         database,
         mail_service,
+        web_channel,
+        _llm(settings),
         *(Service(name, "not_configured") for name in UNBUILT),
     ]
 

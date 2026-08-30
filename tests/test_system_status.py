@@ -67,6 +67,98 @@ async def test_a_service_nobody_has_built_is_not_green(
         assert states[unbuilt] == "not_configured", unbuilt
 
 
+async def test_the_chat_says_not_configured_until_somebody_can_reach_it(
+    migrated: AsyncSession, settings: Settings
+):
+    """A row exists for the web channel long before a bubble does.
+
+    A channel with no address is one nobody can embed and a disabled one refuses every
+    message, so neither is "configured" - the question an owner is asking is whether
+    the bubble on their site works, not whether a row exists.
+    """
+    from api.models import Channel, Workspace
+
+    workspace = Workspace(name="Wagner & Partner")
+    migrated.add(workspace)
+    await migrated.flush()
+
+    # Configured but switched off, and live but with no address: neither counts.
+    migrated.add_all(
+        [
+            Channel(
+                workspace_id=workspace.id,
+                kind="web",
+                name="Old",
+                webhook_path="off-" + "a" * 20,
+                status="disabled",
+            ),
+            Channel(workspace_id=workspace.id, kind="web", name="New", status="active"),
+        ]
+    )
+    await migrated.commit()
+
+    states = {
+        service["id"]: service["state"]
+        for service in (await status.collect(migrated, settings))["services"]
+    }
+    assert states["web_channel"] == "not_configured"
+
+    migrated.add(
+        Channel(
+            workspace_id=workspace.id,
+            kind="web",
+            name="Live",
+            webhook_path="live-" + "b" * 20,
+            status="active",
+        )
+    )
+    await migrated.commit()
+
+    report = await status.collect(migrated, settings)
+    live = next(s for s in report["services"] if s["id"] == "web_channel")
+    assert live["state"] == "ok"
+    assert live["detail"] == "1 live"
+
+
+async def test_the_model_row_answers_without_calling_the_model(
+    migrated: AsyncSession, settings: Settings, monkeypatch
+):
+    """Three states, and none of them costs a request.
+
+    A health screen that spends a model call every time it is opened is a health screen
+    with a bill. What an owner needs from this row - whether this installation has a
+    model at all - is answerable from the environment.
+    """
+    from agent.config import llm_settings
+
+    def row(report):
+        return next(s for s in report["services"] if s["id"] == "llm")
+
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    llm_settings.cache_clear()
+    assert row(await status.collect(migrated, settings))["state"] == "not_configured"
+
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_MODEL", "a-model")
+    monkeypatch.setenv("LLM_API_KEY", "a-secret-key")
+    llm_settings.cache_clear()
+    connected = row(await status.collect(migrated, settings))
+    assert connected["state"] == "ok"
+    assert "a-model" in connected["detail"]
+    # The key is never handed back, and this endpoint being admin-only is not a reason
+    # to start.
+    assert "a-secret-key" not in connected["detail"]
+
+    # Half a configuration is worse than none: the agent refuses to answer, and without
+    # this row the owner has no way to see why from outside a conversation.
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    llm_settings.cache_clear()
+    broken = row(await status.collect(migrated, settings))
+    assert broken["state"] == "down"
+    assert "LLM_API_KEY" in broken["detail"]
+    llm_settings.cache_clear()
+
+
 async def test_an_unconfigured_installation_is_not_degraded(
     migrated: AsyncSession, settings: Settings
 ):
