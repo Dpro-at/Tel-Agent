@@ -581,7 +581,7 @@ async def test_the_second_question_is_asked_with_the_first_still_attached(
 
     asked: list[tuple[str, list]] = []
 
-    async def recording_reply(text: str, *, history=None):
+    async def recording_reply(text: str, *, history=None, **_unused):
         asked.append((text, list(history or [])))
         yield "ja"
 
@@ -630,7 +630,7 @@ async def test_a_visitor_who_leaves_stops_the_generation(stage, monkeypatch) -> 
 
     produced: list[str] = []
 
-    async def endless_reply(text: str, *, history=None):
+    async def endless_reply(text: str, *, history=None, **_unused):
         for index in range(50):
             produced.append(f"chunk-{index}")
             yield f"chunk-{index} "

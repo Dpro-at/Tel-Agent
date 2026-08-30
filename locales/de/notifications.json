@@ -35,6 +35,7 @@
   "msg_backup_no_target": "Es ist kein Sicherungsziel gesetzt, also wird gar nicht gesichert.",
   "msg_backup_unverified": "Eine Sicherung wurde geschrieben, aber das Zurücklesen zur Prüfung schlug fehl.",
   "msg_mail_failed": "Eine E-Mail konnte nicht gesendet werden.",
+  "msg_message_taken": "{name} hat eine Nachricht hinterlassen: {reason}",
   "msg_restore_staged": "Eine Wiederherstellung vom {taken_at} ist vorgemerkt und läuft beim nächsten Neustart.",
   "msg_task_failed": "Die geplante Aufgabe {task} ist fehlgeschlagen.",
   "msg_web_chat_started": "Jemand hat auf Ihrer Website einen Chat begonnen: „{preview}“",

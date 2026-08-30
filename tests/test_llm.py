@@ -17,6 +17,7 @@ import pytest
 from agent import reply as reply_module
 from agent.config import ConfigurationError, LlmSettings, llm_settings
 from agent.providers.llm import Message, configured_provider, provider_for
+from agent.providers.llm.base import TextDelta
 from agent.providers.llm.openai_compatible import OpenAICompatibleLLM
 
 SETTINGS = LlmSettings(
@@ -44,11 +45,11 @@ async def test_the_tokens_arrive_in_the_order_the_model_produced_them() -> None:
         lambda request: httpx.Response(200, content=_stream_body("Guten ", "Tag", "."))
     ) as client:
         provider = OpenAICompatibleLLM(SETTINGS, client=client)
-        chunks = [chunk async for chunk in provider.stream([{"role": "user", "content": "hi"}])]
+        events = [event async for event in provider.stream([{"role": "user", "content": "hi"}])]
 
     # Three pieces, not one string: a provider that buffered would pass an equality
     # check on the joined text and fail this line, which is the point of it.
-    assert chunks == ["Guten ", "Tag", "."]
+    assert [event.text for event in events] == ["Guten ", "Tag", "."]
 
 
 async def test_the_request_carries_the_model_the_key_and_the_turns() -> None:
@@ -64,7 +65,7 @@ async def test_the_request_carries_the_model_the_key_and_the_turns() -> None:
     ]
     async with _client(handler) as client:
         provider = OpenAICompatibleLLM(SETTINGS, client=client)
-        [chunk async for chunk in provider.stream(turns)]
+        [event async for event in provider.stream(turns)]
 
     request = seen[0]
     assert str(request.url) == "https://model.test/v1/chat/completions"
@@ -79,7 +80,7 @@ async def test_a_refusal_is_raised_rather_than_returned_as_a_short_reply() -> No
     async with _client(lambda request: httpx.Response(401, json={"error": "no"})) as client:
         provider = OpenAICompatibleLLM(SETTINGS, client=client)
         with pytest.raises(httpx.HTTPStatusError):
-            [chunk async for chunk in provider.stream([{"role": "user", "content": "hi"}])]
+            [event async for event in provider.stream([{"role": "user", "content": "hi"}])]
 
 
 async def test_a_chunk_that_makes_no_sense_shortens_the_reply_rather_than_breaking_it() -> None:
@@ -93,9 +94,9 @@ async def test_a_chunk_that_makes_no_sense_shortens_the_reply_rather_than_breaki
 
     async with _client(lambda request: httpx.Response(200, content=body)) as client:
         provider = OpenAICompatibleLLM(SETTINGS, client=client)
-        chunks = [chunk async for chunk in provider.stream([{"role": "user", "content": "hi"}])]
+        events = [event async for event in provider.stream([{"role": "user", "content": "hi"}])]
 
-    assert chunks == ["still ", "here"]
+    assert [event.text for event in events] == ["still ", "here"]
 
 
 async def test_stopping_the_consumer_closes_the_stream() -> None:
@@ -114,7 +115,7 @@ async def test_stopping_the_consumer_closes_the_stream() -> None:
         first = await anext(stream)
         await stream.aclose()
 
-    assert first == "one"
+    assert first == TextDelta("one")
 
 
 async def test_no_model_configured_still_answers(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -174,9 +175,9 @@ async def test_the_reply_asks_the_model_to_answer_in_the_visitors_language() -> 
     asked: list[list[Message]] = []
 
     class Recorder:
-        async def stream(self, messages: list[Message]) -> AsyncIterator[str]:
+        async def stream(self, messages: list[Message], tools=None) -> AsyncIterator[TextDelta]:
             asked.append(messages)
-            yield "servus"
+            yield TextDelta("servus")
 
     reply_module_provider = Recorder()
     original = reply_module.configured_provider

@@ -24,10 +24,14 @@ is the honest state of a fresh install rather than a placeholder left behind.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 
 from agent.providers.llm import Message, configured_provider
+from agent.providers.llm.base import TextDelta, ToolCall
+from agent.tools import BUILTIN, BY_NAME, TakenMessage, ToolError
+from agent.tools import parse as parse_taken_message
 
 logger = logging.getLogger("agent.reply")
 
@@ -43,6 +47,17 @@ SYSTEM_PROMPT = (
     "Never invent prices, opening hours, availability or anything else specific to "
     "this business. When you do not know, say so plainly and offer to take a message."
 )
+
+# How many times the model may call tools before the turn ends. Three is two more than
+# any answer has needed: it is a ceiling on a loop that a confused model can otherwise
+# ride forever, at the visitor's expense and the account's.
+MAX_TOOL_ROUNDS = 3
+
+# What is done with a taken message differs per channel - a tray for web chat, and at
+# Milestone 11 something a person hears about while the caller is still on the line. So
+# the agent produces the value and the caller decides, which is also what keeps this
+# package free of `api/`.
+MessageTaken = Callable[[TakenMessage], Awaitable[None]]
 
 # Roughly a word at a time, which is what a model emits and what a person reads.
 GREETING = (
@@ -77,7 +92,45 @@ def _conversation(text: str, history: Sequence[Message] | None) -> list[Message]
     return messages
 
 
-async def reply(text: str, *, history: Sequence[Message] | None = None) -> AsyncIterator[str]:
+async def _run(call: ToolCall, on_message_taken: MessageTaken | None) -> str:
+    """One tool call, and the sentence the model is handed back.
+
+    Every failure is answered rather than raised. A model that is told "that is not a
+    tool" or "name is required" asks the visitor the question it skipped; a model whose
+    turn ends in a traceback leaves somebody mid-conversation with a broken page.
+    """
+    tool = BY_NAME.get(call.name)
+    if tool is None:
+        logger.warning("the model called a tool that does not exist", extra={"tool": call.name})
+        return f"There is no tool called {call.name!r}."
+
+    try:
+        arguments = json.loads(call.arguments or "{}")
+    except json.JSONDecodeError:
+        return "Those arguments were not valid JSON. Try the call again."
+    if not isinstance(arguments, dict):
+        return "Arguments must be an object."
+
+    try:
+        answer = await tool.run(arguments)
+    except ToolError as refused:
+        return str(refused)
+
+    if tool.name == "take_message" and on_message_taken is not None:
+        # Parsed a second time on purpose: the tool validated the arguments for itself,
+        # and this is the value the caller stores. Sharing a mutable result between the
+        # two would make the tool's contract depend on who called it.
+        await on_message_taken(parse_taken_message(arguments))
+
+    return answer
+
+
+async def reply(
+    text: str,
+    *,
+    history: Sequence[Message] | None = None,
+    on_message_taken: MessageTaken | None = None,
+) -> AsyncIterator[str]:
     """The agent's answer, in the pieces it becomes available in.
 
     `history` is the thread so far in the model's own vocabulary - `user` for the
@@ -91,8 +144,52 @@ async def reply(text: str, *, history: Sequence[Message] | None = None) -> Async
             yield word
         return
 
-    # Deliberately not caught here. A model that fails mid-sentence must not leave half
-    # an answer behind: the route stores the reply only when the stream ends normally,
-    # so letting this raise is what keeps a broken generation out of the transcript.
-    async for chunk in provider.stream(_conversation(text, history)):
-        yield chunk
+    messages = _conversation(text, history)
+
+    for _round in range(MAX_TOOL_ROUNDS):
+        spoken: list[str] = []
+        calls: list[ToolCall] = []
+
+        # Deliberately not caught. A model that fails mid-sentence must not leave half
+        # an answer behind: the route stores the reply only when the stream ends
+        # normally, so letting this raise keeps a broken generation out of the
+        # transcript.
+        async for event in provider.stream(messages, BUILTIN):
+            if isinstance(event, TextDelta):
+                spoken.append(event.text)
+                yield event.text
+            else:
+                calls.append(event)
+
+        if not calls:
+            return
+
+        # The turn the model just took, tool calls and all, has to go back to it or the
+        # answers below have nothing to answer.
+        asked: Message = {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": call.id,
+                    "type": "function",
+                    "function": {"name": call.name, "arguments": call.arguments},
+                }
+                for call in calls
+            ],
+        }
+        if spoken:
+            asked["content"] = "".join(spoken)
+        messages.append(asked)
+
+        for call in calls:
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call.id,
+                    "content": await _run(call, on_message_taken),
+                }
+            )
+
+    logger.warning(
+        "the model kept calling tools; the turn was ended", extra={"text": text[:80]}
+    )

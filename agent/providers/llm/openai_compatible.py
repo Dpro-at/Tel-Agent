@@ -9,18 +9,26 @@ being a rewrite. `LLM_BASE_URL` is the whole of that swap.
 **Every token is yielded from inside the open response.** Collecting the stream and
 returning it would satisfy the type and break Rule 3; worse, it would make cancellation
 impossible, because there would be nothing left to close when the visitor leaves.
+
+**A tool call is the one thing here that cannot be streamed through.** Its arguments
+arrive as JSON in fragments, and half of a JSON object is not a smaller JSON object -
+so those fragments are joined and the call is emitted once it is whole. Text is never
+held back for it: an answer that mentions taking a message is said while the call to
+take it is still being assembled.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
+from typing import Any
 
 import httpx
 
 from agent.config import LlmSettings
-from agent.providers.llm.base import Message
+from agent.providers.llm.base import Event, Message, TextDelta, ToolCall
+from agent.tools import Tool
 
 logger = logging.getLogger("agent.llm")
 
@@ -36,7 +44,7 @@ DONE = "[DONE]"
 
 
 class OpenAICompatibleLLM:
-    """Streams tokens from a chat-completions endpoint."""
+    """Streams tokens and tool calls from a chat-completions endpoint."""
 
     def __init__(
         self, settings: LlmSettings, *, client: httpx.AsyncClient | None = None
@@ -47,32 +55,41 @@ class OpenAICompatibleLLM:
         # client is how a shared connection pool dies halfway through a call.
         self._client = client
 
-    async def stream(self, messages: list[Message]) -> AsyncIterator[str]:
-        """The model's reply, token by token, in the order it is produced."""
-        payload = {
+    async def stream(
+        self, messages: list[Message], tools: Sequence[Tool] | None = None
+    ) -> AsyncIterator[Event]:
+        """The model's reply, in the order it is produced."""
+        payload: dict[str, Any] = {
             "model": self._settings.model,
             "messages": messages,
             "stream": True,
         }
+        if tools:
+            payload["tools"] = [tool.as_schema() for tool in tools]
+
         headers = {"Authorization": f"Bearer {self._settings.api_key}"}
         url = f"{self._settings.base_url}/chat/completions"
 
         if self._client is not None:
-            async for chunk in self._read(self._client, url, payload, headers):
-                yield chunk
+            async for event in self._read(self._client, url, payload, headers):
+                yield event
             return
 
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-            async for chunk in self._read(client, url, payload, headers):
-                yield chunk
+            async for event in self._read(client, url, payload, headers):
+                yield event
 
     async def _read(
         self,
         client: httpx.AsyncClient,
         url: str,
-        payload: dict,
+        payload: dict[str, Any],
         headers: dict[str, str],
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[Event]:
+        # Keyed by the index the wire uses, because a model may assemble two calls at
+        # once and the fragments of one carry no other way of telling them apart.
+        pending: dict[int, dict[str, str]] = {}
+
         async with client.stream("POST", url, json=payload, headers=headers) as response:
             if response.status_code >= 400:
                 # The body has to be read before it can be quoted: on a streaming
@@ -86,19 +103,51 @@ class OpenAICompatibleLLM:
                 response.raise_for_status()
 
             async for line in response.aiter_lines():
-                fragment = _fragment(line)
-                if fragment is None:
+                delta = _delta(line)
+                if delta is None:
                     continue
-                if fragment == "":
-                    # A chunk that carries a role and no text - the opening one usually
-                    # does. Skipping it keeps "a chunk arrived" meaning "there is
-                    # something to show".
-                    continue
-                yield fragment
+
+                content = delta.get("content")
+                if isinstance(content, str) and content:
+                    # A chunk carrying only a role - the opening one usually does -
+                    # falls through here, which keeps "an event arrived" meaning "there
+                    # is something to show".
+                    yield TextDelta(content)
+
+                for fragment in delta.get("tool_calls") or []:
+                    _accumulate(pending, fragment)
+
+        for call in pending.values():
+            if call["name"]:
+                yield ToolCall(id=call["id"], name=call["name"], arguments=call["arguments"])
 
 
-def _fragment(line: str) -> str | None:
-    """The text in one server-sent event, or `None` when the line carries none.
+def _accumulate(pending: dict[int, dict[str, str]], fragment: Any) -> None:
+    """Join one fragment of a tool call onto the call it belongs to."""
+    if not isinstance(fragment, dict):
+        return
+    index = fragment.get("index", 0)
+    if not isinstance(index, int):
+        return
+
+    call = pending.setdefault(index, {"id": "", "name": "", "arguments": ""})
+    identifier = fragment.get("id")
+    if isinstance(identifier, str) and identifier:
+        call["id"] = identifier
+
+    function = fragment.get("function")
+    if not isinstance(function, dict):
+        return
+    name = function.get("name")
+    if isinstance(name, str) and name:
+        call["name"] = name
+    arguments = function.get("arguments")
+    if isinstance(arguments, str):
+        call["arguments"] += arguments
+
+
+def _delta(line: str) -> dict[str, Any] | None:
+    """The delta object in one server-sent event, or `None` when it carries none.
 
     Kept apart from the reading loop because this is the part that differs between
     services claiming the same format - and a parser that returns `None` for anything
@@ -123,8 +172,4 @@ def _fragment(line: str) -> str | None:
         return None
 
     delta = choices[0].get("delta")
-    if not isinstance(delta, dict):
-        return None
-
-    content = delta.get("content")
-    return content if isinstance(content, str) else None
+    return delta if isinstance(delta, dict) else None
