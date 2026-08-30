@@ -656,6 +656,66 @@ async def test_a_visitor_who_reloads_gets_the_thread_back(stage) -> None:
     assert set(body["messages"][0]) == {"speaker", "text", "ts_ms"}
 
 
+async def test_a_whisper_reaches_the_model_as_a_note_not_as_something_it_said(
+    stage, monkeypatch
+) -> None:
+    """The other half of the whisper: the agent is told, in the right voice.
+
+    Handed over as an assistant turn it reads as a line the agent already gave the
+    customer, so the model repeats it or answers around it - and the colleague who
+    wrote "tell her the quote still stands" gets neither.
+    """
+    from api.routes import public_chat
+
+    asked: list[list] = []
+
+    async def recording_reply(text: str, *, history=None, **_unused):
+        asked.append(list(history or []))
+        yield "ja"
+
+    monkeypatch.setattr(public_chat, "generate_reply", recording_reply)
+
+    http, paths, db = stage
+    first = (
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "ist das Angebot noch gültig?"},
+            headers={"Origin": ALLOWED},
+        )
+    ).json()
+    thread = await db.scalar(
+        select(Conversation).where(Conversation.external_id == first["conversation"])
+    )
+    db.add(
+        Message(
+            workspace_id=thread.workspace_id,
+            conversation_id=thread.id,
+            ts_ms=int(thread.started_at.timestamp() * 1000) + 1,
+            speaker="human",
+            text="Das Angebot gilt bis 30. September.",
+            is_whisper=True,
+        )
+    )
+    await db.commit()
+
+    # A second question, so the whisper is behind it in the thread.
+    await http.post(
+        f"/public/chat/{paths['ours']}/messages",
+        json={"text": "und der Preis?", "conversation": first["conversation"]},
+        headers={"Origin": ALLOWED},
+    )
+    await http.get(
+        f"/public/chat/{paths['ours']}/stream",
+        params={"conversation": first["conversation"]},
+        headers={"Origin": ALLOWED},
+    )
+
+    whisper = [turn for turn in asked[-1] if "30. September" in turn["content"]]
+    assert len(whisper) == 1
+    assert whisper[0]["role"] == "system"
+    assert whisper[0]["content"].startswith("Note from a colleague")
+
+
 async def test_a_whisper_never_reaches_the_visitor(stage) -> None:
     """The one place an internal note could escape: the visitor's own reload.
 
