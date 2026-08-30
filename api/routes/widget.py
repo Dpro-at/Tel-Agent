@@ -312,6 +312,13 @@ def _page(path: str) -> str:
         if (!line.textContent) {{
           line.className = "msg note";
           line.textContent = "No reply just now.";
+        }} else {{
+          // Half an answer. The server stores a reply only when it finished, so this
+          // one is not in the transcript at all - and a visitor left holding two
+          // sentences of a paragraph should know they were cut off rather than read
+          // them as the whole answer.
+          line.classList.add("unsent");
+          say("That reply was cut off.", "note");
         }}
         done();
       }};
