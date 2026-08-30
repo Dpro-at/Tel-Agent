@@ -354,6 +354,19 @@ MAX_HISTORY_MESSAGES = 20
 # have the agent reply to its own colleague.
 _ROLES: dict[str, str] = {"caller": "user", "agent": "assistant", "human": "assistant"}
 
+# A whisper is an instruction to the agent, not a line it said. Handed over as
+# `assistant` it reads as something the agent already told the customer - so the model
+# either repeats it or answers around it, and the colleague who wrote "tell her the
+# quote still stands" gets neither. As a note it is what it is: something the agent
+# knows and the visitor has not been told.
+_WHISPER_PREFIX = "Note from a colleague, which the visitor has not seen: "
+
+
+def _turn(row: Message) -> LlmMessage:
+    if row.is_whisper:
+        return LlmMessage(role="system", content=_WHISPER_PREFIX + row.text)
+    return LlmMessage(role=_ROLES[row.speaker], content=row.text)
+
 
 async def _history(db: DbSession, thread: Conversation, before: Message) -> list[LlmMessage]:
     """The thread so far, oldest first, without the line being answered.
@@ -377,11 +390,7 @@ async def _history(db: DbSession, thread: Conversation, before: Message) -> list
         .scalars()
         .all()
     )
-    return [
-        LlmMessage(role=_ROLES[row.speaker], content=row.text)
-        for row in reversed(rows)
-        if row.speaker in _ROLES and row.text
-    ]
+    return [_turn(row) for row in reversed(rows) if row.speaker in _ROLES and row.text]
 
 
 async def _reply_stream(
@@ -556,7 +565,15 @@ async def read_thread(
         (
             await db.execute(
                 select(Message)
-                .where(Message.conversation_id == thread.id)
+                .where(
+                    Message.conversation_id == thread.id,
+                    # A whisper is a colleague coaching the agent mid-thread - "tell her
+                    # the quote still stands". The customer never saw it, and the one
+                    # place it could reach them is here, on a reload. The model is still
+                    # given them, because being told things the visitor cannot see is
+                    # what a whisper is for.
+                    Message.is_whisper.is_(False),
+                )
                 .order_by(Message.ts_ms.desc(), Message.id.desc())
                 .limit(THREAD_MAX)
             )

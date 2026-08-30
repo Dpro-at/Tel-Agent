@@ -4,7 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, OfflineError } from "./api";
 
-export type ResourceError = { kind: "offline" | "forbidden" | "failed"; message: string };
+export type ResourceError = {
+  kind: "offline" | "forbidden" | "missing" | "failed";
+  message: string;
+};
 
 /**
  * One fetch, and the three states a screen has to draw for it.
@@ -35,7 +38,12 @@ export type Resource<T> = {
 function describe(thrown: unknown): ResourceError {
   if (thrown instanceof OfflineError) return { kind: "offline", message: thrown.message };
   if (thrown instanceof ApiError) {
-    return { kind: thrown.status === 403 ? "forbidden" : "failed", message: thrown.message };
+    // 404 is kept apart from a server failure for the same reason `offline` is: "this
+    // is not here" and "this could not be fetched" need different words and different
+    // advice. A retry button on the first one only fails again.
+    if (thrown.status === 403) return { kind: "forbidden", message: thrown.message };
+    if (thrown.status === 404) return { kind: "missing", message: thrown.message };
+    return { kind: "failed", message: thrown.message };
   }
   return { kind: "failed", message: String(thrown) };
 }

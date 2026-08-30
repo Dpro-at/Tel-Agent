@@ -161,7 +161,14 @@ async def add_knowledge(
         details={"knowledge_id": row.id, "title": row.title},
     )
     logger.info("knowledge %s added in workspace %s", row.id, context.id)
-    name = await db.scalar(select(Assistant.name).where(Assistant.id == row.assistant_id))
+    # Scoped, like the write path above it. Nothing can reach here with an assistant
+    # from another workspace today - `_assistant_ok` refuses that on the way in - and
+    # this is the read that would quietly print the name if anything ever did.
+    name = await db.scalar(
+        select(Assistant.name).where(
+            Assistant.id == row.assistant_id, Assistant.workspace_id == context.id
+        )
+    )
     return _out(row, name)
 
 
@@ -217,7 +224,14 @@ async def edit_knowledge(
         username=user.username,
         details={"knowledge_id": row.id, "fields": sorted(sent)},
     )
-    name = await db.scalar(select(Assistant.name).where(Assistant.id == row.assistant_id))
+    # Scoped, like the write path above it. Nothing can reach here with an assistant
+    # from another workspace today - `_assistant_ok` refuses that on the way in - and
+    # this is the read that would quietly print the name if anything ever did.
+    name = await db.scalar(
+        select(Assistant.name).where(
+            Assistant.id == row.assistant_id, Assistant.workspace_id == context.id
+        )
+    )
     return _out(row, name)
 
 

@@ -21,6 +21,8 @@
   "messages_one": "1 message",
   "messages_many": "{count} messages",
   "summary_label": "Summary",
+  "thread_gone_title": "This conversation is not here",
+  "thread_gone_body": "It was deleted, or it belongs to another workspace. The thread you came from may be pointing at something that no longer exists.",
   "whisper_label": "Whisper — the customer did not see this",
   "speaker_human": "a person",
   "call_label": "Call",

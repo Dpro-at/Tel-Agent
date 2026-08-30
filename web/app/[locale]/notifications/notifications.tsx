@@ -332,7 +332,11 @@ export function Notifications({ locale, t }: { locale: Locale; t: NotificationsD
                           label it used to borrow belonged to a fixture about an SMS. */}
                       {item.conversation_id ? (
                         <Link
-                          href={`/${locale}/conversations`}
+                          // The thread itself, not the list with it somewhere in it.
+                          // A tray exists to be emptied, and a button that lands
+                          // somebody on a list to search for what they just clicked is
+                          // a button that costs more than it saves.
+                          href={`/${locale}/conversations?thread=${item.conversation_id}`}
                           className="cursor-pointer rounded-md border bg-transparent p-[8px_14px] text-[13px] font-medium whitespace-nowrap"
                           style={{ borderColor: tone.primaryBorder, color: tone.primaryColor }}
                         >

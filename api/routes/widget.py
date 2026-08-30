@@ -22,8 +22,11 @@ no CORS between the widget and the endpoint it posts to.
 
 from __future__ import annotations
 
+import html
 import json
 import logging
+from functools import lru_cache
+from pathlib import Path
 
 from fastapi import APIRouter, Request, Response
 from sqlalchemy import select
@@ -142,7 +145,54 @@ def _js_string(value: str) -> str:
     return encoded
 
 
-def _page(path: str) -> str:
+# Where the interface keeps its words. Read at runtime rather than compiled in: a
+# translator who fixes a sentence should not need a Python release, and the file they
+# are looking for is the one beside every other locale file.
+LOCALES = Path(__file__).resolve().parents[2] / "locales"
+
+# The three a release blocks on (locales/README.md). A channel set to anything else -
+# or to nothing - is served English, because a half-translated chat window is worse
+# than one language spoken consistently.
+SPOKEN = ("en", "de", "ar")
+RIGHT_TO_LEFT = ("ar",)
+
+
+@lru_cache(maxsize=len(SPOKEN))
+def _words(language: str) -> dict[str, str]:
+    """The widget's own strings, in one language.
+
+    Cached, because this is read on every page load and the file only changes when the
+    process restarts. Missing keys fall back to English rather than rendering blank: a
+    button with no label is a button nobody presses.
+    """
+    english = json.loads((LOCALES / "en" / "widget.json").read_text(encoding="utf-8"))
+    if language == "en":
+        return english
+    try:
+        return english | json.loads(
+            (LOCALES / language / "widget.json").read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):  # pragma: no cover - a locale file that is not there
+        logger.warning("no widget words for this language", extra={"language": language})
+        return english
+
+
+def _language(channel: Channel | None) -> str:
+    """What the visitor is spoken to in.
+
+    The channel's own setting, not the browser's `Accept-Language`. A business in
+    Vienna serves German customers and knows it; a browser that happens to be set to
+    English does not change who is at the other end. The visitor's *messages* are still
+    answered in whatever language they wrote in - that is the model's instruction, and
+    this is only the furniture around it.
+    """
+    declared = (channel.default_language or "").strip().lower() if channel else ""
+    # Matched on the leading subtag, so `de-AT` is German rather than a code nobody
+    # recognises falling quietly back to English.
+    return next((code for code in SPOKEN if declared.startswith(code)), "en")
+
+
+def _page(path: str, language: str) -> str:
     """The widget's document. Written here rather than in `web/` on purpose.
 
     It is served by the API so that its fetches are same-origin with the endpoint, and
@@ -150,11 +200,14 @@ def _page(path: str) -> str:
     deliberately small: a build step between a customer pasting a tag and a visitor
     seeing a bubble is a build step that will be out of date on somebody's server.
     """
+    words = _words(language)
+    said = {key: html.escape(value, quote=True) for key, value in words.items()}
+    direction = "rtl" if language in RIGHT_TO_LEFT else "ltr"
     return f"""<!doctype html>
-<html lang="en"><head>
+<html lang="{language}" dir="{direction}"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Chat</title>
+<title>{said["title"]}</title>
 <style>
   :root {{ color-scheme: light dark; font-family: system-ui, sans-serif; }}
   * {{ box-sizing: border-box; }}
@@ -175,6 +228,9 @@ def _page(path: str) -> str:
   .me {{ align-self: flex-end; background: #4f46e5; color: #fff; }}
   .them {{ align-self: flex-start; background: rgba(128,128,128,.16); }}
   .note {{ align-self: center; font-size: 12.5px; opacity: .7; text-align: center; }}
+  /* Sent and unsent must not look the same. Opacity alone would not say it on a
+     screen somebody is reading in daylight, so the outline carries it too. */
+  .unsent {{ opacity: .55; outline: 1px dashed rgba(255,255,255,.55); }}
   form {{ display: flex; gap: 8px; padding: 10px; border-top: 1px solid rgba(128,128,128,.3); }}
   input {{ flex: 1; min-width: 0; padding: 9px 11px; font: inherit; border-radius: 9px;
     border: 1px solid rgba(128,128,128,.4); background: Canvas; color: CanvasText; }}
@@ -183,18 +239,25 @@ def _page(path: str) -> str:
   form button[disabled] {{ opacity: .5; cursor: default; }}
 </style>
 </head><body>
-<button id="bubble" aria-label="Open chat">&#128172;</button>
-<div id="panel" role="dialog" aria-label="Chat">
-  <header><span>Chat</span><button id="close" aria-label="Close chat">&times;</button></header>
+<button id="bubble" aria-label="{said["open"]}">&#128172;</button>
+<div id="panel" role="dialog" aria-label="{said["title"]}">
+  <header>
+    <span>{said["title"]}</span>
+    <button id="close" aria-label="{said["close"]}">&times;</button>
+  </header>
   <div id="log" aria-live="polite"></div>
   <form id="form">
-    <input id="text" autocomplete="off" placeholder="Type a message" maxlength="4000">
-    <button type="submit">Send</button>
+    <input id="text" autocomplete="off" placeholder="{said["placeholder"]}" maxlength="4000">
+    <button type="submit">{said["send"]}</button>
   </form>
 </div>
 <script>
 (function () {{
   var PATH = {_js_string(path)};
+  // Parsed from a string rather than written as a literal, so the one escaping
+  // routine in this file is the only thing standing between a translated sentence
+  // and the parser.
+  var SAYS = JSON.parse({_js_string(json.dumps(words, ensure_ascii=False))});
   var panel = document.getElementById("panel");
   var bubble = document.getElementById("bubble");
   var log = document.getElementById("log");
@@ -245,6 +308,16 @@ def _page(path: str) -> str:
     line.textContent = body;
     log.appendChild(line);
     log.scrollTop = log.scrollHeight;
+    return line;
+  }}
+
+  // A message that did not arrive must not sit there looking like one that did, and
+  // the words the visitor typed are theirs - handing them back beats making somebody
+  // type a paragraph twice because a network blinked.
+  function failed(line, body) {{
+    line.classList.add("unsent");
+    say(SAYS.not_sent, "note");
+    if (!text.value) text.value = body;
   }}
 
   // What was said before the reload, drawn before the visitor types anything. A
@@ -298,7 +371,14 @@ def _page(path: str) -> str:
         source.close();
         if (!line.textContent) {{
           line.className = "msg note";
-          line.textContent = "No reply just now.";
+          line.textContent = SAYS.no_reply;
+        }} else {{
+          // Half an answer. The server stores a reply only when it finished, so this
+          // one is not in the transcript at all - and a visitor left holding two
+          // sentences of a paragraph should know they were cut off rather than read
+          // them as the whole answer.
+          line.classList.add("unsent");
+          say(SAYS.cut_off, "note");
         }}
         done();
       }};
@@ -310,7 +390,7 @@ def _page(path: str) -> str:
     var body = text.value.trim();
     if (!body) return;
     text.value = "";
-    say(body, "me");
+    var line = say(body, "me");
     var button = form.querySelector("button");
     button.disabled = true;
     try {{
@@ -325,10 +405,10 @@ def _page(path: str) -> str:
       }} else {{
         // One sentence for every refusal, because the server gives one. A visitor
         // cannot act on "origin not allowed" and should not be shown it.
-        say("This message could not be sent.", "note");
+        failed(line, body);
       }}
     }} catch (error) {{
-      say("This message could not be sent.", "note");
+      failed(line, body);
     }} finally {{
       button.disabled = false;
       text.focus();
@@ -366,7 +446,7 @@ async def widget_page(request: Request, path: str) -> Response:
     # a stranger sent. The escaping in `_js_string` stands either way; this is the half
     # that makes it unnecessary.
     body = (
-        _page(channel.webhook_path or "")
+        _page(channel.webhook_path or "", _language(channel))
         if channel and allowed
         else "<!doctype html><title>Chat</title>"
     )

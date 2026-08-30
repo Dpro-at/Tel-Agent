@@ -116,9 +116,17 @@ web chat — the reply streaming token by token, interruptible mid-sentence, wit
 message captured and the transcript printed. The messaging channels follow, and **the
 phone comes last**, at Milestone 11.
 
-**The screens exist and have nothing behind them.** Twenty-eight of them are in this
-repository, designed and built; there is no backend serving them yet. Treat them as
-design, not as a product you can run.
+**Most of the screens now have something behind them.** Twenty-three are served by a
+real API — sign-in and the account flows, home, the conversation archive and one
+conversation in full, the notification tray, contacts, assistants, knowledge, the
+catalogue, apps, numbers, routing rules, backups, system health, settings and
+workspaces. Eight are still design with fixture data in them: the calendar, outbound
+campaigns, connectors, the consent log, the live call, usage, updates and the install
+wizard. Every one of those eight belongs to a milestone that has not been reached.
+
+**This is still not a product you can run.** There is no installable release, no
+packaging, and the agent does not answer with a model until one is configured — the
+loop that carries the reply is built and the model is a key away.
 
 The build order is deliberate, and it was reversed once, on 2026-08-22. It originally
 required an answered phone call before anything else was built; the phone loop was

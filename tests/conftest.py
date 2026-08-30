@@ -57,7 +57,15 @@ def settings() -> Settings:
     A contributor with a populated `.env` must get the same result from the suite as
     CI does on a clean checkout.
     """
-    return Settings(_env_file=None)
+    #
+    # **The scheduler is off.** Every application built in this suite starts the job
+    # loop, and its first tick runs immediately - so every test that builds an app also
+    # runs the scheduler against that test's database, for work no test is asking
+    # about. It costs about a fifth of the suite's time, and on PostgreSQL it is
+    # background work holding a connection while the next test tries to drop the
+    # schema. `tests/test_jobs.py` drives the runner directly, which is the honest way
+    # to test a scheduler anyway.
+    return Settings(_env_file=None, jobs_enabled=False)
 
 
 @pytest.fixture

@@ -1,0 +1,10 @@
+{
+  "title": "Chat",
+  "open": "Chat öffnen",
+  "close": "Chat schließen",
+  "placeholder": "Nachricht schreiben",
+  "send": "Senden",
+  "not_sent": "Diese Nachricht konnte nicht gesendet werden.",
+  "no_reply": "Gerade keine Antwort.",
+  "cut_off": "Diese Antwort wurde abgebrochen."
+}
