@@ -16,6 +16,7 @@ import pytest
 from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text as sa_text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from alembic import command
@@ -93,18 +94,58 @@ async def running_app(settings: Settings) -> AsyncIterator[AsyncClient]:
 POSTGRES_URL = os.environ.get("TEST_POSTGRES_URL")
 
 
+async def _open_sessions(url: str) -> str:
+    """Every other connection to this database, and what it is doing.
+
+    Read only when the reset below has already failed. A `DROP SCHEMA` that cannot get
+    its lock is never the fault of the test that ran into it - it is the fault of the
+    one before, which finished without closing something. This is the line that names
+    it.
+    """
+    engine = create_engine(Settings(_env_file=None, database_url=url))
+    try:
+        async with engine.connect() as connection:
+            rows = await connection.execute(
+                sa_text(
+                    "SELECT pid, state, wait_event_type, wait_event, state_change, query "
+                    "FROM pg_stat_activity "
+                    "WHERE datname = current_database() AND pid <> pg_backend_pid()"
+                )
+            )
+            return "\n".join(f"  {row}" for row in rows) or "  (none)"
+    except Exception as reading_failed:  # pragma: no cover - diagnostics only
+        return f"  (could not be read: {reading_failed!r})"
+    finally:
+        await engine.dispose()
+
+
 async def _reset_postgres(url: str) -> None:
     """Give each test an empty schema.
 
     Dropping and recreating `public` rather than deleting rows: a migration test has to
     start from nothing, and a leftover table from a previous test would make the next
     one pass for the wrong reason.
+
+    **`lock_timeout` is what keeps a leak from reading as an infinite test.** `DROP
+    SCHEMA` waits for its lock with no deadline, so one connection left open by an
+    earlier test stops the suite dead - and CI cancels the job twenty minutes later
+    having printed nothing about where it stopped. That happened on three consecutive
+    runs. Ten seconds is orders of magnitude longer than the drop needs when the
+    schema is free, so this only fires on a real leak, and when it does it says which
+    connection is still holding on.
     """
     engine = create_engine(Settings(_env_file=None, database_url=url))
     try:
         async with engine.begin() as connection:
+            await connection.execute(sa_text("SET lock_timeout = '10s'"))
             await connection.execute(sa_text("DROP SCHEMA public CASCADE"))
             await connection.execute(sa_text("CREATE SCHEMA public"))
+    except DBAPIError as blocked:
+        still_connected = await _open_sessions(url)
+        raise RuntimeError(
+            "Could not reset the PostgreSQL schema - a connection from an earlier test "
+            f"is still holding it.\nStill connected:\n{still_connected}"
+        ) from blocked
     finally:
         await engine.dispose()
 
