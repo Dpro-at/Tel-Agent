@@ -7,6 +7,8 @@ a guard that answers 403 and writes the row anyway is not a guard.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
@@ -652,6 +654,49 @@ async def test_a_visitor_who_reloads_gets_the_thread_back(stage) -> None:
     assert body["messages"][0]["text"] == "seid ihr am Samstag offen?"
     # Nothing that belongs to this installation rather than to this visitor.
     assert set(body["messages"][0]) == {"speaker", "text", "ts_ms"}
+
+
+async def test_a_whisper_never_reaches_the_visitor(stage) -> None:
+    """The one place an internal note could escape: the visitor's own reload.
+
+    A whisper is a colleague coaching the agent mid-thread - "tell her the quote still
+    stands, do not redo it". The customer never saw it on the screen and must not see it
+    when the widget asks for the thread back.
+    """
+    http, paths, db = stage
+    first = (
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "ist das Angebot noch gültig?"},
+            headers={"Origin": ALLOWED},
+        )
+    ).json()
+
+    thread = await db.scalar(
+        select(Conversation).where(Conversation.external_id == first["conversation"])
+    )
+    db.add(
+        Message(
+            workspace_id=thread.workspace_id,
+            conversation_id=thread.id,
+            ts_ms=thread.started_at.timestamp() * 1000 + 1,
+            speaker="human",
+            text="Sag ihr, das Angebot gilt bis 30. September.",
+            is_whisper=True,
+        )
+    )
+    await db.commit()
+
+    body = (
+        await http.get(
+            f"/public/chat/{paths['ours']}/messages",
+            params={"conversation": first["conversation"]},
+            headers={"Origin": ALLOWED},
+        )
+    ).json()
+
+    assert [line["text"] for line in body["messages"]] == ["ist das Angebot noch gültig?"]
+    assert "30. September" not in json.dumps(body)
 
 
 async def test_a_thread_is_only_readable_from_a_page_that_may_use_the_chat(stage) -> None:

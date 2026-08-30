@@ -556,7 +556,15 @@ async def read_thread(
         (
             await db.execute(
                 select(Message)
-                .where(Message.conversation_id == thread.id)
+                .where(
+                    Message.conversation_id == thread.id,
+                    # A whisper is a colleague coaching the agent mid-thread - "tell her
+                    # the quote still stands". The customer never saw it, and the one
+                    # place it could reach them is here, on a reload. The model is still
+                    # given them, because being told things the visitor cannot see is
+                    # what a whisper is for.
+                    Message.is_whisper.is_(False),
+                )
                 .order_by(Message.ts_ms.desc(), Message.id.desc())
                 .limit(THREAD_MAX)
             )
