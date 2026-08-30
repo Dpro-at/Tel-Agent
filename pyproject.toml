@@ -39,6 +39,11 @@ dev = [
     "ruff>=0.14",
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
+    # A test that waits forever is what killed three CI runs in a row: the job was
+    # cancelled at its twenty-minute cap with no output naming the test, because a
+    # hung test never prints its own name. This makes a hang a normal failure with a
+    # stack trace in it.
+    "pytest-timeout>=2.3",
     "import-linter>=2.1",
     "httpx>=0.28",
 ]
@@ -95,5 +100,10 @@ ban-relative-imports = "all"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-q --strict-markers"
+# No test in this suite has ever taken longer than a few seconds; the whole file of
+# them runs in well under a minute. Two minutes is therefore not a budget, it is the
+# line past which a test is not slow but stuck - and pytest-timeout prints the stack
+# of every thread when it fires, which is the one thing a cancelled CI job cannot.
+timeout = 120
 # Note: pytest exits 5 on an empty suite, which CI reads as a failure. There is
 # therefore always at least one real test - see tests/test_packages.py.

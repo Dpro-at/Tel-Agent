@@ -33,6 +33,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
 from agent.reply import reply as generate_reply
+from api.db import session_scope
 from api.errors import envelope_response
 from api.models import Channel, Conversation, Message
 from api.notifications import raise_notification
@@ -353,18 +354,27 @@ async def _reply_stream(
     if not whole:
         return
 
-    db: DbSession = request.state.db
-    stored = Message(
-        workspace_id=channel.workspace_id,
-        conversation_id=conversation.id,
-        ts_ms=int(dt.datetime.now(dt.UTC).timestamp() * 1000),
-        speaker="agent",
-        text=whole,
-    )
-    db.add(stored)
-    await db.commit()
-    await db.refresh(stored)
-    yield _event({"done": True, "message_id": stored.id})
+    # **Its own session, not `request.state.db`.** That one belongs to
+    # `AuthenticationMiddleware`, which opens it, hands the response object back, and
+    # closes it - and a streaming body only starts running *after* the response object
+    # has been handed back. Writing the reply through it therefore takes a connection
+    # out of the pool with nobody left to return it: one leaked connection per answer,
+    # until the pool is empty and the widget stops replying. On PostgreSQL the leaked
+    # connection also keeps its locks, which is how it stopped a test suite dead.
+    async with session_scope(request.app.state.sessionmaker) as db:
+        stored = Message(
+            workspace_id=channel.workspace_id,
+            conversation_id=conversation.id,
+            ts_ms=int(dt.datetime.now(dt.UTC).timestamp() * 1000),
+            speaker="agent",
+            text=whole,
+        )
+        db.add(stored)
+        await db.commit()
+        await db.refresh(stored)
+        message_id = stored.id
+
+    yield _event({"done": True, "message_id": message_id})
 
 
 @router.get("/{path}/stream", summary="The agent's reply, as it is produced")

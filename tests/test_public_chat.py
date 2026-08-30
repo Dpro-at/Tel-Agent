@@ -568,6 +568,45 @@ async def test_the_reply_answers_the_message_that_was_stored(stage) -> None:
     assert rows[0].text == "the real question"
 
 
+async def test_the_stream_gives_its_connection_back(stage, settings, database_url) -> None:
+    """A reply that streams must cost the pool nothing once it has ended.
+
+    The session on `request.state.db` belongs to `AuthenticationMiddleware`, and the
+    middleware has already let go of it by the time a streaming body runs - a
+    `BaseHTTPMiddleware` returns the response object, and only then is the body
+    consumed. A generator that writes its row through that session therefore takes a
+    connection nobody is left to return, and the pool loses one per reply. On SQLite
+    that is a warning from the garbage collector; on PostgreSQL it is a live backend
+    holding locks, which is what stopped three CI runs dead at the twenty-minute cap.
+
+    The application is built here rather than taken from `stage` so the engine whose
+    pool is being counted is reachable without private attributes.
+    """
+    _, paths, _ = stage
+
+    app = create_app(settings.model_copy(update={"database_url": database_url}))
+    async with app.router.lifespan_context(app):
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
+        async with AsyncClient(transport=transport, base_url="http://localhost") as http:
+            first = (
+                await http.post(
+                    f"/public/chat/{paths['ours']}/messages",
+                    json={"text": "Do you open on Saturday?"},
+                    headers={"Origin": ALLOWED},
+                )
+            ).json()
+
+            answer = await http.get(
+                f"/public/chat/{paths['ours']}/stream",
+                params={"conversation": first["conversation"]},
+                headers={"Origin": ALLOWED},
+            )
+            assert answer.status_code == 200
+            assert "done" in answer.text
+
+            assert app.state.engine.sync_engine.pool.checkedout() == 0
+
+
 @pytest.mark.parametrize(
     ("origin", "conversation", "because"),
     [
