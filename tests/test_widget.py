@@ -169,6 +169,77 @@ async def test_the_widget_can_reach_the_endpoint_it_points_at(stage) -> None:
     assert answer.status_code == 201
 
 
+async def test_the_visitor_is_spoken_to_in_the_channels_language(
+    migrated, settings, database_url
+) -> None:
+    """The furniture, in the language the business serves its customers in.
+
+    A widget that says "Type a message" to a German customer is a widget that says the
+    business is not quite set up. The visitor's *messages* are answered in whatever
+    language they wrote in - that is the model's instruction - and this is the box
+    around them.
+    """
+    from api.models import Channel, Workspace
+    from api.routes.widget import _page
+
+    workspace = Workspace(name="Wagner & Partner")
+    migrated.add(workspace)
+    await migrated.flush()
+
+    german = Channel(
+        workspace_id=workspace.id,
+        kind="web",
+        name="Web chat",
+        webhook_path="de-" + "a" * 24,
+        default_language="de-AT",
+        status="active",
+        settings_json={"allowed_origins": ["https://shop.test"]},
+    )
+    arabic = Channel(
+        workspace_id=workspace.id,
+        kind="web",
+        name="Web chat",
+        webhook_path="ar-" + "b" * 24,
+        default_language="ar",
+        status="active",
+        settings_json={"allowed_origins": ["https://shop.test"]},
+    )
+    unset = Channel(
+        workspace_id=workspace.id,
+        kind="web",
+        name="Web chat",
+        webhook_path="none-" + "c" * 22,
+        status="active",
+        settings_json={"allowed_origins": ["https://shop.test"]},
+    )
+    migrated.add_all([german, arabic, unset])
+    await migrated.commit()
+
+    from api.routes.widget import _language
+
+    # A regional code is still the language it is a region of.
+    assert _language(german) == "de"
+    assert _language(arabic) == "ar"
+    # Nothing set, and nothing this build speaks, are both English rather than blank.
+    assert _language(unset) == "en"
+    assert _language(None) == "en"
+
+    page = _page("de-" + "a" * 24, "de")
+    assert 'lang="de"' in page
+    assert "Nachricht schreiben" in page
+    assert "Type a message" not in page
+
+    right_to_left = _page("ar-" + "b" * 24, "ar")
+    assert 'dir="rtl"' in right_to_left
+    assert "اكتب رسالة" in right_to_left
+
+    # And English is still English, with the direction said out loud rather than
+    # left to a default that differs between browsers.
+    english = _page("none-" + "c" * 22, "en")
+    assert 'lang="en"' in english
+    assert 'dir="ltr"' in english
+
+
 @pytest.mark.parametrize(
     "hostile",
     [
@@ -190,7 +261,7 @@ def test_the_address_cannot_end_the_script_block(hostile) -> None:
     from api.routes.widget import _js_string, _page
 
     encoded = _js_string(hostile)
-    page = _page(hostile)
+    page = _page(hostile, "en")
 
     # One closing tag: the one that ends the widget's own script.
     assert page.count("</script>") == 1
