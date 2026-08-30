@@ -21,6 +21,8 @@
   "messages_one": "1 Nachricht",
   "messages_many": "{count} Nachrichten",
   "summary_label": "Zusammenfassung",
+  "thread_gone_title": "Dieses Gespräch ist nicht hier",
+  "thread_gone_body": "Es wurde gelöscht oder gehört zu einem anderen Arbeitsbereich. Der Hinweis, über den Sie hierher kamen, zeigt möglicherweise auf etwas, das es nicht mehr gibt.",
   "whisper_label": "Flüstern — der Kunde hat das nicht gesehen",
   "speaker_human": "eine Person",
   "call_label": "Anruf",

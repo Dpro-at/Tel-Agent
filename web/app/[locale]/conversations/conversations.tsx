@@ -124,6 +124,14 @@ function ChannelBadge({
   );
 }
 
+/** The thread the address bar names, if it names one. */
+function threadFromAddress(): number | null {
+  if (typeof window === "undefined") return null;
+  const asked = Number(new URLSearchParams(window.location.search).get("thread"));
+  return Number.isInteger(asked) && asked > 0 ? asked : null;
+}
+
+
 export function Conversations({
   locale,
   t,
@@ -135,7 +143,15 @@ export function Conversations({
   const [searchText, setSearchText] = useState("");
   const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
-  const [picked, setPicked] = useState<number | null>(null);
+  // A thread can be named from outside - the "Open conversation" button on a
+  // notification, which is how somebody arrives here after the agent took a message.
+  //
+  // Read in the initial state rather than through `useSearchParams`, which drags a
+  // Suspense boundary into a prerendered page for a value only the first render needs,
+  // and rather than in an effect, which is a second render and a lint rule. The server
+  // has no address bar, so it reads null - and nothing is drawn from this until the
+  // list arrives from the network, which is after hydration either way.
+  const [picked, setPicked] = useState<number | null>(threadFromAddress);
 
   // Filtering and search happen on the server: the list is a page of a capped size,
   // so a browser-side filter would quietly hide older threads.
@@ -153,7 +169,11 @@ export function Conversations({
   const threads = page.data?.threads ?? [];
   // The first thread of the page stands selected until somebody picks another -
   // derived, so no effect has to run to make the detail pane appear.
-  const selectedId = picked !== null && threads.some((row) => row.id === picked)
+  // A picked thread wins even when it is not on the page in front of us: somebody who
+  // followed a notification is owed that conversation, not the newest one, and the
+  // detail endpoint is scoped by workspace either way. Filters and searches clear the
+  // pick, so this cannot strand somebody on a thread their filter excludes.
+  const selectedId = picked !== null
     ? picked
     : (threads[0]?.id ?? null);
 
@@ -418,18 +438,30 @@ export function Conversations({
                 <ThreadPane locale={locale} t={t} thread={detail.data} />
               ) : detail.error !== null ? (
                 <div className="p-[18px]">
+                  {/* A thread that is gone is not the same as a thread that would not
+                      load, and "conversations could not be loaded" is visibly untrue
+                      with the list of them sitting alongside. Somebody arrives here
+                      from a notification whose conversation has since been deleted;
+                      the honest answer is that it is not here, and a retry button
+                      would only fail again. */}
                   <h3 className="m-0 text-[15px] font-semibold text-[color:var(--od-red-text-3)]">
                     {detail.error.kind === "offline"
                       ? t.error_offline_title
-                      : t.error_failed_title}
+                      : detail.error.kind === "missing"
+                        ? t.thread_gone_title
+                        : t.error_failed_title}
                   </h3>
-                  <button
-                    type="button"
-                    onClick={detail.reload}
-                    className="border-od-stroke bg-od-raise-10 text-od-text-2 mt-[14px] cursor-pointer rounded-[7px] border p-[8px_14px] text-[13px]"
-                  >
-                    {t.retry}
-                  </button>
+                  {detail.error.kind === "missing" ? (
+                    <p className="text-od-muted-4 mt-2 text-[13px]">{t.thread_gone_body}</p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={detail.reload}
+                      className="border-od-stroke bg-od-raise-10 text-od-text-2 mt-[14px] cursor-pointer rounded-[7px] border p-[8px_14px] text-[13px]"
+                    >
+                      {t.retry}
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div

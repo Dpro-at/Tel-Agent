@@ -21,6 +21,8 @@
   "messages_one": "رسالة واحدة",
   "messages_many": "{count} رسائل",
   "summary_label": "الملخص",
+  "thread_gone_title": "هذه المحادثة ليست هنا",
+  "thread_gone_body": "حُذفت، أو هي في مساحة عمل أخرى. ربما يشير ما جئت منه إلى شيء لم يعد موجودًا.",
   "whisper_label": "همس — لم يرَ العميل هذا",
   "speaker_human": "شخص",
   "call_label": "المكالمة",
