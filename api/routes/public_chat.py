@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
 from agent.providers.llm import Message as LlmMessage
 from agent.reply import reply as generate_reply
+from agent.tools import TakenMessage
 from api.db import session_scope
 from api.errors import envelope_response
 from api.models import Channel, Conversation, Message
@@ -70,6 +71,26 @@ class Accepted(BaseModel):
 
     conversation: str
     message_id: int
+
+
+class Line(BaseModel):
+    """One turn of a thread, as a stranger may read it back.
+
+    Three fields, and none of them is an id from this installation: a visitor holding
+    the handle is allowed to see their own conversation, not to learn how many
+    conversations exist or which workspace this is.
+    """
+
+    speaker: str
+    text: str
+    ts_ms: int
+
+
+class Thread(BaseModel):
+    """A conversation as its own visitor sees it after a reload."""
+
+    conversation: str
+    messages: list[Line]
 
 
 def _too_many() -> object:
@@ -380,13 +401,45 @@ async def _reply_stream(
     is stored, and no further tokens are produced - which is what Rule 3 means by
     `cancel()` not being optional, in the only shape that survives being retrofitted.
     """
+
+    async def took(taken: TakenMessage) -> None:
+        """A message the model took, put where a person will see it.
+
+        Its own session, for the same reason the reply's write below has one: the
+        middleware let go of the request's session when the response object was
+        returned, and this runs long after that.
+
+        Raised while the visitor is still reading the confirmation, not after the
+        stream ends - somebody who closes the tab on that sentence has still had their
+        message taken, and the promise the agent just made is already kept.
+        """
+        async with session_scope(request.app.state.sessionmaker) as db:
+            await raise_notification(
+                db,
+                workspace_id=channel.workspace_id,
+                category="review",
+                message_key="message_taken",
+                params={"name": taken.name, "reason": _preview(taken.reason)},
+                # A person has to ring back. That is the whole point of a taken
+                # message, and it is what puts this in the waiting list rather than
+                # in the log with everything else that merely happened.
+                needs_decision=True,
+                primary_action="open_conversation",
+                action_payload={"conversation_id": conversation.id},
+                conversation_id=conversation.id,
+            )
+        logger.info(
+            "web chat message taken",
+            extra={"conversation_id": conversation.id, "urgent": taken.urgent},
+        )
+
     pieces: list[str] = []
     # Rule 4: measured from the first call, not from the first complaint. Time to first
     # token is the number the phone milestone lives or dies on (~250 ms of an 800 ms
     # budget), and a text channel is where it is cheap to start watching it.
     started = time.perf_counter()
     try:
-        async for chunk in generate_reply(text, history=history):
+        async for chunk in generate_reply(text, history=history, on_message_taken=took):
             if await request.is_disconnected():
                 logger.info(
                     "web chat reply cancelled by the visitor",
@@ -434,6 +487,91 @@ async def _reply_stream(
         message_id = stored.id
 
     yield _event({"done": True, "message_id": message_id})
+
+
+# What a visitor is handed back after a reload. Long enough that a real exchange
+# survives, short enough that the handle is not a way to pull an archive.
+THREAD_MAX = 50
+
+# What a stranger may see of who said what. `human` - a colleague who took the thread
+# over - is folded into the agent on purpose: the visitor was talking to the business,
+# and which desk answered is the business's own business.
+_VISIBLE_SPEAKERS = {"caller": "visitor", "agent": "agent", "human": "agent"}
+
+
+@router.get(
+    "/{path}/messages",
+    response_model=Thread,
+    summary="The thread so far, for a visitor who reloaded the page",
+)
+async def read_thread(
+    request: Request,
+    path: str,
+    conversation: str,
+    origin: str | None = Header(default=None),
+) -> object:
+    """Milestone 0's *thread survives a page reload*, from the visitor's side.
+
+    Without this the widget comes back empty after a refresh while the server still
+    holds the thread - so the visitor asks again, and the agent answers a question it
+    was already asked, referring to things the visitor can no longer see.
+
+    **The handle is the whole of the authorisation, and that is deliberate.** It is
+    unguessable, issued only to somebody who passed every check on the message that
+    created it, and scoped to one channel - the same reasoning that guards the reply
+    stream. What it does not do is widen: the guards below are the stream's own, in the
+    same order, and what comes back carries nothing the stream does not.
+    """
+    db: DbSession = request.state.db
+
+    channel = await _channel(db, path)
+    if channel is None:
+        return _refused()
+
+    settings = channel.settings_json or {}
+    refusal = check_origin(
+        origin,
+        settings.get("allowed_origins"),
+        own=str(request.base_url).rstrip("/"),
+        require_header=False,
+    )
+    if refusal is not None:
+        logger.info("web chat thread refused", extra={"reason": refusal.reason})
+        return _refused()
+
+    thread = await db.scalar(
+        select(Conversation).where(
+            Conversation.external_id == conversation,
+            Conversation.channel_id == channel.id,
+            Conversation.status == "open",
+        )
+    )
+    if thread is None:
+        # A handle that has been closed, or was never on this channel, is a handle that
+        # does not exist. The widget starts a new thread rather than showing an error a
+        # visitor cannot act on.
+        return _refused()
+
+    rows = (
+        (
+            await db.execute(
+                select(Message)
+                .where(Message.conversation_id == thread.id)
+                .order_by(Message.ts_ms.desc(), Message.id.desc())
+                .limit(THREAD_MAX)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return Thread(
+        conversation=conversation,
+        messages=[
+            Line(speaker=_VISIBLE_SPEAKERS[row.speaker], text=row.text, ts_ms=row.ts_ms)
+            for row in reversed(rows)
+            if row.speaker in _VISIBLE_SPEAKERS
+        ],
+    )
 
 
 @router.get("/{path}/stream", summary="The agent's reply, as it is produced")

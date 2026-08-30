@@ -123,6 +123,21 @@ stops the generation rather than only the delivery: the route stops pulling, the
 generator unwinds, the provider's response closes. Time to first token is logged from
 here on, which is the number Milestone 11 lives on.
 
+Step 6 is the first tool: `take_message`, offered to the model on every turn. The
+arguments it comes back with are validated rather than believed - a message stored
+under a name a model invented sends somebody to ring the wrong person while the real
+one waits. What comes out is a structured value: the web chat route turns it into a row
+in the tray that a person has to act on, and at Milestone 11 the same value reaches
+somebody while the caller is still on the line. A bad call is answered as a sentence the
+model can act on, never raised - a traceback there ends the turn and leaves a visitor
+looking at a broken page.
+
+**The thread survives a page reload**, which is one of the three things this milestone
+says it measures. The widget keeps its handle in the iframe's own storage - the page
+embedding it cannot read that - and asks for the thread back when it loads. Proven in a
+browser against a throwaway installation: two exchanges, a full reload, both bubbles
+still there, and one conversation row behind them rather than two.
+
 Step 5 is not a nicety. It is the whole of what the old phone-first order was
 protecting: an agent that composes a complete answer and then sends it is an agent that
 can never be put on a phone. Cancellation is proven here, in the easy case, while it is
