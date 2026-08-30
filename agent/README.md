@@ -39,6 +39,13 @@ the database and publishes events; it does not serve the UI.
 
 ## Right now
 
-Milestone 0 is **one script and one page**, with no database, no routing, and no
-provider abstraction beyond the model interface. This structure is where that code goes as it grows — not an instruction to
-build it all now.
+Milestone 0. The model interface exists and has one implementation behind it - an
+OpenAI-compatible `/chat/completions` endpoint, streaming - and `reply.py` is what the
+web chat route consumes. `stt/`, `tts/`, `session/`, `routing/` and `tools/` are still
+empty: this structure is where that code goes as it grows, not an instruction to build
+it all now.
+
+Configuration comes from the environment, in `config.py`. That file exists rather than
+importing `api.config` because this package never imports from `api/` - at Milestone 11
+the agent is a process joining a room, and it has to be configurable without an API
+server existing at all.

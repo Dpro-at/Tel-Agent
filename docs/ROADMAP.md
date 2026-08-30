@@ -104,7 +104,24 @@ tests: a message from an origin the channel does not allow is refused and nothin
 stored; a message typed into the embedded widget reaches the agent process, is stored,
 and raises a notification so a person knows a stranger wrote in; and the greeting
 arrives streamed, chunk by chunk, over server-sent events that close when the reply
-ends. Step 3 is the model, and is next.
+ends.
+
+Step 3 is built and not yet proven. The model sits behind `LLMProvider` (§B3) with one
+implementation - an OpenAI-compatible `/chat/completions` endpoint, which is the shape a
+hosted gateway and a model on your own machine both speak - and `agent.reply` streams
+from it, asking for the answer in the language the visitor wrote in. What it has not had
+is a key: the check says *the model's reply appears in the page*, and that is a browser
+away from a configured installation, not a test away. Until one is configured the agent
+says so in words and the message is still stored, which is the honest state of a fresh
+install rather than a placeholder.
+
+Steps 4 and 5 are built on top of it. The thread is handed to the model oldest first,
+capped at ten exchanges, so the second question is asked with the first still attached -
+asserted on what the model is *given*, because a thread that arrives without its
+beginning still produces a fluent answer to the wrong question. And a visitor who leaves
+stops the generation rather than only the delivery: the route stops pulling, the
+generator unwinds, the provider's response closes. Time to first token is logged from
+here on, which is the number Milestone 11 lives on.
 
 Step 5 is not a nicety. It is the whole of what the old phone-first order was
 protecting: an agent that composes a complete answer and then sends it is an agent that

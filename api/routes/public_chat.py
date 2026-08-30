@@ -24,14 +24,16 @@ import datetime as dt
 import json
 import logging
 import secrets
+import time
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Header, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
+from agent.providers.llm import Message as LlmMessage
 from agent.reply import reply as generate_reply
 from api.db import session_scope
 from api.errors import envelope_response
@@ -320,8 +322,53 @@ def _event(payload: dict[str, object]) -> str:
     return "data: " + body + "\n\n"
 
 
+# How far back the model is told about. Ten exchanges is more than a web chat usually
+# runs to, and the cost of the rest is paid twice: once in what the provider charges for
+# a prompt, and once in the time to first token, which Rule 3 budgets at ~250 ms. A
+# thread longer than this keeps answering - it just stops carrying its own beginning.
+MAX_HISTORY_MESSAGES = 20
+
+# What the model calls the two sides. `human` is a person who took over the thread: to
+# the model that is still the business talking, and mapping it to anything else would
+# have the agent reply to its own colleague.
+_ROLES: dict[str, str] = {"caller": "user", "agent": "assistant", "human": "assistant"}
+
+
+async def _history(db: DbSession, thread: Conversation, before: Message) -> list[LlmMessage]:
+    """The thread so far, oldest first, without the line being answered.
+
+    Ordered by `(ts_ms, id)` in both directions rather than by id alone: two messages
+    can share a millisecond, and a thread handed to a model out of order is a thread
+    where it answers the wrong question - which nothing downstream would notice.
+    """
+    rows = (
+        (
+            await db.execute(
+                select(Message)
+                .where(
+                    Message.conversation_id == thread.id,
+                    tuple_(Message.ts_ms, Message.id) < tuple_(before.ts_ms, before.id),
+                )
+                .order_by(Message.ts_ms.desc(), Message.id.desc())
+                .limit(MAX_HISTORY_MESSAGES)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        LlmMessage(role=_ROLES[row.speaker], content=row.text)
+        for row in reversed(rows)
+        if row.speaker in _ROLES and row.text
+    ]
+
+
 async def _reply_stream(
-    request: Request, channel: Channel, conversation: Conversation, text: str
+    request: Request,
+    channel: Channel,
+    conversation: Conversation,
+    text: str,
+    history: list[LlmMessage],
 ) -> AsyncIterator[str]:
     """The agent's answer, forwarded as it arrives, and stored when it is whole.
 
@@ -334,14 +381,26 @@ async def _reply_stream(
     `cancel()` not being optional, in the only shape that survives being retrofitted.
     """
     pieces: list[str] = []
+    # Rule 4: measured from the first call, not from the first complaint. Time to first
+    # token is the number the phone milestone lives or dies on (~250 ms of an 800 ms
+    # budget), and a text channel is where it is cheap to start watching it.
+    started = time.perf_counter()
     try:
-        async for chunk in generate_reply(text):
+        async for chunk in generate_reply(text, history=history):
             if await request.is_disconnected():
                 logger.info(
                     "web chat reply cancelled by the visitor",
                     extra={"conversation_id": conversation.id},
                 )
                 return
+            if not pieces:
+                logger.info(
+                    "web chat first token",
+                    extra={
+                        "conversation_id": conversation.id,
+                        "ms": round((time.perf_counter() - started) * 1000),
+                    },
+                )
             pieces.append(chunk)
             yield _event({"delta": chunk})
     except asyncio.CancelledError:
@@ -446,7 +505,7 @@ async def stream_reply(
     await db.commit()
 
     return StreamingResponse(
-        _reply_stream(request, channel, thread, last.text),
+        _reply_stream(request, channel, thread, last.text, await _history(db, thread, last)),
         media_type="text/event-stream",
         headers={
             # Without this a proxy buffers the whole stream and delivers it at once,
