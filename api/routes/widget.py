@@ -175,6 +175,9 @@ def _page(path: str) -> str:
   .me {{ align-self: flex-end; background: #4f46e5; color: #fff; }}
   .them {{ align-self: flex-start; background: rgba(128,128,128,.16); }}
   .note {{ align-self: center; font-size: 12.5px; opacity: .7; text-align: center; }}
+  /* Sent and unsent must not look the same. Opacity alone would not say it on a
+     screen somebody is reading in daylight, so the outline carries it too. */
+  .unsent {{ opacity: .55; outline: 1px dashed rgba(255,255,255,.55); }}
   form {{ display: flex; gap: 8px; padding: 10px; border-top: 1px solid rgba(128,128,128,.3); }}
   input {{ flex: 1; min-width: 0; padding: 9px 11px; font: inherit; border-radius: 9px;
     border: 1px solid rgba(128,128,128,.4); background: Canvas; color: CanvasText; }}
@@ -245,6 +248,16 @@ def _page(path: str) -> str:
     line.textContent = body;
     log.appendChild(line);
     log.scrollTop = log.scrollHeight;
+    return line;
+  }}
+
+  // A message that did not arrive must not sit there looking like one that did, and
+  // the words the visitor typed are theirs - handing them back beats making somebody
+  // type a paragraph twice because a network blinked.
+  function failed(line, body) {{
+    line.classList.add("unsent");
+    say("This message could not be sent.", "note");
+    if (!text.value) text.value = body;
   }}
 
   // What was said before the reload, drawn before the visitor types anything. A
@@ -310,7 +323,7 @@ def _page(path: str) -> str:
     var body = text.value.trim();
     if (!body) return;
     text.value = "";
-    say(body, "me");
+    var line = say(body, "me");
     var button = form.querySelector("button");
     button.disabled = true;
     try {{
@@ -325,10 +338,10 @@ def _page(path: str) -> str:
       }} else {{
         // One sentence for every refusal, because the server gives one. A visitor
         // cannot act on "origin not allowed" and should not be shown it.
-        say("This message could not be sent.", "note");
+        failed(line, body);
       }}
     }} catch (error) {{
-      say("This message could not be sent.", "note");
+      failed(line, body);
     }} finally {{
       button.disabled = false;
       text.focus();
