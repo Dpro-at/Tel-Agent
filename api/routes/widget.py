@@ -200,7 +200,33 @@ def _page(path: str) -> str:
   var log = document.getElementById("log");
   var form = document.getElementById("form");
   var text = document.getElementById("text");
+  // The thread has to survive a reload, or a visitor who refreshes asks their
+  // question again and the agent answers one it was already asked, referring to
+  // things that are no longer on the screen. The handle is kept per channel, and in
+  // this iframe's own storage - the page embedding the widget cannot read it, which
+  // is the same wall the iframe exists for.
+  var HANDLE_KEY = "tel-agent:chat:" + PATH;
   var conversation = null;
+  try {{
+    conversation = localStorage.getItem(HANDLE_KEY) || null;
+  }} catch (error) {{
+    // A browser with storage switched off still chats; it just starts fresh each
+    // time, which is what happened before this existed.
+  }}
+
+  function remember(handle) {{
+    conversation = handle;
+    try {{
+      localStorage.setItem(HANDLE_KEY, handle);
+    }} catch (error) {{}}
+  }}
+
+  function forget() {{
+    conversation = null;
+    try {{
+      localStorage.removeItem(HANDLE_KEY);
+    }} catch (error) {{}}
+  }}
 
   function resize(open) {{
     parent.postMessage({{ telAgent: "resize", open: open }}, "*");
@@ -219,6 +245,27 @@ def _page(path: str) -> str:
     line.textContent = body;
     log.appendChild(line);
     log.scrollTop = log.scrollHeight;
+  }}
+
+  // What was said before the reload, drawn before the visitor types anything. A
+  // refused handle - closed, or from a channel this is not - is dropped rather than
+  // shown as an error: the next message simply starts a new thread.
+  async function restore() {{
+    if (!conversation) return;
+    try {{
+      var answer = await fetch(
+        "/public/chat/" + encodeURIComponent(PATH) + "/messages?conversation=" +
+        encodeURIComponent(conversation)
+      );
+      if (!answer.ok) {{ forget(); return; }}
+      var thread = await answer.json();
+      thread.messages.forEach(function (line) {{
+        say(line.text, line.speaker === "visitor" ? "me" : "them");
+      }});
+    }} catch (error) {{
+      // Offline, or the server is down. The handle is kept: the thread is still
+      // there, and the next message continues it.
+    }}
   }}
 
   bubble.addEventListener("click", function () {{ show(true); }});
@@ -273,7 +320,7 @@ def _page(path: str) -> str:
         body: JSON.stringify({{ text: body, conversation: conversation }})
       }});
       if (answer.ok) {{
-        conversation = (await answer.json()).conversation;
+        remember((await answer.json()).conversation);
         await listen();
       }} else {{
         // One sentence for every refusal, because the server gives one. A visitor
@@ -287,6 +334,8 @@ def _page(path: str) -> str:
       text.focus();
     }}
   }});
+
+  restore();
 }})();
 </script>
 </body></html>

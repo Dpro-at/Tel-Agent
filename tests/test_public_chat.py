@@ -618,6 +618,64 @@ async def test_the_second_question_is_asked_with_the_first_still_attached(
     ]
 
 
+async def test_a_visitor_who_reloads_gets_the_thread_back(stage) -> None:
+    """Milestone 0's *the thread survives a page reload*, from the visitor's side.
+
+    Without this the widget comes back empty while the server still holds the thread,
+    so the visitor asks again and the agent answers a question it was already asked,
+    referring to things no longer on the screen.
+    """
+    http, paths, _ = stage
+    first = (
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "seid ihr am Samstag offen?"},
+            headers={"Origin": ALLOWED},
+        )
+    ).json()
+    await http.get(
+        f"/public/chat/{paths['ours']}/stream",
+        params={"conversation": first["conversation"]},
+        headers={"Origin": ALLOWED},
+    )
+
+    answer = await http.get(
+        f"/public/chat/{paths['ours']}/messages",
+        params={"conversation": first["conversation"]},
+        headers={"Origin": ALLOWED},
+    )
+    assert answer.status_code == 200
+    body = answer.json()
+
+    assert body["conversation"] == first["conversation"]
+    assert [line["speaker"] for line in body["messages"]] == ["visitor", "agent"]
+    assert body["messages"][0]["text"] == "seid ihr am Samstag offen?"
+    # Nothing that belongs to this installation rather than to this visitor.
+    assert set(body["messages"][0]) == {"speaker", "text", "ts_ms"}
+
+
+async def test_a_thread_is_only_readable_from_a_page_that_may_use_the_chat(stage) -> None:
+    http, paths, _ = stage
+    first = (
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "hallo"},
+            headers={"Origin": ALLOWED},
+        )
+    ).json()
+
+    # The neighbour's widget, and a page nobody allowed: the same refusal as everywhere
+    # else, and it says nothing about whether the thread exists.
+    for path, origin in ((paths["theirs"], ALLOWED), (paths["ours"], "https://evil.test")):
+        answer = await http.get(
+            f"/public/chat/{path}/messages",
+            params={"conversation": first["conversation"]},
+            headers={"Origin": origin},
+        )
+        assert answer.status_code == 403
+        assert answer.json()["error"]["code"] == "origin_not_allowed"
+
+
 async def test_a_visitor_who_leaves_stops_the_generation(stage, monkeypatch) -> None:
     """Milestone 0 step 5, in the half that is not about the wire.
 
