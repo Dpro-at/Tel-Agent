@@ -134,9 +134,13 @@ export function AssistantEditor({
         {loaded.error !== null && draft === null ? (
           <div className="border-od-red-border bg-od-red-bg rounded-[10px] border p-[22px_24px]">
             <h2 className="m-0 text-[17px] font-semibold text-[color:var(--od-red-text)]">
+              {/* `missing`, not a regular expression over the message: the message is
+                  English prose from the server and this screen renders a translated
+                  string, so matching on it breaks the first time somebody rewords an
+                  error - which is the rule `api.ts` states and this line predated. */}
               {loaded.error.kind === "offline"
                 ? t.error_offline_title
-                : loaded.error.kind === "failed" && /404/.test(loaded.error.message)
+                : loaded.error.kind === "missing"
                   ? t.not_found_title
                   : t.error_failed_title}
             </h2>
