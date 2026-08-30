@@ -16,8 +16,12 @@ export const metadata: Metadata = {
   description: "An agent that answers, on every channel.",
 };
 
-/** Applied before first paint so a light-theme user never sees a dark flash. */
-const THEME_SCRIPT = `try{if(localStorage.getItem("od-theme")==="light")document.documentElement.setAttribute("data-od-theme","light")}catch(e){}`;
+/**
+ * Applied before first paint, so a light-theme user never sees a dark flash and a
+ * reader who collapsed the sidebar never sees it wide for a frame and the page jump
+ * as it narrows. Both are attributes on `<html>`; the CSS does the rest.
+ */
+const SHELL_SCRIPT = `try{var d=document.documentElement;if(localStorage.getItem("od-theme")==="light")d.setAttribute("data-od-theme","light");if(localStorage.getItem("od-rail")==="on")d.setAttribute("data-od-rail","on")}catch(e){}`;
 
 export function generateStaticParams() {
   return LOCALES.map((locale) => ({ locale }));
@@ -45,7 +49,7 @@ export default async function LocaleLayout({
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: SHELL_SCRIPT }} />
       </head>
       <body
         className={cn(

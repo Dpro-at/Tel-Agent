@@ -1,5 +1,9 @@
 {
   "account_menu": "الحساب ومساحة العمل",
+  "channel_email": "البريد الإلكتروني",
+  "channel_phone": "الهاتف",
+  "channel_sms": "الرسائل النصية",
+  "channel_web": "دردشة الويب",
   "expand_children": "إظهار العناصر الفرعية",
   "group_overview": "نظرة عامة",
   "nav_archive": "أرشيف المكالمات",
@@ -16,6 +20,8 @@
   "nav_notifications": "الإشعارات",
   "on_the_line_many": "{count} مكالمات على الخط",
   "on_the_line_one": "مكالمة واحدة على الخط",
+  "rail_collapse": "طيّ الشريط الجانبي",
+  "rail_expand": "إبقاء الشريط الجانبي مفتوحًا",
   "role_admin": "مدير",
   "role_invited": "مدعو",
   "role_owner": "المالك",
