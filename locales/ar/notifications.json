@@ -35,6 +35,7 @@
   "msg_backup_no_target": "لا توجد وجهة للنسخ الاحتياطي، فلا تُؤخذ أي نسخة إطلاقاً.",
   "msg_backup_unverified": "كُتبت نسخة احتياطية، لكن إعادة قراءتها للتحقق أخفقت.",
   "msg_mail_failed": "تعذّر إرسال بريد إلكتروني.",
+  "msg_message_taken": "ترك {name} رسالة: {reason}",
   "msg_restore_staged": "استرجاع من {taken_at} مُسجَّل وسينفَّذ عند إعادة التشغيل القادمة.",
   "msg_task_failed": "فشلت المهمة المجدولة {task}.",
   "msg_web_chat_started": "بدأ أحدهم محادثة على موقعك: «{preview}»",

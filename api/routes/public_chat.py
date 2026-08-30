@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
 from agent.providers.llm import Message as LlmMessage
 from agent.reply import reply as generate_reply
+from agent.tools import TakenMessage
 from api.db import session_scope
 from api.errors import envelope_response
 from api.models import Channel, Conversation, Message
@@ -380,13 +381,45 @@ async def _reply_stream(
     is stored, and no further tokens are produced - which is what Rule 3 means by
     `cancel()` not being optional, in the only shape that survives being retrofitted.
     """
+
+    async def took(taken: TakenMessage) -> None:
+        """A message the model took, put where a person will see it.
+
+        Its own session, for the same reason the reply's write below has one: the
+        middleware let go of the request's session when the response object was
+        returned, and this runs long after that.
+
+        Raised while the visitor is still reading the confirmation, not after the
+        stream ends - somebody who closes the tab on that sentence has still had their
+        message taken, and the promise the agent just made is already kept.
+        """
+        async with session_scope(request.app.state.sessionmaker) as db:
+            await raise_notification(
+                db,
+                workspace_id=channel.workspace_id,
+                category="review",
+                message_key="message_taken",
+                params={"name": taken.name, "reason": _preview(taken.reason)},
+                # A person has to ring back. That is the whole point of a taken
+                # message, and it is what puts this in the waiting list rather than
+                # in the log with everything else that merely happened.
+                needs_decision=True,
+                primary_action="open_conversation",
+                action_payload={"conversation_id": conversation.id},
+                conversation_id=conversation.id,
+            )
+        logger.info(
+            "web chat message taken",
+            extra={"conversation_id": conversation.id, "urgent": taken.urgent},
+        )
+
     pieces: list[str] = []
     # Rule 4: measured from the first call, not from the first complaint. Time to first
     # token is the number the phone milestone lives or dies on (~250 ms of an 800 ms
     # budget), and a text channel is where it is cheap to start watching it.
     started = time.perf_counter()
     try:
-        async for chunk in generate_reply(text, history=history):
+        async for chunk in generate_reply(text, history=history, on_message_taken=took):
             if await request.is_disconnected():
                 logger.info(
                     "web chat reply cancelled by the visitor",

@@ -41,7 +41,8 @@ the database and publishes events; it does not serve the UI.
 
 Milestone 0. The model interface exists and has one implementation behind it - an
 OpenAI-compatible `/chat/completions` endpoint, streaming - and `reply.py` is what the
-web chat route consumes. `stt/`, `tts/`, `session/`, `routing/` and `tools/` are still
+web chat route consumes. `tools/` holds the first built-in tool, `take_message`, which
+the model is offered on every turn. `stt/`, `tts/`, `session/` and `routing/` are still
 empty: this structure is where that code goes as it grows, not an instruction to build
 it all now.
 

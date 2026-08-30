@@ -35,6 +35,7 @@
   "msg_backup_no_target": "No backup target is set, so no backup is being taken at all.",
   "msg_backup_unverified": "A backup was written, but reading it back to check it failed.",
   "msg_mail_failed": "An email could not be sent.",
+  "msg_message_taken": "{name} left a message: {reason}",
   "msg_restore_staged": "A restore from {taken_at} is staged and will run on the next restart.",
   "msg_task_failed": "The scheduled task {task} failed.",
   "msg_web_chat_started": "Somebody started a chat on your website: “{preview}”",
