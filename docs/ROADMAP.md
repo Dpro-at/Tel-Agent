@@ -115,6 +115,14 @@ away from a configured installation, not a test away. Until one is configured th
 says so in words and the message is still stored, which is the honest state of a fresh
 install rather than a placeholder.
 
+Steps 4 and 5 are built on top of it. The thread is handed to the model oldest first,
+capped at ten exchanges, so the second question is asked with the first still attached -
+asserted on what the model is *given*, because a thread that arrives without its
+beginning still produces a fluent answer to the wrong question. And a visitor who leaves
+stops the generation rather than only the delivery: the route stops pulling, the
+generator unwinds, the provider's response closes. Time to first token is logged from
+here on, which is the number Milestone 11 lives on.
+
 Step 5 is not a nicety. It is the whole of what the old phone-first order was
 protecting: an agent that composes a complete answer and then sends it is an agent that
 can never be put on a phone. Cancellation is proven here, in the easy case, while it is

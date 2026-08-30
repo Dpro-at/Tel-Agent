@@ -568,6 +568,113 @@ async def test_the_reply_answers_the_message_that_was_stored(stage) -> None:
     assert rows[0].text == "the real question"
 
 
+async def test_the_second_question_is_asked_with_the_first_still_attached(
+    stage, monkeypatch
+) -> None:
+    """Milestone 0 step 4: the thread holds.
+
+    Asserted on what the model is handed rather than on what it says back. A thread
+    that arrives without its own beginning still produces a fluent answer - to the
+    wrong question - and no assertion on the reply would catch it.
+    """
+    from api.routes import public_chat
+
+    asked: list[tuple[str, list]] = []
+
+    async def recording_reply(text: str, *, history=None):
+        asked.append((text, list(history or [])))
+        yield "ja"
+
+    monkeypatch.setattr(public_chat, "generate_reply", recording_reply)
+
+    http, paths, _ = stage
+
+    async def say(text: str, thread: str | None = None) -> str:
+        answer = await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": text, **({"conversation": thread} if thread else {})},
+            headers={"Origin": ALLOWED},
+        )
+        assert answer.status_code == 201
+        handle = answer.json()["conversation"]
+        await http.get(
+            f"/public/chat/{paths['ours']}/stream",
+            params={"conversation": handle},
+            headers={"Origin": ALLOWED},
+        )
+        return handle
+
+    thread = await say("seid ihr am Samstag offen?")
+    await say("und am Sonntag?", thread)
+
+    # The first question arrived with nothing behind it, which is what an opening line
+    # is; the second arrived with the exchange that came before it, in order.
+    assert asked[0] == ("seid ihr am Samstag offen?", [])
+    second_text, second_history = asked[1]
+    assert second_text == "und am Sonntag?"
+    assert [(turn["role"], turn["content"]) for turn in second_history] == [
+        ("user", "seid ihr am Samstag offen?"),
+        ("assistant", "ja"),
+    ]
+
+
+async def test_a_visitor_who_leaves_stops_the_generation(stage, monkeypatch) -> None:
+    """Milestone 0 step 5, in the half that is not about the wire.
+
+    Stopping the tokens reaching the page is easy; stopping them being *produced* is
+    what Rule 3 means, and the difference is invisible from outside - the page looks
+    the same either way while the bill and the phone's barge-in do not. So this counts
+    what the generator was asked for after the visitor went away.
+    """
+    from api.routes import public_chat
+
+    produced: list[str] = []
+
+    async def endless_reply(text: str, *, history=None):
+        for index in range(50):
+            produced.append(f"chunk-{index}")
+            yield f"chunk-{index} "
+
+    monkeypatch.setattr(public_chat, "generate_reply", endless_reply)
+    # The route asks this between chunks. Saying yes after the first one is a visitor
+    # closing the tab mid-sentence.
+    monkeypatch.setattr(
+        public_chat.Request, "is_disconnected", lambda self: _answer_once_then_gone()
+    )
+
+    http, paths, db = stage
+    first = (
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "hallo"},
+            headers={"Origin": ALLOWED},
+        )
+    ).json()
+
+    answer = await http.get(
+        f"/public/chat/{paths['ours']}/stream",
+        params={"conversation": first["conversation"]},
+        headers={"Origin": ALLOWED},
+    )
+    assert answer.status_code == 200
+
+    # One chunk was produced and the generator was never asked for the rest.
+    assert len(produced) < 50
+    # And nothing was stored: a half-written reply in the archive is indistinguishable
+    # from one the agent actually gave.
+    db.expire_all()
+    speakers = [
+        row.speaker
+        for row in (await db.execute(select(Message).order_by(Message.id))).scalars().all()
+    ]
+    assert speakers == ["caller"]
+
+
+async def _answer_once_then_gone() -> bool:
+    """`is_disconnected` for a visitor who left immediately."""
+    return True
+
+
 async def test_the_stream_gives_its_connection_back(stage, settings, database_url) -> None:
     """A reply that streams must cost the pool nothing once it has ended.
 
