@@ -19,6 +19,7 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agent.config import llm_settings
 from alembic import command
 from api.config import Settings, get_settings
 from api.db import create_engine, create_sessionmaker, session_scope
@@ -37,9 +38,16 @@ def _isolate_environment(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """
     for name in ("ENVIRONMENT", "LOG_LEVEL", "DATABASE_URL", "CORS_ORIGINS", "ENCRYPTION_KEY"):
         monkeypatch.delenv(name, raising=False)
+    # The model too, and for a second reason: a contributor with a real key in their
+    # environment would otherwise have the suite call it, at their expense, on every
+    # test that streams a reply.
+    for name in ("LLM_PROVIDER", "LLM_MODEL", "LLM_API_KEY", "LLM_BASE_URL"):
+        monkeypatch.delenv(name, raising=False)
     get_settings.cache_clear()
+    llm_settings.cache_clear()
     yield
     get_settings.cache_clear()
+    llm_settings.cache_clear()
 
 
 @pytest.fixture
