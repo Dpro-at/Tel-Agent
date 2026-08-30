@@ -178,6 +178,8 @@ function SignInCard({
   /** Set from a real refusal by the server, not from the state-preview toolbar. */
   const [refused, setRefused] = useState(false);
   const [unreachable, setUnreachable] = useState(false);
+  /** The server answered, but with a fault of its own. Not a wrong password. */
+  const [serverFailed, setServerFailed] = useState(false);
   const [unlocksAt, setUnlocksAt] = useState<Date | null>(null);
 
   // The preview toolbar still drives the drawn states, so a designer can look at each
@@ -194,6 +196,7 @@ function SignInCard({
     setBusy(true);
     setRefused(false);
     setUnreachable(false);
+    setServerFailed(false);
     try {
       await signIn(username, password);
       // Land where the visitor was going when the middleware turned them away.
@@ -214,6 +217,12 @@ function SignInCard({
         // differently. Telling somebody their password is wrong when their connection
         // is down sends them to reset a password that was fine.
         setUnreachable(true);
+      } else if (error instanceof ApiError && error.status >= 500) {
+        // The server broke; it never got as far as comparing a password. Saying "that
+        // password does not match" here is the same mistake as saying it when the
+        // network is down, and worse: it sends somebody to reset a password that was
+        // always right, while an unmigrated database or a dead server goes unmentioned.
+        setServerFailed(true);
       } else if (error instanceof ApiError) {
         // Branching on `code`, never on `message`: the message is English prose from
         // the server, and the strings rendered here are the translated ones.
@@ -284,9 +293,9 @@ function SignInCard({
             disabled={busy}
             className={inputClass}
           />
-          {showRefused ? (
+          {showRefused || serverFailed ? (
             <div className="text-od-red-text-4 mt-2 text-[13px] text-pretty" role="alert">
-              {t.wrong_password}
+              {serverFailed ? t.server_error : t.wrong_password}
             </div>
           ) : null}
         </div>
