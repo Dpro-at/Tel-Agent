@@ -66,6 +66,9 @@ class ThreadOut(BaseModel):
     ended_at: str | None
     # Whoever is on the other end, as the channel knows them. For a call this is the
     # caller's number; for a messaging channel the channel's own thread identifier.
+    # Whoever is on the other end, as the channel knows them — a caller's number, a
+    # chat id. **Null on `web`**, and that is a security answer rather than a missing
+    # value: see `_who`.
     who: str | None
     # And as the phonebook knows them, when it does - matched on the number at read
     # time. Null is the honest answer for a caller nobody has named yet.
@@ -112,6 +115,24 @@ class ThreadDetail(ThreadOut):
     call: CallOut | None
 
 
+# Channels whose `external_id` is a credential rather than an identity.
+#
+# On the web channel it is the visitor's resume handle: the widget sends it to continue
+# the same conversation, and possession of it is the whole authorisation
+# (`api/routes/public_chat.py`). Returning it as `who` put it on a screen, into any
+# screenshot of that screen, and into the hands of a `viewer` — the role that may only
+# read — who could then post as that visitor.
+#
+# A number on a `phone` thread is the opposite: it *is* how the person is identified, it
+# is what the phonebook is keyed by, and it stays.
+_HANDLE_IS_A_SECRET = frozenset({"web"})
+
+
+def _who(row: Conversation, channel_kind: str) -> str | None:
+    """The other end's identity, or nothing when the id is a credential."""
+    return None if channel_kind in _HANDLE_IS_A_SECRET else row.external_id
+
+
 def _thread(
     row: Conversation,
     channel_kind: str,
@@ -129,7 +150,7 @@ def _thread(
         intent=row.intent,
         started_at=_utc(row.started_at) or "",
         ended_at=_utc(row.ended_at),
-        who=row.external_id,
+        who=_who(row, channel_kind),
         who_name=who_name,
         preview=preview,
         message_count=count,

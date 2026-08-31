@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import Settings
@@ -294,3 +295,43 @@ async def test_the_static_path_is_declared_before_the_parameterised_one() -> Non
     assert paths.index("/api/conversations/meta/channels") < paths.index(
         "/api/conversations/{conversation_id}"
     )
+
+
+async def test_a_web_visitors_resume_handle_never_leaves_the_server(stage, migrated) -> None:
+    """`external_id` is a credential on the web channel, and `who` is not the place for it.
+
+    On `web` the handle is what the widget sends to continue a thread: possession is the
+    whole authorisation, and `api/routes/public_chat.py` treats it that way. Returning it
+    as `who` put it on a screen, in a screenshot and in any support ticket that quotes
+    one - and gave a `viewer`, the role that may only read, everything needed to post as
+    that visitor.
+
+    A number on a `phone` thread is the opposite: it *is* how the person is identified,
+    and it stays.
+    """
+    workspace = await migrated.scalar(
+        select(Workspace).where(Workspace.name == "Wagner & Partner")
+    )
+    web = await migrated.scalar(
+        select(Channel).where(Channel.workspace_id == workspace.id, Channel.kind == "web")
+    )
+    handle = "an-unguessable-resume-handle"
+    thread = await _thread(migrated, workspace, web, [("caller", "Hello there.")])
+    thread.external_id = handle
+    await migrated.commit()
+
+    clients = stage
+    listed = (await clients["sabine"].get("/api/conversations")).json()
+    assert handle not in str(listed)
+    mine = next(row for row in listed["threads"] if row["id"] == thread.id)
+    assert mine["who"] is None
+
+    detail = (await clients["sabine"].get(f"/api/conversations/{thread.id}")).json()
+    assert handle not in str(detail)
+
+
+async def test_a_callers_number_is_still_the_headline(stage) -> None:
+    """The fix must not blank the one channel where `who` is a real identity."""
+    clients = stage
+    listed = (await clients["sabine"].get("/api/conversations?channel=phone")).json()
+    assert [row["who"] for row in listed["threads"]] == ["+4366412345678"]
