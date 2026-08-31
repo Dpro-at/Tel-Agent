@@ -814,13 +814,17 @@ that string matter and both are deliberate:
 ```python
 import hashlib, hmac, time
 
+
 def verify(secret: str, headers, raw_body: bytes, tolerance: int = 300) -> bool:
     timestamp = int(headers["X-Tel-Agent-Timestamp"])
     if abs(time.time() - timestamp) > tolerance:
         return False
-    expected = "sha256=" + hmac.new(
-        secret.encode(), f"{timestamp}.".encode() + raw_body, hashlib.sha256
-    ).hexdigest()
+    expected = (
+        "sha256="
+        + hmac.new(
+            secret.encode(), f"{timestamp}.".encode() + raw_body, hashlib.sha256
+        ).hexdigest()
+    )
     # Constant time: a plain `==` leaks how much of the signature was right.
     return hmac.compare_digest(expected, headers["X-Tel-Agent-Signature"])
 ```
