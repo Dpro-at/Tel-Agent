@@ -443,6 +443,12 @@ export function saveSettings(
   return api("/api/settings", { method: "PATCH", json: { values } });
 }
 
+/** One token from the configured model, to prove the saved key reaches it. The stream
+ *  is closed after the first event, so this costs a request rather than an answer. */
+export function testModel(): Promise<{ reached: boolean; model: string; base_url: string }> {
+  return api("/api/settings/llm/test", { method: "POST" });
+}
+
 // --- Members and workspaces ----------------------------------------------------
 
 export type MemberRole = "owner" | "admin" | "reception" | "viewer" | "invited";

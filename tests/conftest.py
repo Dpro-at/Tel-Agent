@@ -35,7 +35,19 @@ def _isolate_environment(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     `get_settings` is cached for the life of the process, which is right in production
     and wrong in a test session: without clearing it, the first test to build settings
     would decide the configuration for every test after it.
+
+    This is what makes the promise on the `settings` fixture below true for the whole
+    suite rather than only for tests that use it.
     """
+    # The `.env` *file*, not only the variables. `get_settings()` builds `Settings()`
+    # with `env_file` pointing at the repository root, so a developer who has one is
+    # running a different configuration from CI - and the divergence is invisible,
+    # because the failures land in tests about a key being *absent*. Clearing the
+    # variables alone is not enough: `api.security.crypto.key_available` and the
+    # encrypted column both ask `get_settings()` rather than the settings the app under
+    # test was built with, so a real `ENCRYPTION_KEY` in the file makes an application
+    # constructed with `encryption_key=None` encrypt anyway.
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
     for name in ("ENVIRONMENT", "LOG_LEVEL", "DATABASE_URL", "CORS_ORIGINS", "ENCRYPTION_KEY"):
         monkeypatch.delenv(name, raising=False)
     # The model too, and for a second reason: a contributor with a real key in their

@@ -28,7 +28,7 @@ import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 
-from agent.providers.llm import Message, configured_provider
+from agent.providers.llm import LLMProvider, Message
 from agent.providers.llm.base import TextDelta, ToolCall
 from agent.tools import BUILTIN, BY_NAME, TakenMessage, ToolError
 from agent.tools import parse as parse_taken_message
@@ -128,17 +128,27 @@ async def _run(call: ToolCall, on_message_taken: MessageTaken | None) -> str:
 async def reply(
     text: str,
     *,
+    provider: LLMProvider | None = None,
     history: Sequence[Message] | None = None,
     on_message_taken: MessageTaken | None = None,
 ) -> AsyncIterator[str]:
     """The agent's answer, in the pieces it becomes available in.
+
+    **`provider` is passed in, not looked up.** Since §B9.2 the key can live in the
+    database, and the database is on the far side of the boundary this package may not
+    cross - so whoever *can* read the source resolves it and hands the result down.
+    `api.llm.resolve_provider` is that reader where a dashboard exists;
+    `agent.providers.llm.configured_provider` is it where one does not, which is the
+    standalone process at Milestone 11.
+
+    `None` therefore means what it says: this installation has no model, and the
+    greeting below is spoken. It is not a request to go and look for one.
 
     `history` is the thread so far in the model's own vocabulary - `user` for the
     visitor, `assistant` for the agent - oldest first, without the system prompt. It is
     the caller's job to map its own words for those two onto these, because the caller
     is the one that knows what a speaker column means.
     """
-    provider = configured_provider()
     if provider is None:
         async for word in _greeting():
             yield word

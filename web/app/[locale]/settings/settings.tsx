@@ -20,6 +20,7 @@ import {
   removeMember,
   saveWebChannel,
   sendTestMail,
+  testModel,
   signOutEverywhereElse,
   updateMyLocale,
   webChannel,
@@ -176,6 +177,23 @@ function mailFields(t: SettingsDictionary): FieldCopy[] {
     { key: "smtp.from", label: t.f_send_as, help: t.f_send_as_help },
     { key: "smtp.use_tls", label: t.f_smtp_tls, help: t.f_smtp_tls_help },
     { key: "smtp.use_ssl", label: t.f_smtp_ssl, help: t.f_smtp_ssl_help },
+  ];
+}
+
+/**
+ * The model that answers — §B9.2, which puts a provider key in the encrypted column
+ * rather than in `.env`. This is the field the whole product rests on: with nothing
+ * here the agent takes messages and says so, which is honest but is not the product.
+ *
+ * The endpoint row replaced a drawn one on this same tab. It read
+ * `http://localhost:8080/v1` and saved nowhere.
+ */
+function modelFields(t: SettingsDictionary): FieldCopy[] {
+  return [
+    { key: "llm.provider", label: t.f_llm_provider, help: t.f_llm_provider_help },
+    { key: "llm.model", label: t.f_llm_model, help: t.f_llm_model_help },
+    { key: "llm.api_key", label: t.f_llm_key, help: t.f_llm_key_help },
+    { key: "llm.base_url", label: t.f_llm_base_url, help: t.f_llm_base_url_help },
   ];
 }
 
@@ -337,6 +355,11 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
                     {tab === "advanced" ? (
                       <>
                         <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border">
+                          <SectionHead title={t.model_title} note={t.live_note} />
+                          <LiveSettings fields={modelFields(t)} labels={liveLabels(t)} />
+                          <ModelTestRow t={t} />
+                        </div>
+                        <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border">
                           <SectionHead
                             title={t.backup_section_title}
                             note={t.backup_section_note}
@@ -414,6 +437,78 @@ const LANGUAGES: { id: "en" | "de" | "ar"; endonym: string }[] = [
   { id: "de", endonym: "Deutsch" },
   { id: "ar", endonym: "العربية" },
 ];
+
+/**
+ * The model panel's proof: ask for one token and close the stream.
+ *
+ * Two of the five outcomes carry something only the server knows — which field is
+ * empty, what status the endpoint returned — so those show the translated sentence
+ * *and* the machine's own words beside it, kept apart the way #76 settled.
+ */
+function ModelTestRow({ t }: { t: SettingsDictionary }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ text: string; machine?: string; bad?: boolean } | null>(
+    null,
+  );
+
+  async function run() {
+    setBusy(true);
+    setResult(null);
+    try {
+      const outcome = await testModel();
+      setResult({ text: t.model_test_reached, machine: outcome.model });
+    } catch (thrown) {
+      if (thrown instanceof ApiError) {
+        if (thrown.code === "llm_not_configured") {
+          setResult({ text: t.model_test_not_configured, bad: true });
+        } else if (thrown.code === "llm_incomplete") {
+          setResult({ text: t.model_test_incomplete, machine: thrown.message, bad: true });
+        } else if (thrown.code === "llm_refused") {
+          setResult({ text: t.model_test_refused, machine: thrown.message, bad: true });
+        } else if (thrown.code === "llm_unreachable") {
+          setResult({ text: t.model_test_unreachable, bad: true });
+        } else {
+          setResult({ text: thrown.message, bad: true });
+        }
+      } else {
+        setResult({ text: thrown instanceof Error ? thrown.message : String(thrown), bad: true });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-[18px] gap-y-3 border-t border-[color:var(--od-raise-6)] p-[14px_18px]">
+      <div
+        className="max-w-[60ch] text-[13px] text-pretty"
+        style={{ color: result?.bad ? "var(--od-red-text-6)" : "var(--od-muted-5)" }}
+      >
+        {result ? (
+          <>
+            {result.text}
+            {result.machine ? (
+              <>
+                {" "}
+                <span dir="ltr" className="mono ltr-data">
+                  {result.machine}
+                </span>
+              </>
+            ) : null}
+          </>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void run()}
+        className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-md border p-[8px_14px] text-[13px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {busy ? t.model_testing : t.model_test}
+      </button>
+    </div>
+  );
+}
 
 /**
  * The mail panel's proof: send a test to the signed-in admin's own address.

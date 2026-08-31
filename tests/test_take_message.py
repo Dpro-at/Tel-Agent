@@ -41,17 +41,6 @@ def _call(arguments: dict | str, name: str = "take_message") -> ToolCall:
     return ToolCall(id="call-1", name=name, arguments=body)
 
 
-def _run_with(provider) -> None:
-    reply_module.configured_provider = lambda: provider  # type: ignore[assignment]
-
-
-@pytest.fixture(autouse=True)
-def _restore_provider():
-    original = reply_module.configured_provider
-    yield
-    reply_module.configured_provider = original  # type: ignore[assignment]
-
-
 def test_the_arguments_are_validated_rather_than_believed() -> None:
     """A model's arguments are a suggestion, and this one is refused.
 
@@ -83,23 +72,19 @@ async def test_taking_a_message_hands_the_caller_a_structured_result() -> None:
     async def remember(message: TakenMessage) -> None:
         taken.append(message)
 
-    _run_with(
-        Script(
-            [
-                TextDelta("Einen Moment"),
-                _call(
-                    {"name": "Anna Gruber", "reason": "Heizung tropft", "callback": "0664 1"}
-                ),
-            ],
-            [TextDelta("Danke, jemand meldet sich.")],
-        )
+    provider = Script(
+        [
+            TextDelta("Einen Moment"),
+            _call({"name": "Anna Gruber", "reason": "Heizung tropft", "callback": "0664 1"}),
+        ],
+        [TextDelta("Danke, jemand meldet sich.")],
     )
 
     said = "".join(
         [
             chunk
             async for chunk in reply_module.reply(
-                "Die Heizung tropft", on_message_taken=remember
+                "Die Heizung tropft", provider=provider, on_message_taken=remember
             )
         ]
     )
@@ -120,9 +105,7 @@ async def test_the_model_is_told_what_the_tool_answered() -> None:
         [_call({"name": "Anna", "reason": "Heizung"})],
         [TextDelta("Danke.")],
     )
-    _run_with(provider)
-
-    [chunk async for chunk in reply_module.reply("Die Heizung tropft")]
+    [chunk async for chunk in reply_module.reply("Die Heizung tropft", provider=provider)]
 
     second_round = provider.seen[1]
     assert second_round[-2]["role"] == "assistant"
@@ -135,9 +118,7 @@ async def test_the_model_is_told_what_the_tool_answered() -> None:
 
 async def test_the_tool_is_offered_to_the_model_at_all() -> None:
     provider = Script([TextDelta("hallo")])
-    _run_with(provider)
-
-    [chunk async for chunk in reply_module.reply("hallo")]
+    [chunk async for chunk in reply_module.reply("hallo", provider=provider)]
 
     assert provider.tools_offered == ["take_message"]
     assert "take_message" in BY_NAME
@@ -166,10 +147,13 @@ async def test_a_bad_call_comes_back_as_a_sentence_the_model_can_act_on(
         taken.append(message)
 
     provider = Script([call], [TextDelta("Wie war noch Ihr Name?")])
-    _run_with(provider)
-
     said = "".join(
-        [chunk async for chunk in reply_module.reply("Hilfe", on_message_taken=remember)]
+        [
+            chunk
+            async for chunk in reply_module.reply(
+                "Hilfe", provider=provider, on_message_taken=remember
+            )
+        ]
     )
 
     assert taken == []
@@ -180,8 +164,6 @@ async def test_a_bad_call_comes_back_as_a_sentence_the_model_can_act_on(
 async def test_a_model_that_only_calls_tools_forever_is_stopped() -> None:
     """The ceiling exists because the alternative is billed by the token."""
     provider = Script(*[[_call({"name": "Anna", "reason": "again"})] for _ in range(10)])
-    _run_with(provider)
-
-    [chunk async for chunk in reply_module.reply("hallo")]
+    [chunk async for chunk in reply_module.reply("hallo", provider=provider)]
 
     assert len(provider.seen) == reply_module.MAX_TOOL_ROUNDS

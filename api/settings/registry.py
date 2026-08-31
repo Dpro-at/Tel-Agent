@@ -48,6 +48,41 @@ REGISTRY: dict[str, Definition] = _define(
         default="EUR",
         description="ISO 4217 code the catalogue's prices are in, for example EUR or CHF.",
     ),
+    # The model that answers - §B9.2, which puts LLM keys in the encrypted column and
+    # not in `.env`. The environment still configures a model, because the agent runs
+    # without an API server at Milestone 11 and an installer's `.env` must keep
+    # working; what changed is which one wins. `api.llm.resolve` prefers these, so a
+    # key saved on the screen takes effect on the next turn rather than at the next
+    # restart.
+    #
+    # **Installation scope, deliberately.** Two workspaces on one machine share a model
+    # today, the way they share a mail server: a key is bought once and metered once.
+    # The store already resolves workspace-then-installation, so the day one business
+    # wants its own model this is a one-word change here and no migration.
+    Definition(
+        "llm.provider",
+        "installation",
+        description="Which kind of endpoint answers. Empty means no model is "
+        "connected, which is a supported state: the agent still takes messages.",
+    ),
+    Definition(
+        "llm.model",
+        "installation",
+        description="The model name the endpoint expects, for example gpt-4o-mini.",
+    ),
+    Definition(
+        "llm.api_key",
+        "installation",
+        secret=True,
+        description="Stored encrypted, and never returned in full. A local model that "
+        "wants no key still needs something here - most such servers accept any value.",
+    ),
+    Definition(
+        "llm.base_url",
+        "installation",
+        description="Where the endpoint lives. Empty means the OpenAI-compatible "
+        "default; point it at a gateway or a model on your own machine to use those.",
+    ),
     Definition("smtp.host", "installation", description="Hostname of the mail server."),
     Definition("smtp.port", "installation", "integer", 587, description="Usually 587."),
     Definition("smtp.username", "installation", description="Leave empty for no auth."),

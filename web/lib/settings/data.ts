@@ -158,16 +158,13 @@ export const SECTIONS: Partial<Record<(typeof TABS)[number]["id"], Section>> = {
       },
     ],
   },
+  // The model endpoint row that used to sit here is gone: it is a real field now, in
+  // the wired panel at the top of this tab. What is left are still drawings.
   advanced: {
     title: "sec_advanced_title",
     body: "sec_advanced_body",
     fields: [
       { id: "loglevel", label: "f_loglevel", control: { kind: "select", valueText: "info" } },
-      {
-        id: "endpoint",
-        label: "f_model_endpoint",
-        control: { kind: "input", valueText: "http://localhost:8080/v1", mono: true },
-      },
       {
         id: "codec",
         label: "f_codec",
