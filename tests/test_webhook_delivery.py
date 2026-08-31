@@ -26,6 +26,27 @@ from api.models import BackgroundJob, Webhook, Workspace
 
 SECRET = "the-shared-secret-a-receiver-also-has"  # noqa: S105
 NOW = dt.datetime(2026, 8, 31, 10, 0, tzinfo=dt.UTC)
+KEY_HEX = "aa" * 32
+
+
+@pytest.fixture(autouse=True)
+def _encryption_key(monkeypatch: pytest.MonkeyPatch):
+    """A webhook's secret is an encrypted column, so these tests need a key.
+
+    Autouse and not optional: without it every test that writes a `Webhook` fails with
+    `EncryptionKeyError`, and on a machine that happens to have a real `ENCRYPTION_KEY`
+    in `.env` it passes anyway - which is how this reached CI green locally and red
+    there.
+    """
+    from api.config import get_settings
+    from api.models.encrypted import reset_key_cache
+
+    monkeypatch.setenv("ENCRYPTION_KEY", KEY_HEX)
+    get_settings.cache_clear()
+    reset_key_cache()
+    yield
+    get_settings.cache_clear()
+    reset_key_cache()
 
 
 @pytest.fixture
