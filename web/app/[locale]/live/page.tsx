@@ -7,7 +7,7 @@ import en from "../../../../locales/en/live.json";
 import { pickDictionary } from "@/lib/i18n";
 import { isLocale } from "@/lib/locales";
 
-import { LiveCall } from "./live-call";
+import { Live } from "./live";
 
 /** English is the reference shape; the other two are checked against it. */
 export type LiveDictionary = typeof en;
@@ -18,5 +18,5 @@ export default async function LivePage({ params }: { params: Promise<{ locale: s
 
   const t = pickDictionary<LiveDictionary>(locale, { en, de, ar });
 
-  return <LiveCall locale={locale} t={t} />;
+  return <Live locale={locale} t={t} />;
 }
