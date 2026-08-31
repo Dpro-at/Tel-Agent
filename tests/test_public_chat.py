@@ -1069,3 +1069,85 @@ async def test_a_long_message_is_trimmed_for_the_tray(stage) -> None:
     # Trimmed, not corrupted: it ends on a word and says that it was cut.
     assert preview.endswith("…")
     assert not preview[:-1].endswith(" ")
+
+
+async def test_the_model_the_owner_saved_is_the_one_that_answers(
+    stage, migrated: AsyncSession, monkeypatch
+) -> None:
+    """§B9.2's move, proven at the only place it matters: the reply.
+
+    `agent/` may not read the database, so the route resolves the configuration and
+    hands the provider down. Asserted on what the agent is *given*, because a stub that
+    ignored the argument would answer just as fluently with the wrong model.
+    """
+    from agent.providers.llm.openai_compatible import OpenAICompatibleLLM
+    from api.routes import public_chat
+    from api.settings import store
+
+    given: list[object] = []
+
+    async def recording_reply(text: str, *, provider=None, **_unused):
+        given.append(provider)
+        yield "ja"
+
+    monkeypatch.setattr(public_chat, "generate_reply", recording_reply)
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_API_KEY", "key-from-the-file")
+    await store.set_value(migrated, "llm.provider", "openai")
+    await store.set_value(migrated, "llm.model", "saved-on-the-screen")
+    await migrated.commit()
+
+    http, paths, _ = stage
+    answer = await http.post(
+        f"/public/chat/{paths['ours']}/messages",
+        json={"text": "hallo"},
+        headers={"Origin": ALLOWED},
+    )
+    assert answer.status_code == 201
+    await http.get(
+        f"/public/chat/{paths['ours']}/stream",
+        params={"conversation": answer.json()["conversation"]},
+        headers={"Origin": ALLOWED},
+    )
+
+    assert len(given) == 1
+    assert isinstance(given[0], OpenAICompatibleLLM)
+    # The screen's model, over the file's - and the file's key, which nobody retyped.
+    assert given[0]._settings.model == "saved-on-the-screen"
+    assert given[0]._settings.api_key == "key-from-the-file"
+
+
+async def test_half_a_configuration_never_reaches_the_visitor(
+    stage, migrated: AsyncSession
+) -> None:
+    """A stranger on the customer's website must never be told which field is empty.
+
+    This endpoint is the only public one in the product. A provider named with nothing
+    behind it is an administrator's problem, and the visitor gets what an unconfigured
+    installation says - which is true of them either way. The operator sees the reason
+    on the health screen instead.
+    """
+    from agent.reply import GREETING
+    from api.settings import store
+
+    await store.set_value(migrated, "llm.provider", "openai")
+    await migrated.commit()
+
+    http, paths, _ = stage
+    answer = await http.post(
+        f"/public/chat/{paths['ours']}/messages",
+        json={"text": "hallo"},
+        headers={"Origin": ALLOWED},
+    )
+    assert answer.status_code == 201
+    stream = await http.get(
+        f"/public/chat/{paths['ours']}/stream",
+        params={"conversation": answer.json()["conversation"]},
+        headers={"Origin": ALLOWED},
+    )
+
+    assert stream.status_code == 200
+    body = stream.text
+    assert GREETING.split(" ")[0] in body
+    assert "API key" not in body
+    assert "llm." not in body

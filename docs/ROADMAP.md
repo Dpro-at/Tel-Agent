@@ -115,6 +115,20 @@ away from a configured installation, not a test away. Until one is configured th
 says so in words and the message is still stored, which is the honest state of a fresh
 install rather than a placeholder.
 
+**The key now has a place to be typed.** §B9.2 puts a credential the user enters in an
+encrypted column rather than in `.env`, and says the move happens at Milestone 1 - so
+the provider, the model, the endpoint and the key are declared settings, saved from the
+settings screen, masked on the way back out, and read on every turn rather than at
+startup. The environment still configures a model and still works; what changed is that
+a value saved on the screen wins over it, per value, so an installation already running
+on `.env` moves one field at a time instead of all at once. Beside the form is the
+proof: one token asked of the configured model and the stream closed immediately, which
+answers "does this key reach anything" without spending an answer - and exercises the
+cancellation path Rule 3 requires, on the cheapest request in the product.
+
+What is still outstanding is the browser: a real key on a real installation, and the
+reply read on the page in the visitor's language. Nothing here claims that has happened.
+
 Steps 4 and 5 are built on top of it. The thread is handed to the model oldest first,
 capped at ten exchanges, so the second question is asked with the first still attached -
 asserted on what the model is *given*, because a thread that arrives without its

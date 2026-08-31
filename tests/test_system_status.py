@@ -127,7 +127,10 @@ async def test_the_model_row_answers_without_calling_the_model(
 
     A health screen that spends a model call every time it is opened is a health screen
     with a bill. What an owner needs from this row - whether this installation has a
-    model at all - is answerable from the environment.
+    model at all - is answerable from the configuration.
+
+    The environment is still one of the two sources §B9.2 leaves in place, so it is what
+    this drives; `test_llm_settings.py` owns the store and the order between them.
     """
     from agent.config import llm_settings
 
@@ -155,7 +158,10 @@ async def test_the_model_row_answers_without_calling_the_model(
     llm_settings.cache_clear()
     broken = row(await status.collect(migrated, settings))
     assert broken["state"] == "down"
-    assert "LLM_API_KEY" in broken["detail"]
+    # Named as the *screen* names it, not as `.env` does, whichever source the half
+    # configuration came from: the remedy is the same either way, because a value
+    # typed into the settings screen wins over a stale environment variable.
+    assert "the API key" in broken["detail"]
     llm_settings.cache_clear()
 
 

@@ -33,9 +33,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
+from agent.config import ConfigurationError
+from agent.providers.llm import LLMProvider
 from agent.providers.llm import Message as LlmMessage
 from agent.reply import reply as generate_reply
 from agent.tools import TakenMessage
+from api import llm
 from api.db import session_scope
 from api.errors import envelope_response
 from api.models import Channel, Conversation, Message
@@ -399,6 +402,7 @@ async def _reply_stream(
     conversation: Conversation,
     text: str,
     history: list[LlmMessage],
+    provider: LLMProvider | None,
 ) -> AsyncIterator[str]:
     """The agent's answer, forwarded as it arrives, and stored when it is whole.
 
@@ -448,7 +452,9 @@ async def _reply_stream(
     # budget), and a text channel is where it is cheap to start watching it.
     started = time.perf_counter()
     try:
-        async for chunk in generate_reply(text, history=history, on_message_taken=took):
+        async for chunk in generate_reply(
+            text, provider=provider, history=history, on_message_taken=took
+        ):
             if await request.is_disconnected():
                 logger.info(
                     "web chat reply cancelled by the visitor",
@@ -659,8 +665,30 @@ async def stream_reply(
         return _too_many()
     await db.commit()
 
+    # Resolved here rather than inside the stream, for two reasons. The session below
+    # belongs to the middleware, which closes it the moment this response object is
+    # handed back - and a streaming body runs after that. And a configuration that is
+    # broken should be found before the first token, not halfway through one.
+    try:
+        provider = await llm.resolve_provider(db)
+    except ConfigurationError:
+        # Half a configuration - a provider named with nothing behind it. The visitor
+        # hears what an unconfigured installation says, because that is true of them
+        # either way and this endpoint is public: a stranger on the customer's website
+        # must never be shown which field an administrator left empty. The operator
+        # sees it as a red row on the health screen, with the reason.
+        logger.exception("web chat could not resolve a model", extra={"path": path})
+        provider = None
+
     return StreamingResponse(
-        _reply_stream(request, channel, thread, last.text, await _history(db, thread, last)),
+        _reply_stream(
+            request,
+            channel,
+            thread,
+            last.text,
+            await _history(db, thread, last),
+            provider,
+        ),
         media_type="text/event-stream",
         headers={
             # Without this a proxy buffers the whole stream and delivers it at once,

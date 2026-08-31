@@ -179,19 +179,20 @@ async def test_the_reply_asks_the_model_to_answer_in_the_visitors_language() -> 
             asked.append(messages)
             yield TextDelta("servus")
 
-    reply_module_provider = Recorder()
-    original = reply_module.configured_provider
-    reply_module.configured_provider = lambda: reply_module_provider  # type: ignore[assignment]
-    try:
-        history: list[Message] = [
-            {"role": "user", "content": "seid ihr am Samstag offen?"},
-            {"role": "assistant", "content": "Ja, bis 14 Uhr."},
+    history: list[Message] = [
+        {"role": "user", "content": "seid ihr am Samstag offen?"},
+        {"role": "assistant", "content": "Ja, bis 14 Uhr."},
+    ]
+    # Handed in rather than patched over a lookup: since §B9.2 the key can live in the
+    # database, so `reply` is given its provider by whoever could read one.
+    answer = "".join(
+        [
+            chunk
+            async for chunk in reply_module.reply(
+                "und am Sonntag?", provider=Recorder(), history=history
+            )
         ]
-        answer = "".join(
-            [chunk async for chunk in reply_module.reply("und am Sonntag?", history=history)]
-        )
-    finally:
-        reply_module.configured_provider = original  # type: ignore[assignment]
+    )
 
     assert answer == "servus"
     messages = asked[0]

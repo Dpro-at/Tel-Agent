@@ -14,6 +14,7 @@ here with the store that makes it possible.
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Request, status
@@ -25,6 +26,8 @@ from api.errors import envelope_response
 from api.security.permissions import WorkspaceContext, require_admin
 from api.settings import store
 from api.settings.registry import REGISTRY, UnknownSetting, definition
+
+logger = logging.getLogger("api.settings")
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -202,3 +205,98 @@ async def send_test_mail(
             "exact words.",
         )
     return MailTested(sent=True, to=user.email)
+
+
+class ModelTested(BaseModel):
+    reached: bool
+    # What answered, so "it works" has a referent when two people share an installation
+    # and one of them has just repointed it at their laptop.
+    model: str
+    base_url: str
+
+
+@router.post(
+    "/llm/test",
+    response_model=ModelTested,
+    summary="Ask the configured model for one token, and report what happened",
+)
+async def test_model(
+    request: Request, context: Annotated[WorkspaceContext, require_admin]
+) -> object:
+    """Prove the saved key reaches a model, before a visitor is the one who finds out.
+
+    **One token, then the stream is closed.** The point is reachability - the endpoint
+    answers, the key is accepted, the model name exists - and none of that needs a
+    finished sentence. Closing early also exercises the cancellation path that Rule 3
+    says must work, on the cheapest request in the product.
+
+    Failures come back as a designed answer with the provider's own status, not a 502
+    traceback: "the setting looks right" is exactly what a rejected key shows.
+    """
+    from contextlib import aclosing
+
+    import httpx
+
+    from agent.config import ConfigurationError
+    from agent.providers.llm import provider_for
+    from api import llm
+    from api.security.crypto import DecryptionFailed
+
+    db: DbSession = request.state.db
+
+    try:
+        settings = await llm.resolve(db)
+    except ConfigurationError as broken:
+        return envelope_response(
+            status_code=status.HTTP_409_CONFLICT,
+            code="llm_incomplete",
+            message=str(broken),
+        )
+    except DecryptionFailed:
+        # This is the button somebody presses when credentials stop working, so it is
+        # the least useful place in the product to answer with a traceback.
+        logger.exception("the stored model key could not be decrypted")
+        return envelope_response(
+            status_code=status.HTTP_409_CONFLICT,
+            code="llm_key_unreadable",
+            message=llm.UNREADABLE_KEY,
+        )
+    if settings is None:
+        return envelope_response(
+            status_code=status.HTTP_409_CONFLICT,
+            code="llm_not_configured",
+            message="No model is connected. Choose a provider, fill in the model and "
+            "the key above, save, then test.",
+        )
+
+    provider = provider_for(settings)
+    try:
+        async with aclosing(provider.stream([{"role": "user", "content": "ping"}])) as stream:
+            async for _event in stream:
+                # An empty stream is a valid answer to "say nothing" (§B3), so arriving
+                # here is not what proves the endpoint works - returning without an
+                # exception is. This breaks only so the request is not paid in full.
+                break
+    except httpx.HTTPStatusError as refused:
+        return envelope_response(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="llm_refused",
+            message=f"The endpoint answered {refused.response.status_code}. "
+            "A 401 is the key, a 404 is usually the model name or the address.",
+        )
+    except (httpx.HTTPError, httpx.InvalidURL) as unreachable:
+        # The exception's text, not the request's: httpx puts the URL in some of these
+        # and the URL is the one part of a model configuration worth not echoing back
+        # into a log line beside everything else.
+        logger.warning(
+            "the model endpoint could not be reached",
+            extra={"error": type(unreachable).__name__},
+        )
+        return envelope_response(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="llm_unreachable",
+            message="Nothing answered at that address. Check the endpoint, and that "
+            "this machine can reach it.",
+        )
+
+    return ModelTested(reached=True, model=settings.model, base_url=settings.base_url)

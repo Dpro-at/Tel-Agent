@@ -175,29 +175,24 @@ async def _web_channel(db: DbSession) -> Service:
     return Service("web_channel", "ok", detail=f"{live} live")
 
 
-def _llm(settings: Settings) -> Service:
-    """The model, as the environment describes it.
+async def _llm(db: DbSession) -> Service:
+    """The model, as this installation resolves one - the store first, then `.env`.
 
     Not called here. A health screen that spends a model request every time it is
     opened is a health screen with a bill, and the thing an owner needs to know from
     this row - whether this installation has a model at all - is answerable without
     one. A model that is configured and refusing shows up where it matters, in a
     conversation, and lands in the tray.
+
+    `api.llm.describe` owns both the order and the words; this row is only where they
+    are shown. Half a configuration comes back `down` with the reason, because an
+    installation that thinks it has a model and does not is the case an owner cannot
+    diagnose from the outside.
     """
-    from agent.config import ConfigurationError, llm_settings
+    from api import llm
 
-    try:
-        configured = llm_settings()
-    except ConfigurationError as broken:
-        # Half a configuration is worse than none: the agent refuses to answer and the
-        # owner has no way to see why from the outside. This row is that way.
-        return Service("llm", "down", detail=str(broken))
-
-    if configured is None:
-        return Service("llm", "not_configured")
-    # The model and where it lives. Never the key - this endpoint is admin-only, and
-    # that is not a reason to hand one back.
-    return Service("llm", "ok", detail=f"{configured.model} at {configured.base_url}")
+    state, detail = await llm.describe(db)
+    return Service("llm", state, detail=detail)
 
 
 async def collect(db: DbSession, settings: Settings) -> dict[str, Any]:
@@ -214,6 +209,7 @@ async def collect(db: DbSession, settings: Settings) -> dict[str, Any]:
     database = await _database(db)
     mail_service = await _mail(db, settings)
     web_channel = await _web_channel(db)
+    model = await _llm(db)
 
     services = [
         # The API answered this request, so it is up by construction. Said explicitly
@@ -222,7 +218,7 @@ async def collect(db: DbSession, settings: Settings) -> dict[str, Any]:
         database,
         mail_service,
         web_channel,
-        _llm(settings),
+        model,
         *(Service(name, "not_configured") for name in UNBUILT),
     ]
 
