@@ -38,6 +38,7 @@ from api.middleware.auth import AuthenticationMiddleware
 from api.middleware.csrf import CsrfMiddleware
 from api.middleware.limits import RequestLimitsMiddleware
 from api.middleware.request_id import RequestIdMiddleware
+from api.middleware.security_headers import SecurityHeadersMiddleware
 from api.middleware.ws_auth import WebSocketAuthMiddleware
 from api.routes import apps as apps_routes
 from api.routes import assistants as assistant_routes
@@ -254,6 +255,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # `RequestIdMiddleware`, so it is not logged under an id. A preflight carries no
     # application meaning, so that is the right thing to give up.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
+    # Innermost of the application's own middleware, so it sees the response every
+    # route produced - including the ones that set a policy of their own, which it
+    # then leaves alone. See the module docstring: overwriting the widget's
+    # `frame-ancestors` would unembed every customer's chat bubble.
+    app.add_middleware(SecurityHeadersMiddleware, hsts_seconds=settings.hsts_seconds)
     app.add_middleware(AuthenticationMiddleware)
     # The websocket twin of the gate above: BaseHTTPMiddleware never sees websocket
     # scopes, so without this every websocket route would bypass authentication.
