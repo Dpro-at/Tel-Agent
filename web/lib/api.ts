@@ -415,6 +415,26 @@ export function backupDownloadUrl(id: number): string {
   return `${API_URL}/api/backup/${id}/download`;
 }
 
+// --- First run ----------------------------------------------------------------
+
+/** Whether this installation still has no account. Answered without a session,
+ *  because the answer decides whether one is possible. */
+export function setupState(): Promise<{ needed: boolean }> {
+  return api("/api/setup");
+}
+
+/** Create the first account and its workspace. The response also sets the session
+ *  cookie, so the caller is signed in when this resolves. */
+export function completeFirstRun(values: {
+  username: string;
+  password: string;
+  workspace_name: string;
+  email?: string;
+  locale: string;
+}): Promise<{ username: string; workspace: string; workspace_id: number }> {
+  return api("/api/setup", { method: "POST", json: values });
+}
+
 // --- Settings ----------------------------------------------------------------
 
 export type SettingRow = {
