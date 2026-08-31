@@ -98,6 +98,14 @@ class Settings(BaseSettings):
     max_body_bytes: int = Field(default=1_048_576, ge=1024, le=104_857_600)
     request_timeout_seconds: int = Field(default=30, ge=1, le=300)
 
+    # G1. Off unless an operator sets it, and the default is not timidity. Most
+    # installations are a machine on a business network reached over plain HTTP, and a
+    # Strict-Transport-Security header sent to one of those makes the dashboard
+    # unreachable from every browser that saw it, for as long as the header said, with
+    # no way to undo it from the server. Seconds; 31536000 is a year, which is what an
+    # installation with TLS everywhere should eventually use.
+    hsts_seconds: int = Field(default=0, ge=0, le=63072000)
+
     # Mail. Most installations have none, and that is a designed state rather than a
     # broken one: the `forgot` screen says so and points at a command on the machine.
     # `smtp_host` being unset is what puts the API into that answer.
