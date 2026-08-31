@@ -105,6 +105,13 @@ class Settings(BaseSettings):
     # no way to undo it from the server. Seconds; 31536000 is a year, which is what an
     # installation with TLS everywhere should eventually use.
     hsts_seconds: int = Field(default=0, ge=0, le=63072000)
+    # G3. Where the server listens, and it is loopback because §B9's three supported
+    # paths - a private network, a VPN, a reverse proxy terminating TLS - all reach a
+    # process on 127.0.0.1, and none of them needs one on every interface. Applied by
+    # `python -m api`, which is why that is the documented way to start it: a default
+    # nothing applies is decoration.
+    bind_host: str = "127.0.0.1"
+    bind_port: int = Field(default=8000, ge=1, le=65535)
 
     # Mail. Most installations have none, and that is a designed state rather than a
     # broken one: the `forgot` screen says so and points at a command on the machine.

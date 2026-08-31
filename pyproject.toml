@@ -34,6 +34,11 @@ dependencies = [
     "cryptography>=43.0",
 ]
 
+[project.scripts]
+# The documented way to start the API. It exists so that `bind_host` is applied rather
+# than suggested - see `api/__main__.py`.
+tel-agent = "api.__main__:main"
+
 [project.optional-dependencies]
 dev = [
     "ruff>=0.14",
