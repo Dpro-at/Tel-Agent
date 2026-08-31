@@ -1151,3 +1151,80 @@ async def test_half_a_configuration_never_reaches_the_visitor(
     assert GREETING.split(" ")[0] in body
     assert "API key" not in body
     assert "llm." not in body
+
+
+async def test_a_registered_hook_is_told_a_stranger_wrote_in(stage, configured_key) -> None:
+    """The other half of G5: a sender nothing calls is the same thing as no sender.
+
+    Queued rather than sent, because a request that waits for somebody else's server is
+    a request that inherits their outage - the runner does the delivering.
+    """
+    from api.models import BackgroundJob, Channel, Webhook
+
+    http, paths, db = stage
+    ours = await db.scalar(select(Channel).where(Channel.webhook_path == paths["ours"]))
+    db.add(
+        Webhook(
+            workspace_id=ours.workspace_id,
+            url="https://wagner-partner.test/hooks",
+            events=["conversation.started", "message.received"],
+            secret="a-shared-secret",  # noqa: S106
+            enabled=True,
+        )
+    )
+    await db.commit()
+
+    answer = await http.post(
+        f"/public/chat/{paths['ours']}/messages",
+        json={"text": "hallo"},
+        headers={"Origin": ALLOWED},
+    )
+    assert answer.status_code == 201
+
+    queued = (
+        await db.scalars(select(BackgroundJob).where(BackgroundJob.kind == "webhook"))
+    ).all()
+    # The first message of a thread is both: the thread beginning, and a line arriving.
+    assert sorted(job.payload["event"] for job in queued) == [
+        "conversation.started",
+        "message.received",
+    ]
+    text = next(j for j in queued if j.payload["event"] == "message.received")
+    assert text.payload["data"]["text"] == "hallo"
+
+
+async def test_a_second_line_is_not_a_second_conversation_starting(
+    stage, configured_key
+) -> None:
+    """`conversation.started` fires once per thread. A visitor typing five lines is one
+    arrival, and a receiver told five times opens five tickets."""
+    from api.models import BackgroundJob, Channel, Webhook
+
+    http, paths, db = stage
+    ours = await db.scalar(select(Channel).where(Channel.webhook_path == paths["ours"]))
+    db.add(
+        Webhook(
+            workspace_id=ours.workspace_id,
+            url="https://wagner-partner.test/hooks",
+            events=["conversation.started"],
+            secret="a-shared-secret",  # noqa: S106
+            enabled=True,
+        )
+    )
+    await db.commit()
+
+    first = await http.post(
+        f"/public/chat/{paths['ours']}/messages",
+        json={"text": "hallo"},
+        headers={"Origin": ALLOWED},
+    )
+    await http.post(
+        f"/public/chat/{paths['ours']}/messages",
+        json={"text": "noch etwas", "conversation": first.json()["conversation"]},
+        headers={"Origin": ALLOWED},
+    )
+
+    queued = (
+        await db.scalars(select(BackgroundJob).where(BackgroundJob.kind == "webhook"))
+    ).all()
+    assert [job.payload["event"] for job in queued] == ["conversation.started"]
