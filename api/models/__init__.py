@@ -38,6 +38,7 @@ from api.models.identity import ROLES, Membership, User, Workspace
 from api.models.invite import INVITE_LIFETIME, INVITE_ROLES, Invite
 from api.models.jobs import JOB_STATUSES, BackgroundJob, ScheduledTask
 from api.models.knowledge import CONTENT_MAX, Knowledge
+from api.models.machine_token import MACHINE_SCOPES, MachineToken
 from api.models.notification import CATEGORIES, Notification
 from api.models.quota import RateCounter
 from api.models.rule import RULE_ACTIONS, Rule
@@ -59,6 +60,7 @@ __all__ = [
     "INVITE_LIFETIME",
     "INVITE_ROLES",
     "JOB_STATUSES",
+    "MACHINE_SCOPES",
     "NAME_MAX",
     "ORIGINS",
     "PRICE_MODES",
@@ -82,6 +84,7 @@ __all__ = [
     "Invite",
     "KeyChallenge",
     "Knowledge",
+    "MachineToken",
     "Membership",
     "Message",
     "Notification",
