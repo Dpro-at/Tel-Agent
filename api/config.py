@@ -85,6 +85,19 @@ class Settings(BaseSettings):
     # Echoes every statement. Useful once, noisy always - off unless asked for.
     database_echo: bool = False
 
+    # G2. Ceilings on one request, against a mistake rather than an attacker: an
+    # unbounded body and an unbounded handler are each a denial of service that nobody
+    # has to intend. A megabyte is far above every body this API accepts - nothing here
+    # takes an upload - and thirty seconds is far above every handler, so both are a
+    # backstop rather than a budget anything runs near.
+    #
+    # The timeout is measured to the first byte of the response, never to the last:
+    # `api/middleware/limits.py` cancels it when the response starts, because a wall
+    # clock over a whole response would cut off exactly the streamed replies Rule 3
+    # exists to make possible.
+    max_body_bytes: int = Field(default=1_048_576, ge=1024, le=104_857_600)
+    request_timeout_seconds: int = Field(default=30, ge=1, le=300)
+
     # Mail. Most installations have none, and that is a designed state rather than a
     # broken one: the `forgot` screen says so and points at a command on the machine.
     # `smtp_host` being unset is what puts the API into that answer.

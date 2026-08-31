@@ -36,6 +36,7 @@ from api.jobs.runner import loop as job_loop
 from api.logging import configure_logging
 from api.middleware.auth import AuthenticationMiddleware
 from api.middleware.csrf import CsrfMiddleware
+from api.middleware.limits import RequestLimitsMiddleware
 from api.middleware.request_id import RequestIdMiddleware
 from api.middleware.ws_auth import WebSocketAuthMiddleware
 from api.routes import apps as apps_routes
@@ -258,6 +259,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # scopes, so without this every websocket route would bypass authentication.
     app.add_middleware(WebSocketAuthMiddleware)
     app.add_middleware(CsrfMiddleware)
+    # Between CSRF and the request id on purpose: a refusal here still carries an id the
+    # dashboard can quote, and an oversized body is dropped before authentication,
+    # session lookup and routing have been paid for.
+    app.add_middleware(
+        RequestLimitsMiddleware,
+        max_body_bytes=settings.max_body_bytes,
+        timeout_seconds=settings.request_timeout_seconds,
+    )
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(
         CORSMiddleware,
