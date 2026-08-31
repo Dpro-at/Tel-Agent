@@ -58,6 +58,7 @@ from api.routes import rules as rule_routes
 from api.routes import settings as settings_routes
 from api.routes import setup as setup_routes
 from api.routes import system as system_routes
+from api.routes import tokens as token_routes
 from api.routes import web_channel as web_channel_routes
 from api.routes import webhooks as webhook_routes
 from api.routes import widget as widget_routes
@@ -306,6 +307,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(home_routes.router)
     app.include_router(catalogue_routes.router)
     app.include_router(setup_routes.router)
+    app.include_router(token_routes.router)
 
     @app.get(
         "/health",

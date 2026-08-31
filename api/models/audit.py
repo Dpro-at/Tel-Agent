@@ -89,6 +89,12 @@ EVENTS = (
     # can reach the agent at all, and its reCAPTCHA secret is a credential - so a
     # change needs a name attached afterwards.
     "web_channel_changed",
+    # Machine tokens — §B9.1. Each one is a credential that opens a path the
+    # dashboard session cannot, so minting, rotating and removing one all need a
+    # name attached afterwards. The token itself never appears in `details`.
+    "machine_token_added",
+    "machine_token_rotated",
+    "machine_token_removed",
     # First run. The one event that creates an owner out of nothing, on an endpoint
     # that needs no session because there is nobody to be yet. It can only ever happen
     # once, and an installation whose log does not start with it was set up some other

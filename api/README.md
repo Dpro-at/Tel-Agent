@@ -48,6 +48,13 @@ WS     /ws/conversations/{id}/whisper operator -> agent, mid-conversation
 - The MCP endpoint needs its own token, separate from the dashboard session, with hard
   limits on calls per hour and allowed destination numbers — an external model that
   can start real calls spends real money
+- **`/hooks/…` and `/mcp` are the machine paths**, and each carries its own credential
+  rather than a session (§B9.1). They are minted from `/api/tokens`, presented as
+  `Authorization: Bearer …`, stored as a SHA-256 and shown in full exactly once. A
+  token is good for one path family: presented at the other it is refused with the
+  same 401 an unknown one gets, so a leak neither opens the other path nor confirms
+  itself. Both families have a per-token request ceiling, and an address that has
+  proved nothing has a lower one
 
 ## Right now
 
