@@ -76,3 +76,31 @@ def test_a_migration_can_be_undone(path: Path) -> None:
         "undone, say so in a comment above the `pass` so the next reader knows it was "
         "a decision rather than a leftover."
     )
+
+
+@pytest.mark.parametrize("path", _migrations(), ids=lambda path: path.stem)
+def test_a_batch_alter_of_messages_puts_the_search_triggers_back(path: Path) -> None:
+    """`batch_alter_table("messages")` silently unindexes the transcript archive.
+
+    SQLite cannot alter a table in place for most operations, so alembic's batch mode
+    rebuilds it: new table, copy, drop, rename. The three FTS5 triggers created in
+    `56268f297c2b` are attached to the table that gets dropped, so they go with it —
+    and nothing errors. Full-text search keeps answering, from an index that stops
+    being updated. The bug surfaces as "older conversations are findable and newer ones
+    are not", months later, with no failure to point at.
+
+    Caught once, by four tests that had nothing to do with the migration that broke
+    them. This is the cheap version of that.
+    """
+    source = path.read_text(encoding="utf-8")
+    rebuilds = any(
+        f"batch_alter_table({quote}messages{quote}" in source for quote in ('"', "'")
+    )
+    if not rebuilds:
+        pytest.skip("does not rebuild `messages`")
+
+    assert "messages_fts" in source, (
+        f"{path.name} rebuilds `messages` without restoring `messages_fts`. On SQLite "
+        "that drops the search triggers and leaves the index frozen. Drop them before "
+        "the batch, recreate them after, and rebuild — see afa4aef2e4c9."
+    )

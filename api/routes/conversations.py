@@ -18,10 +18,11 @@ behind them. They stay drawings rather than becoming buttons that do nothing.
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
@@ -32,8 +33,12 @@ from api.conversations import (
     previews,
     search_filter,
 )
-from api.models import Call, Channel, Contact, Conversation, Message
-from api.security.permissions import WorkspaceContext, require_viewer
+from api.dependencies import CurrentUser
+from api.errors import envelope_response
+from api.models import Call, Channel, Contact, Conversation, Message, User
+from api.security.permissions import WorkspaceContext, require_reception, require_viewer
+
+logger = logging.getLogger("api.conversations")
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 
@@ -87,6 +92,8 @@ class MessageOut(BaseModel):
     # flagged because the customer never saw it - a screen that drew it like any other
     # line would be showing a conversation that did not happen.
     is_whisper: bool
+    # Who wrote it, when a person did. `speaker` is a role; this is the name.
+    author: str | None
     stt_confidence: float | None
     language: str | None
 
@@ -307,6 +314,19 @@ async def read_conversation(
     )
     call = await db.get(Call, row.id)
     name_by_who = await _names_for(db, context.id, [row.external_id])
+    # One query for every author on the thread rather than one per line. Whispers are a
+    # handful of lines out of hundreds, so the set is nearly always empty or tiny.
+    author_ids = {m.author_user_id for m in messages if m.author_user_id is not None}
+    author_by_id: dict[int, str] = (
+        {
+            user_id: username
+            for user_id, username in (
+                await db.execute(select(User.id, User.username).where(User.id.in_(author_ids)))
+            ).all()
+        }
+        if author_ids
+        else {}
+    )
 
     return ThreadDetail(
         **_thread(
@@ -325,6 +345,7 @@ async def read_conversation(
                 speaker=m.speaker,
                 text=m.text,
                 is_whisper=m.is_whisper,
+                author=author_by_id.get(m.author_user_id or 0),
                 stt_confidence=m.stt_confidence,
                 language=m.language,
             )
@@ -340,4 +361,88 @@ async def read_conversation(
             if call is not None
             else None
         ),
+    )
+
+
+class Whisper(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+@router.post(
+    "/{conversation_id}/whisper",
+    response_model=MessageOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Say something to the agent that the customer will not see",
+)
+async def whisper(
+    request: Request,
+    context: Annotated[WorkspaceContext, require_reception],
+    user: CurrentUser,
+    conversation_id: int,
+    payload: Whisper,
+) -> object:
+    """§A6.7's first intervention, and the one it calls highest value and lowest cost.
+
+    The agent is told; the customer is not. Both halves of that already existed - the
+    model is handed a whisper as a system note and the widget's thread filters it out
+    (`api/routes/public_chat.py`) - and there was no way to write one. This is it.
+
+    **Reception, not viewer.** Reading a transcript and putting words into the agent's
+    mouth are different powers: this line becomes part of what a customer is told.
+
+    **A closed thread is refused rather than accepted quietly.** Nothing is listening to
+    it, so a whisper written into one is coaching for nobody - and it would sit in the
+    archive looking exactly like coaching that arrived in time.
+    """
+    db: DbSession = request.state.db
+    text = payload.text.strip()
+    if not text:
+        return envelope_response(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            code="empty_whisper",
+            message="A whisper needs something in it.",
+        )
+
+    row = await db.scalar(
+        conversations_for(context.id).where(Conversation.id == conversation_id)
+    )
+    if row is None:
+        # Same silence as the read above: another workspace's id answers like one that
+        # does not exist.
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No such conversation.")
+    if row.status != "open":
+        return envelope_response(
+            status_code=status.HTTP_409_CONFLICT,
+            code="conversation_closed",
+            message="This conversation has ended, so nothing is listening to a whisper.",
+        )
+
+    line = Message(
+        workspace_id=context.id,
+        conversation_id=row.id,
+        # The same clock `api/routes/public_chat.py` writes, so the whisper sorts among
+        # the lines it belongs between rather than at one end of them.
+        ts_ms=int(dt.datetime.now(dt.UTC).timestamp() * 1000),
+        speaker="human",
+        text=text,
+        is_whisper=True,
+        author_user_id=user.id,
+        # Null on a text channel, and the null is §B5's own signal that this was typed.
+        stt_confidence=None,
+        language=None,
+    )
+    db.add(line)
+    await db.commit()
+    await db.refresh(line)
+
+    logger.info("whisper written into conversation %s by %s", row.id, user.username)
+    return MessageOut(
+        id=line.id,
+        ts_ms=line.ts_ms,
+        speaker=line.speaker,
+        text=line.text,
+        is_whisper=line.is_whisper,
+        author=user.username,
+        stt_confidence=line.stt_confidence,
+        language=line.language,
     )
