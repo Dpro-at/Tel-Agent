@@ -230,6 +230,19 @@ class Message(Base):
     # An operator's instruction to the agent, mid-conversation. Stored in the transcript
     # because it is part of what happened, flagged because the customer never saw it.
     is_whisper: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Which person wrote it, when a person did.
+    #
+    # `speaker` is a role, and on a reception desk of four "human" is not an answer to
+    # who coached the agent into what it then told a customer. §A6.4's own transcript
+    # names the person - *human joined: Mohamed* - so the column the name comes from
+    # has to exist.
+    #
+    # Null for every line a person did not write, which is nearly all of them.
+    # `SET NULL` rather than `CASCADE`: an account can be removed from an installation,
+    # and deleting the lines they wrote would delete a customer's conversation with it.
+    author_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     # §B5 decision 5, per line rather than per conversation.
     #
     # Both are null on text channels, and that null is itself the signal that the line
