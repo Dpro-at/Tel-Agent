@@ -38,7 +38,7 @@ from agent.providers.llm import LLMProvider
 from agent.providers.llm import Message as LlmMessage
 from agent.reply import reply as generate_reply
 from agent.tools import TakenMessage
-from api import llm
+from api import llm, webhooks
 from api.db import session_scope
 from api.errors import envelope_response
 from api.models import Channel, Conversation, Message
@@ -314,6 +314,50 @@ async def post_message(
             primary_action="open_conversation",
             action_payload={"conversation_id": conversation.id},
             conversation_id=conversation.id,
+        )
+
+    # Told to whatever the operator registered, and never at the visitor's expense.
+    # Queued rather than sent: a request that waits for somebody else's server is a
+    # request that inherits their outage, and the runner already knows how to retry.
+    #
+    # Swallowed for the same reason the tray's failures are: a widget that stops
+    # accepting messages because a webhook could not be written down is worse than a
+    # webhook nobody received.
+    try:
+        if started:
+            await webhooks.queue(
+                db,
+                workspace_id=channel.workspace_id,
+                event="conversation.started",
+                data={
+                    "conversation": conversation.external_id,
+                    "channel": "web",
+                    "started_at": conversation.started_at.isoformat()
+                    if conversation.started_at
+                    else None,
+                },
+            )
+        await webhooks.queue(
+            db,
+            workspace_id=channel.workspace_id,
+            event="message.received",
+            data={
+                "conversation": conversation.external_id,
+                "message_id": message.id,
+                "speaker": "caller",
+                # The visitor's own words, in full. This is the whole reason somebody
+                # registers this event, and trimming it here would make the hook
+                # useless for the case it exists for.
+                "text": message.text,
+                "ts_ms": message.ts_ms,
+            },
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        logger.exception(
+            "could not queue webhooks for an accepted message",
+            extra={"conversation_id": conversation.id},
         )
 
     logger.info(

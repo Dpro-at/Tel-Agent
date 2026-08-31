@@ -784,6 +784,56 @@ paths that spend real money.
 
 Each signed with a shared secret.
 
+**The names above are the phone-era set and are superseded in code.** §B5 decision 6
+made a call a conversation on a `phone` channel, so `api/models/webhook.py` sends
+`conversation.started`, `conversation.ended`, `message.received`, `assistant.changed`
+and `knowledge.changed`. This list should be rewritten against that when somebody
+settles what the remaining four become.
+
+### How a receiver verifies one
+
+Every delivery carries four headers:
+
+| Header | |
+|---|---|
+| `X-Tel-Agent-Event` | the event name |
+| `X-Tel-Agent-Timestamp` | unix seconds, and part of what is signed |
+| `X-Tel-Agent-Signature` | `sha256=` followed by the hex HMAC |
+| `X-Tel-Agent-Delivery` | the delivery's id — **keep it and ignore repeats** |
+
+The signature is `HMAC-SHA256(secret, f"{timestamp}.{raw_body}")`, hex. Two things about
+that string matter and both are deliberate:
+
+- **The timestamp is inside it.** Signing the body alone means a delivery captured once
+  can be replayed for as long as the secret lives, because the body has not changed.
+  Refuse anything whose timestamp is more than a few minutes old.
+- **`raw_body` is the bytes as they arrived**, before any parse. A framework that
+  re-serialises the JSON for you produces a different byte string, and the signature
+  over it will not match no matter how correct the code looks.
+
+```python
+import hashlib, hmac, time
+
+
+def verify(secret: str, headers, raw_body: bytes, tolerance: int = 300) -> bool:
+    timestamp = int(headers["X-Tel-Agent-Timestamp"])
+    if abs(time.time() - timestamp) > tolerance:
+        return False
+    expected = (
+        "sha256="
+        + hmac.new(
+            secret.encode(), f"{timestamp}.".encode() + raw_body, hashlib.sha256
+        ).hexdigest()
+    )
+    # Constant time: a plain `==` leaks how much of the signature was right.
+    return hmac.compare_digest(expected, headers["X-Tel-Agent-Signature"])
+```
+
+**Delivery is at least once.** A receiver that is briefly unreachable is retried with
+backoff, so the same event can arrive twice — act on `X-Tel-Agent-Delivery` once and
+ignore a repeat. **Redirects are not followed**: a signed POST that follows one delivers
+the signature somewhere the operator never registered.
+
 **Webhook in:** `POST /hooks/call` — start an outbound call from n8n or anything else.
 
 ## B7. Built-in tools

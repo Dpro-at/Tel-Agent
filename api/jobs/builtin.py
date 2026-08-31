@@ -201,6 +201,40 @@ async def _send_email(db: DbSession, payload: dict) -> None:
         raise RuntimeError("mail delivery failed")
 
 
+@job("webhook")
+async def _webhook(db: DbSession, payload: dict) -> None:
+    """Deliver one signed webhook, or raise so the runner tries again.
+
+    The hook is read at send time rather than carried in the payload: a secret rotated
+    while deliveries are waiting should rescue them, and a hook switched off during an
+    incident should stop them. Both are the same lookup.
+
+    A hook that has been deleted or switched off returns quietly. It is not a failure
+    to retry - there is nothing left to deliver to, and retrying until the attempts run
+    out would leave a permanently failed job for something the operator did on purpose.
+    """
+    import datetime as dt
+
+    from api import webhooks
+    from api.models import Webhook
+
+    hook = await db.get(Webhook, payload["webhook_id"])
+    if hook is None or not hook.enabled:
+        logger.info(
+            "webhook skipped: gone or switched off",
+            extra={"webhook_id": payload["webhook_id"], "event": payload["event"]},
+        )
+        return
+
+    await webhooks.send(
+        hook,
+        event=payload["event"],
+        data=payload["data"],
+        delivery_id=payload.get("delivery_id", 0),
+        now=dt.datetime.now(dt.UTC),
+    )
+
+
 async def last_task_status(db: DbSession) -> dict[str, dict[str, object]]:
     """What the scheduler last saw, for the health endpoint."""
     rows = (await db.execute(select(ScheduledTask))).scalars().all()
