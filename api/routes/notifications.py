@@ -16,7 +16,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
@@ -26,6 +26,12 @@ from api.dependencies import CurrentUser
 from api.errors import envelope_response
 from api.models import Notification
 from api.security.permissions import CurrentWorkspace, WorkspaceContext, require_reception
+
+# G2. The ceiling on one page, so `?limit=100000000` is a refusal rather than a query
+# that reads the table into memory. Declared here rather than in a middleware: a cap
+# belongs on the endpoint that knows what a page of its own rows costs, and this way it
+# is in the OpenAPI document and refused by validation with the standard envelope.
+PAGE = 200
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
@@ -97,7 +103,7 @@ async def list_notifications(
     request: Request,
     context: CurrentWorkspace,
     category: str | None = None,
-    limit: int = 50,
+    limit: Annotated[int, Query(ge=1, le=PAGE)] = 50,
 ) -> NotificationList:
     db: DbSession = request.state.db
 
