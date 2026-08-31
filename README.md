@@ -198,8 +198,10 @@ cable.
 
 ## Security notes
 
-- **Do not expose the port to the internet.** VPN, Tailscale, or a reverse proxy with
-  HTTPS are the supported paths.
+- **The port is not exposed by default.** The server listens on `127.0.0.1`, and
+  `python -m api` warns if you change that. The supported ways to reach an installation
+  from elsewhere — a private network, a VPN, or a reverse proxy terminating TLS — all
+  talk to a server on loopback, so none of them requires widening it.
 - **A password is required on first run.** There are no default credentials.
 - **API keys are encrypted at rest** and are never returned in full to the client.
 - **Recording announcements are on by default.** Austria requires both parties to be
