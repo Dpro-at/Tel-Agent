@@ -7,7 +7,7 @@ import en from "../../../../locales/en/install.json";
 import { pickDictionary } from "@/lib/i18n";
 import { isLocale } from "@/lib/locales";
 
-import { InstallWizard } from "./install-wizard";
+import { FirstRun } from "./first-run";
 
 /** English is the reference shape; the other two are checked against it. */
 export type InstallDictionary = typeof en;
@@ -18,5 +18,5 @@ export default async function InstallPage({ params }: { params: Promise<{ locale
 
   const t = pickDictionary<InstallDictionary>(locale, { en, de, ar });
 
-  return <InstallWizard locale={locale} t={t} />;
+  return <FirstRun locale={locale} t={t} />;
 }

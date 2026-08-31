@@ -1,5 +1,21 @@
 "use client";
 
+/**
+ * The drawn install wizard — **not routed, and kept on purpose.**
+ *
+ * `/install` renders `first-run.tsx` instead: the part of this flow that has a backend
+ * today. What is drawn here and cannot be honest yet is most of it. Choosing a database
+ * and ports from a web page is not merely unbuilt, it is impossible in this order — the
+ * application is already running on a database and a port before the page can load. The
+ * speech steps wait for `agent/providers/{stt,tts}`, which are empty; the machine check
+ * has nothing behind it; the line and the closing "call yourself" belong to Milestone 11.
+ *
+ * It is left here rather than deleted because it is the design this eventually grows
+ * back into, and reconstructing it from a git history nobody remembers is worse than
+ * one unrouted file that says why it is unrouted. Delete it the day the flow is rebuilt
+ * against real endpoints.
+ */
+
 import Link from "next/link";
 import { useMemo, useState } from "react";
 

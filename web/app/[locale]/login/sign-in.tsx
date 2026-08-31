@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { ApiError, OfflineError, lockedUntil, signIn } from "@/lib/api";
+import { ApiError, OfflineError, lockedUntil, setupState, signIn } from "@/lib/api";
 
 import { DevCredentials } from "@/components/dev-credentials";
 import { StatePreview, type ScreenState } from "@/components/state-preview";
@@ -171,6 +171,27 @@ function SignInCard({
 }) {
   const t = dictionary.auth;
   const router = useRouter();
+
+  // An installation with no account at all is sent to first run instead of being shown
+  // a password box that no password satisfies. Nothing else routes here: the middleware
+  // turns an unauthenticated visitor towards sign-in, so without this check a fresh
+  // machine has no reachable way in.
+  //
+  // A failure is ignored on purpose. The likeliest reason is that the API is not
+  // running, and that is the sign-in form's own offline state to report - redirecting
+  // to first run on a server that is merely down would send an installation that is
+  // already set up to a screen telling it to create an account.
+  useEffect(() => {
+    let live = true;
+    setupState()
+      .then((state) => {
+        if (live && state.needed) router.replace(`/${locale}/install`);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [locale, router]);
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");

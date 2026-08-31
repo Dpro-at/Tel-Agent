@@ -89,6 +89,11 @@ EVENTS = (
     # can reach the agent at all, and its reCAPTCHA secret is a credential - so a
     # change needs a name attached afterwards.
     "web_channel_changed",
+    # First run. The one event that creates an owner out of nothing, on an endpoint
+    # that needs no session because there is nobody to be yet. It can only ever happen
+    # once, and an installation whose log does not start with it was set up some other
+    # way - which is worth being able to see.
+    "installation_created",
 )
 
 
