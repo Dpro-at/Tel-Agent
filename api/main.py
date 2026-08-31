@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import Settings, get_settings
 from api.db import check_database, create_engine, create_sessionmaker
+from api.docs import describe
 from api.errors import ErrorResponse, install_error_handlers
 from api.extensions.builtin import BUILTIN
 from api.extensions.registry import Registry, sync_catalogue
@@ -64,13 +65,164 @@ from api.routes import webhooks as webhook_routes
 from api.routes import widget as widget_routes
 from api.routes import workspaces as workspace_routes
 
+# One sentence per group, and each says what the group is *not* wherever that is the
+# thing a reader gets wrong. A tag with no description is a heading; a tag with one is a
+# map, and this document is the product's public surface (§B6).
+#
+# `tests/test_openapi.py` fails if a route uses a tag that is missing here, so a new
+# router cannot quietly add a nineteenth unexplained word.
 TAGS_METADATA = [
     {
         "name": "system",
         "description": (
             "Liveness and version. `/health` is the endpoint a reverse proxy, a "
-            "monitor or an operator hits first."
+            "monitor or an operator hits first, and it reports what it has actually "
+            "verified rather than that the process is running."
         ),
+    },
+    {
+        "name": "setup",
+        "description": (
+            "First run, and only first run. There is nobody to authenticate as before "
+            "this, so it is public and defends itself by refusing to run twice."
+        ),
+    },
+    {
+        "name": "authentication",
+        "description": (
+            "Signing in, signing out, the six-digit code, SSH-key sign-in and changing "
+            "a password. **No public signup** (D-030): the first account comes from "
+            "setup and every later one is invited."
+        ),
+    },
+    {
+        "name": "workspaces",
+        "description": (
+            "The tenant boundary (D-028), its members and their roles. Every other "
+            "route on this page is scoped by the active workspace, sent as "
+            "`X-Workspace-Id`; omitted, the caller's first workspace is assumed."
+        ),
+    },
+    {
+        "name": "invitations",
+        "description": (
+            "A one-time link by which an invited person names themselves (D-034). "
+            "Guarded by the token in the path rather than by a session, because the "
+            "caller has no account worth the name yet."
+        ),
+    },
+    {
+        "name": "conversations",
+        "description": (
+            "The transcript archive, every channel in one place — a phone call is a "
+            "conversation on a `phone` channel (D-017), not a separate kind of thing. "
+            "Includes whispering into one that is still running (§A6.7)."
+        ),
+    },
+    {
+        "name": "contacts",
+        "description": (
+            "The phonebook. It is what turns an identity the channel knows — a number, "
+            "a chat id — into a name on a screen, and nothing else reads it."
+        ),
+    },
+    {
+        "name": "rules",
+        "description": (
+            "Routing: who reaches the agent, who is refused, who goes straight "
+            "through. Decided from a channel identity, not from a phone number, so one "
+            "table serves every channel."
+        ),
+    },
+    {
+        "name": "numbers",
+        "description": (
+            "The registry of numbers this installation answers on. Adding, disabling "
+            "and releasing one; SIP credentials arrive with the SIP milestone, because "
+            "§B9.2 wants them encrypted and `sip_config` is plain JSON today."
+        ),
+    },
+    {
+        "name": "assistants",
+        "description": (
+            "Who the agent is: persona, instructions, and which tools it may use. This "
+            "is what the business says to its customers, which is why every change is "
+            "in the audit trail."
+        ),
+    },
+    {
+        "name": "knowledge",
+        "description": (
+            "What the agent is allowed to read before it answers. Adding a source "
+            "changes the answers a customer gets, so it is recorded like a change to "
+            "the assistant rather than like a file upload."
+        ),
+    },
+    {
+        "name": "catalogue",
+        "description": (
+            "Services and their prices. A price here is quoted to a customer by an "
+            "agent that cannot check it against anything, so who changed one and when "
+            "is the only record of why a caller was told a number."
+        ),
+    },
+    {
+        "name": "web chat",
+        "description": (
+            "The web chat channel and the widget it serves (§B14). The widget's own two "
+            "routes are the only unauthenticated ones in the product, guarded by an "
+            "origin allowlist, a captcha and a rate limit instead of by a session."
+        ),
+    },
+    {
+        "name": "webhooks",
+        "description": (
+            "Where this installation posts what happened, and the secret that signs it. "
+            "Rule 5 in `CLAUDE.md` is why this matters more than its size suggests: "
+            "everything outside Tel-Agent's column is reached through here."
+        ),
+    },
+    {
+        "name": "tokens",
+        "description": (
+            "Credentials for the machine paths — `/hooks/…` and `/mcp` — each separate "
+            "from the dashboard session and from each other (§B9.1). Shown once, stored "
+            "as a hash, rotatable in place."
+        ),
+    },
+    {
+        "name": "apps",
+        "description": (
+            'Extensions (D-031). A channel is an extension, which is what keeps "add '
+            'one more connector" from having no end.'
+        ),
+    },
+    {
+        "name": "settings",
+        "description": (
+            "Declared keys only, secrets encrypted and masked on read. Installation "
+            "secrets live in `.env` and never here; credentials a person types live "
+            "here and never in `.env` (§B9.2)."
+        ),
+    },
+    {
+        "name": "notifications",
+        "description": (
+            "What happened while nobody was watching, and what is waiting on a decision "
+            "only a person can make. The two are kept apart on purpose."
+        ),
+    },
+    {
+        "name": "backup",
+        "description": (
+            "Archive, verify by reading back, retention, and a staged restore. One "
+            "archive is every transcript on the installation, so downloading one is a "
+            "data export and is recorded as one."
+        ),
+    },
+    {
+        "name": "home",
+        "description": "The two counts the dashboard opens with (§A6.2). Nothing else.",
     },
 ]
 
@@ -228,6 +380,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Read back by `lifespan`, which is what actually opens the engine.
     app.state.settings = settings
+
+    # What the generator cannot see: how to authenticate, and what each tag is for.
+    describe(app, TAGS_METADATA)
 
     install_error_handlers(app)
 
