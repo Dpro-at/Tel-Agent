@@ -635,6 +635,8 @@ export type ThreadMessage = {
   /** An operator's instruction to the agent mid-conversation — part of the record,
    *  flagged because the customer never saw it. */
   is_whisper: boolean;
+  /** Who wrote it, when a person did. `speaker` is a role; this is the name. */
+  author: string | null;
   stt_confidence: number | null;
   language: string | null;
 };
@@ -1100,6 +1102,18 @@ export function changeRule(
   return api<RoutingRule>(`/api/rules/${id}`, {
     method: "PATCH",
     json: { action, note: note ?? null },
+  });
+}
+
+/**
+ * Say something to the agent that the customer will not see — §A6.7's first
+ * intervention. Reception and above; a conversation that has ended answers 409, because
+ * nothing is listening to it.
+ */
+export function sendWhisper(conversationId: number, text: string): Promise<ThreadMessage> {
+  return api<ThreadMessage>(`/api/conversations/${conversationId}/whisper`, {
+    method: "POST",
+    json: { text },
   });
 }
 
