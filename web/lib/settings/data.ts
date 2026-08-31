@@ -208,36 +208,20 @@ export const HOST_FIELDS: Field[] = [
   },
 ];
 
-/** The visible part of a key is real; the rest is never sent to the client. */
-export const API_KEYS: { id: string; name: Key; key: string; used: Key }[] = [
-  { id: "website", name: "k_website", key: "od_live_9f2c••••••••3ab1", used: "used_2h" },
-  { id: "export", name: "k_export", key: "od_live_41de••••••••77c0", used: "used_yesterday" },
-];
-
-/** URLs and event names are what your own software matches on. */
-export const WEBHOOKS: { id: string; url: string; events: string; last: Key; ok: boolean }[] = [
-  {
-    id: "call",
-    url: "https://wagner-partner.at/hooks/call",
-    events: "call.ended · transcript.ready",
-    last: "w_delivered_0944",
-    ok: true,
-  },
-  {
-    id: "n8n",
-    url: "https://n8n.local/webhook/telagent",
-    events: "tool.failed · call.missed",
-    last: "w_three_failures",
-    ok: false,
-  },
-  {
-    id: "booking",
-    url: "https://wagner-partner.at/hooks/booking",
-    events: "appointment.booked",
-    last: "w_delivered_0812",
-    ok: true,
-  },
-];
+/**
+ * The webhook vocabulary the screen knows how to name - `WEBHOOK_EVENTS` in
+ * `api/models/webhook.py`. The list itself is read from `/api/webhooks/events`, so this
+ * map only supplies the sentence: an event outside it is rendered verbatim as machine
+ * output, which is how a name added on the server degrades to something readable
+ * rather than to a blank row.
+ */
+export const WEBHOOK_EVENT_LABEL: Record<string, Key> = {
+  "conversation.started": "wev_conversation_started",
+  "conversation.ended": "wev_conversation_ended",
+  "message.received": "wev_message_received",
+  "assistant.changed": "wev_assistant_changed",
+  "knowledge.changed": "wev_knowledge_changed",
+};
 
 /** Tools Tel-Agent exposes over MCP. Write is off by default — see the warning. */
 export const OUR_TOOLS: { name: string; desc: Key; scope: "read" | "act" | "write"; on: boolean }[] = [

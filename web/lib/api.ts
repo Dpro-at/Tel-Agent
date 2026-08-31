@@ -1151,3 +1151,42 @@ export function resolveNotification(id: number): Promise<NotificationItem> {
 export function markLogRead(): Promise<{ resolved: number; still_waiting: number }> {
   return api("/api/notifications/mark-log-read", { method: "POST" });
 }
+
+// --- Machine tokens — the credential the machine paths carry ------------------
+
+/** Which machine path a token opens. §B9.1 gives each one its own credential, and one
+ *  never opens the other; the server refuses anything outside this list. */
+export type MachineScope = "hooks" | "mcp";
+
+export type MachineToken = {
+  id: number;
+  name: string;
+  scope: MachineScope;
+  /** The four characters an operator recognises in a list of six. The token itself is
+   *  stored as a hash, so there is nothing else to show and no way to show more. */
+  last_four: string;
+  created_at: string;
+  /** Null until somebody has presented it. A credential minted three months ago and
+   *  never used is one to remove, and it looks exactly like a working one without
+   *  this field. */
+  last_used_at: string | null;
+};
+
+/** The mint and rotate responses, and the only time the token itself exists here. */
+export type MintedToken = MachineToken & { token: string };
+
+export function tokenList(): Promise<MachineToken[]> {
+  return api<MachineToken[]>("/api/tokens");
+}
+
+export function mintToken(name: string, scope: MachineScope): Promise<MintedToken> {
+  return api<MintedToken>("/api/tokens", { method: "POST", json: { name, scope } });
+}
+
+export function rotateToken(id: number): Promise<MintedToken> {
+  return api<MintedToken>(`/api/tokens/${id}/rotate`, { method: "POST" });
+}
+
+export function removeToken(id: number): Promise<void> {
+  return api<void>(`/api/tokens/${id}`, { method: "DELETE" });
+}
