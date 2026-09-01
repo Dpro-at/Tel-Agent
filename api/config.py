@@ -141,6 +141,9 @@ class Settings(BaseSettings):
     # Where Meta's Graph API lives, version included. Same reasoning: a stand-in for
     # development and tests, never changed in production.
     whatsapp_api_base: str = "https://graph.facebook.com/v23.0"
+    # Messenger and Instagram speak to the same Graph API; a separate setting so a
+    # test can stand in for one product without impersonating the other.
+    meta_api_base: str = "https://graph.facebook.com/v23.0"
 
     @property
     def version(self) -> str:

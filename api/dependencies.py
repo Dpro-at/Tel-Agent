@@ -62,6 +62,10 @@ PUBLIC_PATHS: frozenset[str] = frozenset(
         # caller and holds no session; guarded by a long random address and the
         # X-Hub-Signature-256 HMAC over the raw body with the app secret.
         "/public/whatsapp/{path}",
+        # The same webhook mechanism for Messenger and Instagram - one door for the
+        # pair, because on Meta's side it is one mechanism with one signature scheme.
+        # Same guards as the WhatsApp door, same identical refusal for every reason.
+        "/public/meta/{path}",
     }
 )
 
@@ -70,6 +74,7 @@ PUBLIC_PATHS: frozenset[str] = frozenset(
 PUBLIC_PREFIXES: tuple[str, ...] = (
     "/api/invites/",
     "/public/chat/",
+    "/public/meta/",
     "/public/whatsapp/",
     "/widget/",
 )

@@ -673,6 +673,33 @@ async def reply_as_business(
                 "Check the channel's credentials and try again.",
             )
 
+    if channel is not None and channel.kind in ("messenger", "instagram"):
+        import httpx
+
+        from api.channels import meta_chat as meta_transport
+
+        credentials = meta_transport.credentials_for(channel)
+        if credentials is None or not row.external_id:
+            return envelope_response(
+                status_code=status.HTTP_409_CONFLICT,
+                code="credentials_incomplete",
+                message="This conversation's Meta channel has no complete credentials saved.",
+            )
+        try:
+            async with meta_transport.make_client() as client:
+                await meta_transport.send_text(client, credentials[0], row.external_id, text)
+        except (meta_transport.MetaChatError, httpx.HTTPError) as error:
+            logger.warning(
+                "meta reply not delivered",
+                extra={"conversation_id": row.id, "error": str(error)[:200]},
+            )
+            return envelope_response(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                code="not_delivered",
+                message="Meta did not accept the message, so nothing was written. "
+                "Check the channel's credentials and try again.",
+            )
+
     if channel is not None and channel.kind == "email":
         from api.channels import email as email_transport
 

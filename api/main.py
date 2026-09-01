@@ -55,6 +55,7 @@ from api.routes import home as home_routes
 from api.routes import invites as invite_routes
 from api.routes import knowledge as knowledge_routes
 from api.routes import mcp as mcp_routes
+from api.routes import meta_chat_channels as meta_chat_routes
 from api.routes import notifications as notification_routes
 from api.routes import numbers as number_routes
 from api.routes import public_chat as public_chat_routes
@@ -205,6 +206,24 @@ TAGS_METADATA = [
             "access token, a phone number id, and the app secret that signs every "
             "webhook Meta delivers. Inbound arrives on a public webhook because the "
             "Cloud API offers nothing to poll; these routes are its settings card."
+        ),
+    },
+    {
+        "name": "messenger",
+        "description": (
+            "The Messenger channel (§B13) — a Facebook page answered through the "
+            "customer's own Meta application, messaged with the page access token. "
+            "Inbound shares Meta's webhook door with Instagram; these routes are its "
+            "settings card."
+        ),
+    },
+    {
+        "name": "instagram",
+        "description": (
+            "The Instagram channel (§B13) — a Business account linked to a Facebook "
+            "page, its DMs answered through that page's token from the same Meta "
+            "application. Inbound shares Meta's webhook door with Messenger; these "
+            "routes are its settings card."
         ),
     },
     {
@@ -506,6 +525,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(email_channel_routes.router)
     app.include_router(whatsapp_channel_routes.router)
     app.include_router(whatsapp_channel_routes.card)
+    app.include_router(meta_chat_routes.router)
+    app.include_router(meta_chat_routes.messenger_card)
+    app.include_router(meta_chat_routes.instagram_card)
 
     @app.get(
         "/health",
