@@ -138,6 +138,10 @@ class Settings(BaseSettings):
     # bot, a network, or Telegram's cooperation.
     telegram_api_base: str = "https://api.telegram.org"
 
+    # Where Meta's Graph API lives, version included. Same reasoning: a stand-in for
+    # development and tests, never changed in production.
+    whatsapp_api_base: str = "https://graph.facebook.com/v23.0"
+
     @property
     def version(self) -> str:
         return _installed_version()

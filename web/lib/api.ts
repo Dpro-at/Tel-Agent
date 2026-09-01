@@ -1140,6 +1140,51 @@ export function testEmailChannel(): Promise<{ ok: boolean }> {
   return api("/api/channels/email/test", { method: "POST" });
 }
 
+// --- The WhatsApp channel -------------------------------------------------------
+
+export type WhatsAppChannel = {
+  enabled: boolean;
+  phone_number_id: string | null;
+  /** Masked, or null. Neither secret ever leaves the server after it is saved. */
+  access_token_preview: string | null;
+  app_secret_preview: string | null;
+  /** What Meta must be given, and what it will ask back during the handshake. */
+  callback_url: string;
+  verify_token: string;
+  /** What the last connection test said this number is. Null until one has run. */
+  display_phone_number: string | null;
+  verified_name: string | null;
+};
+
+export function whatsappChannel(): Promise<WhatsAppChannel> {
+  return api<WhatsAppChannel>("/api/channels/whatsapp");
+}
+
+/**
+ * Any subset. The two secrets travel as a pair — they come from the same Meta
+ * application — with the cards' contract: omit to keep, "" on either removes both
+ * (and switches the channel off), a mask-echo is ignored.
+ */
+export function saveWhatsAppChannel(
+  fields: Partial<{
+    enabled: boolean;
+    phone_number_id: string;
+    access_token: string;
+    app_secret: string;
+  }>,
+): Promise<WhatsAppChannel> {
+  return api<WhatsAppChannel>("/api/channels/whatsapp", { method: "PUT", json: fields });
+}
+
+/** §A6.8's "Test connection": asks the Graph API who the configured number is. */
+export function testWhatsAppChannel(): Promise<{
+  ok: boolean;
+  display_phone_number: string | null;
+  verified_name: string | null;
+}> {
+  return api("/api/channels/whatsapp/test", { method: "POST" });
+}
+
 // --- Routing rules ------------------------------------------------------------
 
 export type RuleAction = "pass" | "block" | "ai";

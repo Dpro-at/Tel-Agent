@@ -9,4 +9,5 @@ BUILTIN = (
     "api.extensions.builtin.web_chat",
     "api.extensions.builtin.telegram",
     "api.extensions.builtin.email",
+    "api.extensions.builtin.whatsapp",
 )

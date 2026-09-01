@@ -371,6 +371,12 @@ async def test_every_route_under_a_public_prefix_is_pinned(client) -> None:
         # `api/routes/public_chat.py`'s docstring before adding one.
         "/public/chat/{path}/messages",
         "/public/chat/{path}/stream",
+        # Meta's webhook for the WhatsApp channel (§B13) - the decision the comment
+        # above asks for, taken deliberately: the Cloud API has no inbox to poll, so
+        # Meta pushes or nothing arrives. It opens no session; what guards it is the
+        # long random address and the X-Hub-Signature-256 HMAC over the raw body
+        # with the app secret, refused identically for every reason.
+        "/public/whatsapp/{path}",
         # The widget's own document, §B14. Public for the same reason the message
         # endpoint is - a stranger's browser fetches it, on a page this installation
         # does not control. It opens no session either; what limits it is the

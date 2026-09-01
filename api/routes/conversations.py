@@ -642,6 +642,37 @@ async def reply_as_business(
                 "Check the channel's bot token and try again.",
             )
 
+    if channel is not None and channel.kind == "whatsapp":
+        import httpx
+
+        from api.channels import whatsapp as whatsapp_transport
+
+        credentials = whatsapp_transport.credentials_for(channel)
+        phone_number_id = str((channel.settings_json or {}).get("phone_number_id") or "")
+        if credentials is None or not phone_number_id or not row.external_id:
+            return envelope_response(
+                status_code=status.HTTP_409_CONFLICT,
+                code="credentials_incomplete",
+                message="This conversation's WhatsApp channel has no complete "
+                "Meta credentials saved.",
+            )
+        try:
+            async with whatsapp_transport.make_client() as client:
+                await whatsapp_transport.send_text(
+                    client, credentials[0], phone_number_id, row.external_id, text
+                )
+        except (whatsapp_transport.WhatsAppError, httpx.HTTPError) as error:
+            logger.warning(
+                "whatsapp reply not delivered",
+                extra={"conversation_id": row.id, "error": str(error)[:200]},
+            )
+            return envelope_response(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                code="not_delivered",
+                message="Meta did not accept the message, so nothing was written. "
+                "Check the channel's credentials and try again.",
+            )
+
     if channel is not None and channel.kind == "email":
         from api.channels import email as email_transport
 
