@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
+from api import webhooks
 from api.dependencies import CurrentUser
 from api.errors import envelope_response
 from api.models import CONTENT_MAX, Assistant, Knowledge
@@ -30,6 +31,24 @@ from api.security.permissions import WorkspaceContext, require_admin, require_vi
 logger = logging.getLogger("api.knowledge")
 
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
+
+
+async def _told(db: DbSession, workspace_id: int, *, data: dict[str, object]) -> None:
+    """Queue `knowledge.changed` for whoever registered for it, and commit.
+
+    Swallowed on failure, like every export: the edit already stands, and undoing it
+    because a webhook could not be written down would punish the operator for the
+    receiver's problem. A subscriber typically re-syncs whatever mirrors the knowledge,
+    so the payload carries which source and what happened, not the content.
+    """
+    try:
+        await webhooks.queue(
+            db, workspace_id=workspace_id, event="knowledge.changed", data=data
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        logger.exception("could not queue knowledge.changed", extra={"data": data})
 
 
 class KnowledgeOut(BaseModel):
@@ -161,6 +180,9 @@ async def add_knowledge(
         details={"knowledge_id": row.id, "title": row.title},
     )
     logger.info("knowledge %s added in workspace %s", row.id, context.id)
+    await _told(
+        db, context.id, data={"knowledge_id": row.id, "title": row.title, "action": "added"}
+    )
     # Scoped, like the write path above it. Nothing can reach here with an assistant
     # from another workspace today - `_assistant_ok` refuses that on the way in - and
     # this is the read that would quietly print the name if anything ever did.
@@ -224,6 +246,9 @@ async def edit_knowledge(
         username=user.username,
         details={"knowledge_id": row.id, "fields": sorted(sent)},
     )
+    await _told(
+        db, context.id, data={"knowledge_id": row.id, "title": row.title, "action": "changed"}
+    )
     # Scoped, like the write path above it. Nothing can reach here with an assistant
     # from another workspace today - `_assistant_ok` refuses that on the way in - and
     # this is the read that would quietly print the name if anything ever did.
@@ -260,4 +285,7 @@ async def remove_knowledge(
         details={"knowledge_id": knowledge_id, "title": title},
     )
     logger.info("knowledge %s removed from workspace %s", knowledge_id, context.id)
+    await _told(
+        db, context.id, data={"knowledge_id": knowledge_id, "title": title, "action": "removed"}
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

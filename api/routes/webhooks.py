@@ -11,9 +11,11 @@ while the person is already looking at the screen.
 is switched off keeps its secret, because a hook switched off during an incident should
 come back without every receiver being reconfigured.
 
-**Nothing sends anything yet.** This records what a webhook is; deliveries, retries and
-their statuses are a different table with a different lifetime, and they arrive with
-the sender that produces them.
+**Sending lives in `api/webhooks.py` and the background runner.** This records what a
+webhook is; deliveries, retries and their statuses ride on the job that sends them.
+The one delivery made from here is the test one - fired by hand from the settings
+screen, synchronously, because the person clicking wants the receiver's answer and
+not a promise that a job exists.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ import secrets
 from typing import Annotated
 from urllib.parse import urlparse
 
+import httpx
 from fastapi import APIRouter, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -316,6 +319,73 @@ async def rotate_secret(
     )
     logger.info("webhook %s secret rotated in workspace %s", row.id, context.id)
     return WebhookCreated(**_out(row).model_dump(), secret=secret)
+
+
+class TestResult(BaseModel):
+    """What the receiver did with the test, told plainly either way."""
+
+    delivered: bool
+    # The HTTP answer, when there was one. A refusal (anything outside 2xx) still has
+    # a code; a receiver that could not be reached at all has none.
+    status_code: int | None
+    error: str | None
+
+
+@router.post(
+    "/{webhook_id}/test",
+    response_model=TestResult,
+    summary="Send one test delivery, signed like a real one",
+)
+async def send_test(
+    request: Request,
+    context: Annotated[WorkspaceContext, require_admin],
+    user: CurrentUser,
+    webhook_id: int,
+) -> object:
+    """Fired by hand from the settings screen, so the operator can prove the receiver
+    is wired - URL, secret, signature check - before anything real depends on it.
+
+    Synchronous on purpose, unlike every real delivery: the person clicking wants the
+    receiver's answer, and a queued job would answer "maybe, later". Signed exactly
+    like a real delivery so the receiver's verification code is what gets tested, with
+    `webhook.test` as the event name so it can tell the drill from the fire.
+    """
+    from api import webhooks as sender
+
+    db: DbSession = request.state.db
+    row = await _find(db, context.id, webhook_id)
+    if row is None:
+        return _missing()
+
+    try:
+        answered = await sender.send(
+            row,
+            event="webhook.test",
+            data={"note": "A test delivery, sent by hand from the settings screen."},
+            delivery_id=0,
+            now=dt.datetime.now(dt.UTC),
+        )
+    except httpx.HTTPError as error:
+        result = TestResult(delivered=False, status_code=None, error=str(error)[:300])
+    except RuntimeError as error:
+        # `send` raises this on any non-2xx answer, redirects included; the code is
+        # the last word of its message. Parsed rather than re-requested: asking the
+        # receiver twice to report once would double every side effect it has.
+        code = str(error).rsplit(" ", 1)[-1]
+        result = TestResult(
+            delivered=False,
+            status_code=int(code) if code.isdigit() else None,
+            error=str(error)[:300],
+        )
+    else:
+        result = TestResult(delivered=True, status_code=answered.status_code, error=None)
+
+    logger.info(
+        "webhook %s test delivery: %s",
+        row.id,
+        "delivered" if result.delivered else result.error,
+    )
+    return result
 
 
 @router.delete("/{webhook_id}", summary="Remove a webhook")
