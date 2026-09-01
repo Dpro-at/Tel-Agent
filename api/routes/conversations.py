@@ -30,6 +30,7 @@ from api.conversations import (
     PAGE,
     conversations_for,
     message_counts,
+    position_ms,
     previews,
     search_filter,
 )
@@ -441,9 +442,9 @@ async def whisper(
     line = Message(
         workspace_id=context.id,
         conversation_id=row.id,
-        # The same clock `api/routes/public_chat.py` writes, so the whisper sorts among
-        # the lines it belongs between rather than at one end of them.
-        ts_ms=int(dt.datetime.now(dt.UTC).timestamp() * 1000),
+        # A position in the conversation, like every other line, so the whisper sorts
+        # among the ones it belongs between rather than at one end of them.
+        ts_ms=position_ms(row.started_at),
         speaker="human",
         text=text,
         is_whisper=True,
