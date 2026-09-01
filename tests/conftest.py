@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -122,6 +123,46 @@ async def running_app(settings: Settings) -> AsyncIterator[AsyncClient]:
 POSTGRES_URL = os.environ.get("TEST_POSTGRES_URL")
 
 
+async def _create_database(url: str) -> None:
+    """Make this database if it is not there, from the maintenance database.
+
+    `CREATE DATABASE` cannot run inside a transaction and cannot be issued from within
+    the database it names, so it goes through `postgres` with autocommit.
+    """
+    name = url.rsplit("/", 1)[1]
+    server = url.rsplit("/", 1)[0] + "/postgres"
+    engine = create_engine(Settings(_env_file=None, database_url=server)).execution_options(
+        isolation_level="AUTOCOMMIT"
+    )
+    try:
+        async with engine.connect() as connection:
+            exists = await connection.scalar(
+                sa_text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": name}
+            )
+            if not exists:
+                await connection.execute(sa_text(f'CREATE DATABASE "{name}"'))
+    finally:
+        await engine.dispose()
+
+
+def _worker_database(url: str) -> str:
+    """One PostgreSQL database per parallel worker.
+
+    Without this the suite cannot be run in parallel at all: `_reset_postgres` drops and
+    recreates `public`, so two workers sharing a database would delete each other's
+    schema mid-test - and the failures would look like flaky tests rather than like the
+    configuration mistake they are.
+
+    `PYTEST_XDIST_WORKER` is `gw0`, `gw1`, … under `-n`, and unset otherwise, so a plain
+    serial run keeps using the database it always did.
+    """
+    worker = os.environ.get("PYTEST_XDIST_WORKER")
+    if not worker:
+        return url
+    base, name = url.rsplit("/", 1)
+    return f"{base}/{name}_{worker}"
+
+
 async def _open_sessions(url: str) -> str:
     """Every other connection to this database, and what it is doing.
 
@@ -178,32 +219,36 @@ async def _reset_postgres(url: str) -> None:
         await engine.dispose()
 
 
+@pytest.fixture(scope="session")
+async def postgres_worker_database() -> None:
+    """Create this worker's own database, once, before anything asks for it."""
+    if POSTGRES_URL is not None:
+        await _create_database(_worker_database(POSTGRES_URL))
+
+
 @pytest.fixture(
     params=["sqlite", *(["postgresql"] if POSTGRES_URL else [])],
     ids=lambda dialect: f"on-{dialect}",
 )
-def database_url(request: pytest.FixtureRequest, tmp_path: Path) -> str:
+def database_url(
+    request: pytest.FixtureRequest, tmp_path: Path, postgres_worker_database: None
+) -> str:
     """The URL under test, one per supported dialect."""
     if request.param == "postgresql":
         assert POSTGRES_URL is not None
-        return POSTGRES_URL
+        return _worker_database(POSTGRES_URL)
     return f"sqlite+aiosqlite:///{tmp_path}/test.db"
 
 
-@pytest.fixture
-async def migrated(settings: Settings, database_url: str) -> AsyncIterator[AsyncSession]:
-    """A database built by `alembic upgrade head`.
-
-    The schema comes from **running the migration**, not from
-    `Base.metadata.create_all()`. Creating tables from the models would test the models
-    against themselves and pass even if the migration were empty - and the migration is
-    what actually reaches an installation.
-    """
-    if database_url.startswith("postgresql"):
-        await _reset_postgres(database_url)
-
+def _alembic_config() -> Config:
     config = Config(str(REPO_ROOT / "alembic.ini"))
     config.set_main_option("script_location", str(REPO_ROOT / "alembic"))
+    return config
+
+
+async def upgrade_to_head(database_url: str) -> None:
+    """`alembic upgrade head` against this URL, the way an operator would run it."""
+    config = _alembic_config()
     # env.py reads the URL from Settings, so it is set the way an operator would.
     os.environ["DATABASE_URL"] = database_url
     get_settings.cache_clear()
@@ -216,6 +261,56 @@ async def migrated(settings: Settings, database_url: str) -> AsyncIterator[Async
     finally:
         os.environ.pop("DATABASE_URL", None)
         get_settings.cache_clear()
+
+
+@pytest.fixture(scope="session")
+def sqlite_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The migrated SQLite schema, built once and copied per test.
+
+    **Five hundred and forty-six of this suite's tests were each running the whole
+    migration chain from nothing** — about 830 ms apiece, roughly two thirds of an
+    eleven-minute run, to arrive at the identical empty schema every time. Copying the
+    file instead costs about a millisecond.
+
+    **This does not weaken what the fixture promises.** The schema still comes from
+    *running* the migration rather than from `Base.metadata.create_all()`; the migration
+    simply runs once per session instead of once per test, and every test gets a copy of
+    its output. A copy of the migration's result is not the models testing themselves.
+
+    A test that needs the chain itself — `tests/test_positions.py` upgrades to an
+    earlier revision and then forward — drives alembic directly and is unaffected.
+    """
+    path = tmp_path_factory.mktemp("schema") / "template.db"
+    asyncio.run(upgrade_to_head(f"sqlite+aiosqlite:///{path}"))
+    return path
+
+
+@pytest.fixture
+async def migrated(
+    settings: Settings, database_url: str, sqlite_template: Path
+) -> AsyncIterator[AsyncSession]:
+    """A database built by `alembic upgrade head`.
+
+    The schema comes from **running the migration**, not from
+    `Base.metadata.create_all()`. Creating tables from the models would test the models
+    against themselves and pass even if the migration were empty - and the migration is
+    what actually reaches an installation. See `sqlite_template` for why that run is
+    once per session rather than once per test.
+    """
+    if database_url.startswith("postgresql"):
+        # **No template on this side, and that is a measurement rather than an
+        # oversight.** The same trick was tried here - `CREATE DATABASE … TEMPLATE` in
+        # place of the migration - and it made the PostgreSQL half *slower*: 37.8s to
+        # 50.7s over the same fifty-one tests. Cloning a database copies its whole file
+        # layout and needs every connection dropped first, which costs more than
+        # emptying a small schema and replaying the chain on a connection that is
+        # already open. SQLite has no equivalent cost, which is why it keeps the copy.
+        await _reset_postgres(database_url)
+        await upgrade_to_head(database_url)
+    else:
+        # `database_url` is `sqlite+aiosqlite:///<tmp_path>/test.db`, and the file does
+        # not exist yet - this is what creates it.
+        shutil.copyfile(sqlite_template, database_url.split("///", 1)[1])
 
     engine = create_engine(settings.model_copy(update={"database_url": database_url}))
     sessionmaker = create_sessionmaker(engine)

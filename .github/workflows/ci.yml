@@ -60,8 +60,14 @@ jobs:
     runs-on: ubuntu-latest
     # A hung job otherwise runs to GitHub's six-hour cap. One did: the database never
     # came up and pytest sat waiting for a connection that was never going to arrive,
-    # holding a pull request for forty minutes before anybody looked. Twenty minutes is
-    # roughly three times the honest runtime, so a real slowdown still passes.
+    # holding a pull request for forty minutes before anybody looked.
+    #
+    # **Twenty was not three times the runtime, it was barely twice it.** The same
+    # commit took 8m53s and 20m16s depending on which runner picked it up, and the slow
+    # draw failed at the cap with `Terminate orphan process: pid (2631) (pytest)` -
+    # nothing wrong with the code, and a re-run passed at 10m26s. Parallelism is what
+    # fixed that (see the pytest step); this stays at twenty because the ceiling is now
+    # several times the runtime again rather than adjacent to it.
     timeout-minutes: 20
 
     # D-029 supports two dialects, so the suite runs against both. Without a real
@@ -105,4 +111,13 @@ jobs:
       - run: lint-imports
       # pytest exits 5 on an empty suite and CI reads that as a failure, so the
       # repository always carries at least one real test.
-      - run: pytest
+      # `-n auto` uses every core the runner has. The suite is embarrassingly parallel:
+      # each test builds its own database and shares nothing with any other, and it runs
+      # the whole matrix twice, once per dialect. The one thing that had to change first
+      # was PostgreSQL - `_reset_postgres` drops and recreates `public`, so workers
+      # sharing a database would have deleted each other's schema mid-test and it would
+      # have read as flakiness. `tests/conftest.py` gives each worker its own.
+      #
+      # Measured on a developer machine, both dialects, the same 1269 tests:
+      # 16m43s serially, 3m14s on four workers.
+      - run: pytest -n auto

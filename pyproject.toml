@@ -49,6 +49,11 @@ dev = [
     # hung test never prints its own name. This makes a hang a normal failure with a
     # stack trace in it.
     "pytest-timeout>=2.3",
+    # The suite is embarrassingly parallel - every test builds its own database and
+    # shares nothing - and it runs the whole matrix twice, once per dialect. See
+    # `_worker_database` in tests/conftest.py for the one thing that had to change
+    # before `-n` was safe.
+    "pytest-xdist>=3.6",
     "import-linter>=2.1",
     "httpx>=0.28",
 ]
