@@ -8,6 +8,7 @@ import { LiveSettings, type FieldCopy } from "@/components/settings/live-setting
 import { Sidebar } from "@/components/shell/sidebar";
 import { StatePreview, type ScreenState } from "@/components/state-preview";
 import {
+  API_URL,
   ASSIGNABLE_ROLES,
   ApiError,
   accountEvents,
@@ -364,7 +365,9 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
                     {tab === "users" ? <UsersPanels t={t} /> : null}
                     {tab === "channels" ? <ChannelsPanels t={t} /> : null}
                     {tab === "api" ? <ApiPanels locale={locale} t={t} /> : null}
-                    {tab === "mcp" ? <McpPanels locale={locale} t={t} /> : null}
+                    {tab === "mcp" ? (
+                      <McpPanels locale={locale} t={t} onOpenApiTab={() => setTab("api")} />
+                    ) : null}
                     {tab === "advanced" ? (
                       <>
                         <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border">
@@ -2441,7 +2444,25 @@ function ApiPanels({ locale, t }: { locale: Locale; t: SettingsDictionary }) {
   );
 }
 
-function McpPanels({ locale, t }: { locale: Locale; t: SettingsDictionary }) {
+/**
+ * The MCP tab, wired to the endpoint Milestone 7 built (`api/routes/mcp.py`).
+ *
+ * What the drawing promised that the server cannot keep is gone, per the pattern the
+ * API tab set (#124): the enable switch (the endpoint is live exactly when a token
+ * with the `mcp` scope exists — there is nothing else to switch), the per-tool
+ * switches (v1 serves its five tools to any holder of the token), the invented
+ * `.local` address, and the three phone-era tools nothing serves. The tool list is
+ * `OUR_TOOLS`, kept in the same order as the server's own registry.
+ */
+function McpPanels({
+  locale,
+  t,
+  onOpenApiTab,
+}: {
+  locale: Locale;
+  t: SettingsDictionary;
+  onOpenApiTab: () => void;
+}) {
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-[10px] border border-[color:var(--od-violet-border)] bg-[rgba(139,124,255,.06)]">
@@ -2454,7 +2475,6 @@ function McpPanels({ locale, t }: { locale: Locale; t: SettingsDictionary }) {
               {t.m_inward_note}
             </div>
           </div>
-          <Switch on />
         </div>
 
         <div className="p-[0_18px_14px]">
@@ -2462,7 +2482,17 @@ function McpPanels({ locale, t }: { locale: Locale; t: SettingsDictionary }) {
             dir="ltr"
             className="mono ltr-data border-od-border-6 bg-od-canvas-2 text-od-text-2 rounded-[7px] border p-[11px_13px] text-[12.5px] [overflow-wrap:anywhere]"
           >
-            https://telagent.wagner-partner.local/mcp
+            {`${API_URL}/mcp`}
+          </div>
+          <div className="text-od-muted-5 mt-[9px] text-[12.5px] text-pretty">
+            {t.m_token_note}{" "}
+            <button
+              type="button"
+              onClick={onOpenApiTab}
+              className="cursor-pointer border-0 bg-transparent p-0 text-[12.5px] text-[color:var(--od-violet-3)] hover:underline"
+            >
+              {t.m_token_link}
+            </button>
           </div>
         </div>
 
@@ -2483,32 +2513,18 @@ function McpPanels({ locale, t }: { locale: Locale; t: SettingsDictionary }) {
               className="mt-[2px] flex-none rounded-[5px] border p-[2px_9px] text-[10.5px] font-bold tracking-[.05em] uppercase whitespace-nowrap"
               style={{
                 borderColor:
-                  tool.scope === "read"
-                    ? "var(--od-border-7)"
-                    : tool.scope === "act"
-                      ? "var(--od-violet-border)"
-                      : "var(--od-amber-border)",
+                  tool.scope === "read" ? "var(--od-border-7)" : "var(--od-violet-border)",
                 background:
-                  tool.scope === "read"
-                    ? "var(--od-raise-5)"
-                    : tool.scope === "act"
-                      ? "rgba(139,124,255,.12)"
-                      : "var(--od-amber-bg)",
-                color:
-                  tool.scope === "read"
-                    ? "var(--od-muted-5)"
-                    : tool.scope === "act"
-                      ? "var(--od-violet-3)"
-                      : "var(--od-amber-text)",
+                  tool.scope === "read" ? "var(--od-raise-5)" : "rgba(139,124,255,.12)",
+                color: tool.scope === "read" ? "var(--od-muted-5)" : "var(--od-violet-3)",
               }}
             >
               {t[`scope_${tool.scope}`]}
             </span>
-            <Switch on={tool.on} />
           </div>
         ))}
 
-        {/* Why write is off by default, said plainly. */}
+        {/* What holding the token means, said plainly. */}
         <div className="border-t border-[color:var(--od-raise-6)] p-[14px_18px] text-[12.5px] text-pretty text-[color:var(--od-amber-text)]">
           {t.m_warning}
         </div>

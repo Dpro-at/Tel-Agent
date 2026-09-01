@@ -51,6 +51,7 @@ from api.routes import conversations as conversation_routes
 from api.routes import home as home_routes
 from api.routes import invites as invite_routes
 from api.routes import knowledge as knowledge_routes
+from api.routes import mcp as mcp_routes
 from api.routes import notifications as notification_routes
 from api.routes import numbers as number_routes
 from api.routes import public_chat as public_chat_routes
@@ -463,6 +464,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(catalogue_routes.router)
     app.include_router(setup_routes.router)
     app.include_router(token_routes.router)
+    app.include_router(mcp_routes.router)
 
     @app.get(
         "/health",
