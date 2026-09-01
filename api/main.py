@@ -25,6 +25,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.channels import email as email_transport
 from api.channels import telegram as telegram_transport
 from api.config import Settings, get_settings
 from api.db import check_database, create_engine, create_sessionmaker
@@ -49,6 +50,7 @@ from api.routes import backup as backup_routes
 from api.routes import catalogue as catalogue_routes
 from api.routes import contacts as contact_routes
 from api.routes import conversations as conversation_routes
+from api.routes import email_channel as email_channel_routes
 from api.routes import home as home_routes
 from api.routes import invites as invite_routes
 from api.routes import knowledge as knowledge_routes
@@ -187,6 +189,15 @@ TAGS_METADATA = [
         ),
     },
     {
+        "name": "email",
+        "description": (
+            "The email channel (§B13) — an IMAP/SMTP mailbox the customer already "
+            "owns, its password stored encrypted and masked on every read. Not the "
+            "installation's notification SMTP: that one talks to the operator, this "
+            "one talks to customers. These routes are only its settings card."
+        ),
+    },
+    {
         "name": "webhooks",
         "description": (
             "Where this installation posts what happened, and the secret that signs it. "
@@ -318,8 +329,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # could never be run against it.
         logging.getLogger("api.extensions").exception("could not sync the app catalogue")
 
-    worker: asyncio.Task | None = None
-    poller: asyncio.Task | None = None
+    background: list[asyncio.Task] = []
     if settings.jobs_enabled:
         try:
             async with app.state.sessionmaker() as db:
@@ -329,20 +339,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # A database that is not migrated yet must not stop the app from starting
             # and answering /health with the reason.
             logging.getLogger("api.jobs").exception("could not seed the core schedule")
-        worker = asyncio.create_task(job_loop(app.state.sessionmaker))
-        # The Telegram transport rides the same flag: it is background machinery with
-        # the same "exactly one clock ticks" constraint, and tests drive `poll_once`
-        # directly rather than racing a loop.
-        poller = asyncio.create_task(telegram_transport.loop(app.state.sessionmaker))
+        background.append(asyncio.create_task(job_loop(app.state.sessionmaker)))
+        # The channel transports ride the same flag: background machinery with the
+        # same "exactly one clock ticks" constraint, and tests drive each transport's
+        # `poll_once` directly rather than racing a loop.
+        background.append(asyncio.create_task(telegram_transport.loop(app.state.sessionmaker)))
+        background.append(asyncio.create_task(email_transport.loop(app.state.sessionmaker)))
 
     try:
         yield
     finally:
-        for task in (worker, poller):
-            if task is not None:
-                task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await task
+        for task in background:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
         await engine.dispose()
 
 
@@ -483,6 +493,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(token_routes.router)
     app.include_router(mcp_routes.router)
     app.include_router(telegram_channel_routes.router)
+    app.include_router(email_channel_routes.router)
 
     @app.get(
         "/health",

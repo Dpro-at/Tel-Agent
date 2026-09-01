@@ -1091,6 +1091,55 @@ export function testTelegramChannel(): Promise<{ ok: boolean; bot_username: stri
   return api("/api/channels/telegram/test", { method: "POST" });
 }
 
+// --- The email channel ----------------------------------------------------------
+
+export type EmailChannel = {
+  enabled: boolean;
+  imap_host: string | null;
+  imap_port: number;
+  smtp_host: string | null;
+  smtp_port: number;
+  username: string | null;
+  from_address: string | null;
+  imap_ssl: boolean;
+  smtp_tls: boolean;
+  smtp_ssl: boolean;
+  /** Masked, or null. The password itself never leaves the server after it is saved. */
+  password_preview: string | null;
+};
+
+export function emailChannel(): Promise<EmailChannel> {
+  return api<EmailChannel>("/api/channels/email");
+}
+
+/**
+ * Any subset. `password` is write-only, with the other cards' contract: omit to
+ * leave the stored one alone, send "" to remove it (which also switches the channel
+ * off), never send back the displayed mask.
+ */
+export function saveEmailChannel(
+  fields: Partial<{
+    enabled: boolean;
+    imap_host: string;
+    imap_port: number;
+    smtp_host: string;
+    smtp_port: number;
+    username: string;
+    from_address: string;
+    imap_ssl: boolean;
+    smtp_tls: boolean;
+    smtp_ssl: boolean;
+    password: string;
+  }>,
+): Promise<EmailChannel> {
+  return api<EmailChannel>("/api/channels/email", { method: "PUT", json: fields });
+}
+
+/** §A6.8's "Test connection": signs into IMAP and SMTP with the saved mailbox. */
+export function testEmailChannel(): Promise<{ ok: boolean }> {
+  return api("/api/channels/email/test", { method: "POST" });
+}
+
 // --- Routing rules ------------------------------------------------------------
 
 export type RuleAction = "pass" | "block" | "ai";
