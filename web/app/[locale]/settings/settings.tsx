@@ -44,6 +44,7 @@ import {
   testMetaChatChannel,
   testSlackChannel,
   testTelegramChannel,
+  testWebhook,
   testWhatsAppChannel,
   whatsappChannel,
   testModel,
@@ -66,6 +67,7 @@ import {
   type TelegramChannel,
   type WebChannel,
   type WhatsAppChannel,
+  type WebhookTestResult,
   type WebhookWithSecret,
 } from "@/lib/api";
 import { interpolate } from "@/lib/i18n";
@@ -3396,6 +3398,8 @@ function WebhooksPanel({ t }: { t: SettingsDictionary }) {
   const events = useResource(() => webhookEvents(), []);
   const [adding, setAdding] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
+  // The last test delivery's outcome, kept against the hook it was fired for.
+  const [tested, setTested] = useState<{ id: number; result: WebhookTestResult } | null>(null);
   const [confirming, setConfirming] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -3507,9 +3511,40 @@ function WebhooksPanel({ t }: { t: SettingsDictionary }) {
                   {hook.secret_preview}
                 </span>
               </div>
+              {tested?.id === hook.id ? (
+                <p
+                  className="mt-[6px] mb-0 text-[12.5px] text-pretty"
+                  style={{
+                    color: tested.result.delivered
+                      ? "var(--od-green-text)"
+                      : "var(--od-red-text-4)",
+                  }}
+                >
+                  {tested.result.delivered
+                    ? t.w_test_ok.replace("{code}", String(tested.result.status_code ?? ""))
+                    : t.w_test_fail.replace(
+                        "{detail}",
+                        tested.result.status_code !== null
+                          ? String(tested.result.status_code)
+                          : (tested.result.error ?? ""),
+                      )}
+                </p>
+              ) : null}
             </div>
 
             <div className="ms-auto flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void act(async () => {
+                    setTested({ id: hook.id, result: await testWebhook(hook.id) });
+                  })
+                }
+                className="border-od-border-7 text-od-muted hover:text-od-text-2 cursor-pointer rounded-md border bg-transparent p-[7px_12px] text-[13px] hover:bg-[var(--od-raise-4)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {t.w_test}
+              </button>
               <button
                 type="button"
                 disabled={busy}

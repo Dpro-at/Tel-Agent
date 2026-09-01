@@ -1026,6 +1026,18 @@ export function removeWebhook(id: number): Promise<void> {
   return api<void>(`/api/webhooks/${id}`, { method: "DELETE" });
 }
 
+/** What the receiver did with the one delivery an operator can fire by hand. */
+export type WebhookTestResult = {
+  delivered: boolean;
+  status_code: number | null;
+  error: string | null;
+};
+
+/** Sends one delivery signed like a real one, with `webhook.test` as the event. */
+export function testWebhook(id: number): Promise<WebhookTestResult> {
+  return api<WebhookTestResult>(`/api/webhooks/${id}/test`, { method: "POST" });
+}
+
 // --- The web chat channel ------------------------------------------------------
 
 export type WebChannel = {

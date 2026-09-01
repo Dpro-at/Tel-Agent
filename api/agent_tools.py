@@ -32,6 +32,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from agent.tools import BUILTIN, Tool
+from api import webhooks
 from api.db import session_scope
 from api.models import Conversation, Knowledge
 from api.notifications import raise_notification
@@ -213,6 +214,18 @@ def toolset(
                 # The column is timezone-naive and read back through `_utc()`, so
                 # what is stored is bare UTC - an aware value breaks on PostgreSQL.
                 row.ended_at = dt.datetime.now(dt.UTC).replace(tzinfo=None)
+                # `end_call` is the one writer of `status='closed'`, which makes it
+                # the emitter of `conversation.ended` - queued in the same session as
+                # the close, so neither can be observed without the other.
+                await webhooks.queue(
+                    db,
+                    workspace_id=workspace_id,
+                    event="conversation.ended",
+                    data={
+                        "conversation": row.external_id,
+                        "ended_at": row.ended_at.isoformat(),
+                    },
+                )
                 await db.commit()
         logger.info("agent closed conversation %s", conversation_id)
         return (

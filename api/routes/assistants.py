@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
+from api import webhooks
 from api.dependencies import CurrentUser
 from api.errors import envelope_response
 from api.models import ASSISTANT_STATUSES, ASSISTANT_TEMPLATES, ASSISTANT_TOOLS, Assistant
@@ -69,6 +70,24 @@ def _out(row: Assistant) -> AssistantOut:
         created_at=row.created_at.isoformat(),
         updated_at=row.updated_at.isoformat(),
     )
+
+
+async def _told(db: DbSession, workspace_id: int, *, data: dict[str, object]) -> None:
+    """Queue `assistant.changed` for whoever registered for it, and commit.
+
+    Swallowed on failure, like every export: the edit already stands, and undoing it
+    because a webhook could not be written down would punish the operator for the
+    receiver's problem. `WEBHOOK_EVENTS` has offered this name since the registry was
+    written; this is the emitter.
+    """
+    try:
+        await webhooks.queue(
+            db, workspace_id=workspace_id, event="assistant.changed", data=data
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        logger.exception("could not queue assistant.changed", extra={"data": data})
 
 
 def _missing() -> object:
@@ -283,6 +302,9 @@ async def add_assistant(
         details={"assistant_id": row.id, "name": row.name},
     )
     logger.info("assistant %s created in workspace %s", row.id, context.id)
+    await _told(
+        db, context.id, data={"assistant_id": row.id, "name": row.name, "action": "added"}
+    )
     return _out(row)
 
 
@@ -361,6 +383,9 @@ async def edit_assistant(
         username=user.username,
         details={"assistant_id": row.id, "fields": sorted(sent)},
     )
+    await _told(
+        db, context.id, data={"assistant_id": row.id, "name": row.name, "action": "changed"}
+    )
     return _out(row)
 
 
@@ -389,4 +414,7 @@ async def delete_assistant(
         details={"assistant_id": assistant_id, "name": name},
     )
     logger.info("assistant %s deleted from workspace %s", assistant_id, context.id)
+    await _told(
+        db, context.id, data={"assistant_id": assistant_id, "name": name, "action": "removed"}
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

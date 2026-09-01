@@ -120,7 +120,14 @@ async def queue(db: DbSession, *, workspace_id: int, event: str, data: dict[str,
         # can read the database, and a queue is a strange second place for a credential
         # to live; the handler reads the live one at send time, which also means
         # rotating a secret rescues the deliveries already waiting.
-        await enqueue(db, "webhook", {"webhook_id": hook.id, "event": event, "data": data})
+        job = await enqueue(
+            db, "webhook", {"webhook_id": hook.id, "event": event, "data": data}
+        )
+        # The job's id is the delivery id the receiver deduplicates on, and it needs a
+        # flush to exist. Written back whole rather than mutated: a JSON column does
+        # not see changes made inside the dict it already holds.
+        await db.flush()
+        job.payload = {**job.payload, "delivery_id": job.id}
         queued += 1
 
     if queued:
@@ -136,12 +143,13 @@ async def send(
     delivery_id: int,
     now: dt.datetime,
     client: httpx.AsyncClient | None = None,
-) -> None:
+) -> httpx.Response:
     """POST one signed delivery. Raises on anything that is worth retrying.
 
-    A 2xx is success. Everything else raises, and the runner decides whether that
-    becomes a retry or a permanent failure - it already knows how many attempts this
-    delivery has had and this function does not.
+    A 2xx is success and is returned, so a caller that wants the receiver's answer -
+    the settings screen's test button - has it. Everything else raises, and the runner
+    decides whether that becomes a retry or a permanent failure - it already knows how
+    many attempts this delivery has had and this function does not.
     """
     body = envelope(event, data, sent_at=now)
     timestamp = int(now.timestamp())
@@ -167,3 +175,4 @@ async def send(
         # delivers the signature somewhere the operator never registered, and that is
         # the one failure mode worth being noisy about rather than quietly obeying.
         raise RuntimeError(f"{hook.url} answered {response.status_code}")
+    return response
