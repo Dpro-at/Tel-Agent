@@ -642,6 +642,37 @@ async def reply_as_business(
                 "Check the channel's bot token and try again.",
             )
 
+    if channel is not None and channel.kind == "email":
+        from api.channels import email as email_transport
+
+        config = email_transport.config_for(channel)
+        if config is None or not row.external_id:
+            return envelope_response(
+                status_code=status.HTTP_409_CONFLICT,
+                code="mailbox_incomplete",
+                message="This conversation's email channel has no complete mailbox saved.",
+            )
+        state = email_transport.thread_state(row)
+        try:
+            await email_transport.send_mail(
+                config,
+                to=row.external_id,
+                subject=email_transport.reply_subject(str(state.get("subject") or "")),
+                text=text,
+                in_reply_to=state.get("last_message_id") or None,
+            )
+        except email_transport.EmailError as error:
+            logger.warning(
+                "email reply not delivered",
+                extra={"conversation_id": row.id, "error": str(error)[:200]},
+            )
+            return envelope_response(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                code="not_delivered",
+                message="The mailbox did not accept the message, so nothing was "
+                "written. Check the channel's mailbox settings and try again.",
+            )
+
     line = Message(
         workspace_id=context.id,
         conversation_id=row.id,

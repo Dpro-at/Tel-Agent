@@ -17,6 +17,7 @@ import {
   changePassword,
   createInvite,
   currentUser,
+  emailChannel,
   changeWebhook,
   membersList,
   mintToken,
@@ -26,10 +27,12 @@ import {
   removeWebhook,
   rotateToken,
   rotateWebhookSecret,
+  saveEmailChannel,
   saveTelegramChannel,
   saveWebChannel,
   sendTestMail,
   telegramChannel,
+  testEmailChannel,
   testTelegramChannel,
   testModel,
   signOutEverywhereElse,
@@ -43,6 +46,7 @@ import {
   type MachineScope,
   type Member,
   type MintedToken,
+  type EmailChannel,
   type TelegramChannel,
   type WebChannel,
   type WebhookWithSecret,
@@ -1720,6 +1724,211 @@ function ChannelsPanels({ t }: { t: SettingsDictionary }) {
       </div>
 
       <TelegramCard t={t} />
+      <EmailCard t={t} />
+    </div>
+  );
+}
+
+/**
+ * The email card — §B13's third no-platform channel: an IMAP/SMTP mailbox the
+ * customer already owns.
+ *
+ * Deliberately not the notifications tab's SMTP: that one is how Tel-Agent talks to
+ * its operator, this one is how the business talks to its customers, per workspace,
+ * on credentials the customer owns (§B9.2). The password follows the cards'
+ * contract — masked once saved, the echoed mask never treated as an edit, an empty
+ * write removing it and switching the channel off with it.
+ */
+function EmailCard({ t }: { t: SettingsDictionary }) {
+  const channel = useResource<EmailChannel>(() => emailChannel(), []);
+  // The saved value until somebody types; then what they typed. `null` is
+  // "untouched", which is why these are not initialised from the row in an effect.
+  const [fields, setFields] = useState<Record<string, string | null>>({});
+  const [flags, setFlags] = useState<Record<string, boolean | null>>({});
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [tested, setTested] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const row = channel.data;
+
+  const text = (key: keyof EmailChannel): string =>
+    fields[key] ?? String(row?.[key] ?? "");
+  const flag = (key: keyof EmailChannel): boolean =>
+    flags[key] ?? Boolean(row?.[key] ?? false);
+
+  const describe = (thrown: unknown): string => {
+    if (thrown instanceof ApiError) {
+      if (thrown.code === "mailbox_incomplete") return t.em_error_incomplete;
+      if (thrown.code === "encryption_key_missing") return t.wc_error_no_key;
+      if (thrown.code === "mailbox_refused") return thrown.message;
+      return thrown.message;
+    }
+    return String(thrown);
+  };
+
+  const act = async (run: () => Promise<unknown>) => {
+    if (busy) return;
+    setBusy(true);
+    setProblem(null);
+    setSaved(false);
+    setTested(false);
+    try {
+      await run();
+      setSaved(true);
+      channel.reload();
+    } catch (thrown) {
+      setProblem(describe(thrown));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const save = (extra: Partial<Parameters<typeof saveEmailChannel>[0]> = {}) =>
+    act(async () => {
+      await saveEmailChannel({
+        imap_host: text("imap_host"),
+        imap_port: Number(text("imap_port")) || 993,
+        smtp_host: text("smtp_host"),
+        smtp_port: Number(text("smtp_port")) || 587,
+        username: text("username"),
+        from_address: text("from_address"),
+        imap_ssl: flag("imap_ssl"),
+        smtp_tls: flag("smtp_tls"),
+        smtp_ssl: flag("smtp_ssl"),
+        // Omitted when untouched: the server ignores an echoed mask, and not
+        // sending one is the half that does not rely on it doing so.
+        ...(password === "" ? {} : { password }),
+        ...extra,
+      });
+      setPassword("");
+    });
+
+  if (row === null) return null;
+
+  const box = (
+    key: keyof EmailChannel,
+    label: string,
+    options: { placeholder?: string; wide?: boolean; secret?: boolean } = {},
+  ) => (
+    <label className={options.wide ? "min-w-[220px] flex-[2_1_260px]" : "min-w-[110px] flex-[1_1_120px]"}>
+      <span className="text-od-text-3 text-[13px] font-medium">{label}</span>
+      <input
+        dir="ltr"
+        value={text(key)}
+        placeholder={options.placeholder}
+        onChange={(event) => setFields((all) => ({ ...all, [key]: event.target.value }))}
+        className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono mt-2 w-full rounded-[7px] border p-[9px_11px] text-start text-[13px]"
+      />
+    </label>
+  );
+
+  const tick = (key: keyof EmailChannel, label: string) => (
+    <label className="text-od-text-3 flex cursor-pointer items-center gap-2 text-[13px]">
+      <input
+        type="checkbox"
+        checked={flag(key)}
+        onChange={(event) => setFlags((all) => ({ ...all, [key]: event.target.checked }))}
+      />
+      {label}
+    </label>
+  );
+
+  return (
+    <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border p-[18px]">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-[10px]">
+        <h3 className="text-od-muted-4 m-0 text-[13px] font-semibold tracking-[.07em] uppercase">
+          {t.em_title}
+        </h3>
+        <span className="text-od-faint max-w-[52ch] text-[12.5px] text-pretty">
+          {t.em_note}
+        </span>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-3">
+        {box("imap_host", t.em_imap_host, { placeholder: "imap.example.com", wide: true })}
+        {box("imap_port", t.em_imap_port)}
+        {box("smtp_host", t.em_smtp_host, { placeholder: "smtp.example.com", wide: true })}
+        {box("smtp_port", t.em_smtp_port)}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-3">
+        {box("username", t.em_username, { wide: true })}
+        <label className="min-w-[220px] flex-[2_1_260px]">
+          <span className="text-od-text-3 text-[13px] font-medium">{t.em_password}</span>
+          <input
+            dir="ltr"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder={row.password_preview ?? ""}
+            className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono mt-2 w-full rounded-[7px] border p-[9px_11px] text-start text-[13px]"
+          />
+          <span className="text-od-faint-2 mt-[6px] block text-[12.5px]">
+            {row.password_preview ? t.em_password_keep : t.em_password_help}
+          </span>
+        </label>
+        {box("from_address", t.em_from, { wide: true })}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+        {tick("imap_ssl", t.em_imap_ssl)}
+        {tick("smtp_tls", t.em_smtp_tls)}
+        {tick("smtp_ssl", t.em_smtp_ssl)}
+      </div>
+
+      <div className="border-od-border mt-4 flex flex-wrap items-center gap-3 border-t pt-4">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void save()}
+          className="border-od-stroke bg-od-raise-10 text-od-text hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[9px_16px] text-[13.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy ? t.wc_saving : t.em_save}
+        </button>
+        <button
+          type="button"
+          disabled={busy || row.password_preview === null}
+          onClick={() =>
+            void act(async () => {
+              await testEmailChannel();
+              setTested(true);
+            })
+          }
+          className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[8px_14px] text-[13px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {t.em_test}
+        </button>
+        <button
+          type="button"
+          disabled={busy || row.password_preview === null}
+          onClick={() => void act(() => saveEmailChannel({ enabled: !row.enabled }))}
+          className="border-od-stroke bg-od-raise-10 text-od-text cursor-pointer rounded-[7px] border p-[8px_14px] text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {t.em_enabled}
+          {row.enabled ? " ✓" : ""}
+        </button>
+        {row.password_preview !== null ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void act(() => saveEmailChannel({ password: "" }))}
+            className="border-od-line text-od-muted-4 hover:text-od-text-2 cursor-pointer rounded-md border bg-transparent p-[7px_12px] text-[12.5px]"
+          >
+            {t.em_password_clear}
+          </button>
+        ) : null}
+        <span className="text-od-faint ms-auto max-w-[44ch] text-[12.5px] text-pretty">
+          {tested ? t.em_test_ok : row.enabled ? t.em_polling_note : t.em_enabled_off_help}
+        </span>
+      </div>
+
+      {problem !== null ? (
+        <div className="mt-3 max-w-[62ch] text-pretty text-[13px] text-[color:var(--od-red-text)]">
+          {problem}
+        </div>
+      ) : saved ? (
+        <div className="text-od-muted-5 mt-3 text-[13px]">{t.wc_saved}</div>
+      ) : null}
     </div>
   );
 }

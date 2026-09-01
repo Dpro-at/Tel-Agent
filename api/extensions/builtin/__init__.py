@@ -8,4 +8,5 @@ BUILTIN = (
     "api.extensions.builtin.database",
     "api.extensions.builtin.web_chat",
     "api.extensions.builtin.telegram",
+    "api.extensions.builtin.email",
 )

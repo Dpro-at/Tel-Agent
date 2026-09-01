@@ -342,6 +342,9 @@ async def poll_once(db: DbSession, client: httpx.AsyncClient) -> int:
     timeout = LONG_POLL_SECONDS if len(channels) == 1 else SHORT_POLL_SECONDS
 
     for channel in channels:
+        # Captured before anything can roll the session back: an expired ORM object
+        # read for a log line raises from inside the except that wanted to log.
+        channel_id = channel.id
         token = channel.credentials_encrypted
         if not token:
             continue
@@ -362,7 +365,7 @@ async def poll_once(db: DbSession, client: httpx.AsyncClient) -> int:
             # pass - the loop must survive one channel's bad day.
             logger.warning(
                 "telegram poll failed",
-                extra={"channel_id": channel.id, "error": str(error)},
+                extra={"channel_id": channel_id, "error": str(error)},
             )
             continue
 
@@ -381,7 +384,10 @@ async def poll_once(db: DbSession, client: httpx.AsyncClient) -> int:
                 handled += 1
             except (TelegramError, httpx.HTTPError):
                 await db.rollback()
-                logger.exception("telegram update failed", extra={"channel_id": channel.id})
+                logger.exception("telegram update failed", extra={"channel_id": channel_id})
+                # The rollback expired every loaded object, and the next update in
+                # this batch still needs the channel's columns.
+                await db.refresh(channel)
     return handled
 
 
