@@ -60,6 +60,11 @@ MESSAGES: dict[str, frozenset[str]] = {
     # else - the notification is "somebody started talking to you", not "a message
     # exists".
     "web_chat_started": frozenset({"preview"}),
+    # Milestone 9. A channel transport that lost its platform, and the moment it got
+    # it back. The kind is an identifier the screen translates; whatever the failure
+    # said travels as `detail`, shown as machine output.
+    "channel_down": frozenset({"channel"}),
+    "channel_recovered": frozenset({"channel"}),
 }
 
 # Longer than this and it stops being a hint and starts being a log. The full text is

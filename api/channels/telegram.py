@@ -267,6 +267,9 @@ async def _reply_and_send(
         # Cosmetic. A typing bubble that could not be shown must not cost the answer.
         logger.debug("telegram typing action failed", extra={"channel_id": channel.id})
 
+    import time
+
+    started = time.perf_counter()
     pieces: list[str] = []
     async for chunk in generate_reply(
         incoming.text, provider=provider, history=history, on_message_taken=took
@@ -282,6 +285,11 @@ async def _reply_and_send(
     # and the next poll answers the same question again.
     await send_text(client, token, conversation.external_id or "", whole)
     await _store_line(db, conversation, speaker="agent", text=whole)
+
+    from api.channels import health
+
+    # Rule 4: the whole journey, generation to delivery, measured per channel.
+    health.note_reply("telegram", channel.id, (time.perf_counter() - started) * 1000)
 
 
 async def _handle_update(
@@ -319,15 +327,11 @@ async def _handle_update(
 
 
 async def _active_channels(db: DbSession) -> list[Channel]:
-    return list(
-        (
-            await db.execute(
-                select(Channel).where(Channel.kind == "telegram", Channel.status == "active")
-            )
-        )
-        .scalars()
-        .all()
-    )
+    from api.channels import health
+
+    # The decrypt-safe loader: a row saved under a key this installation no longer
+    # has is reported down and skipped, instead of taking the whole pass with it.
+    return await health.usable_channels(db, ("telegram",))
 
 
 async def poll_once(db: DbSession, client: httpx.AsyncClient) -> int:
@@ -361,14 +365,17 @@ async def poll_once(db: DbSession, client: httpx.AsyncClient) -> int:
                 },
             )
         except (TelegramError, httpx.HTTPError) as error:
-            # A wrong token, or Telegram unreachable. Logged and left for the next
-            # pass - the loop must survive one channel's bad day.
-            logger.warning(
-                "telegram poll failed",
-                extra={"channel_id": channel_id, "error": str(error)},
-            )
+            # A wrong token, or Telegram unreachable. Logged, told to the health
+            # registry (which raises the tray alert on the transition), and left for
+            # the next pass - the loop must survive one channel's bad day.
+            from api.channels import health
+
+            await health.report_down(db, channel, detail=str(error))
             continue
 
+        from api.channels import health
+
+        await health.report_ok(db, channel)
         if not isinstance(updates, list) or not updates:
             continue
 

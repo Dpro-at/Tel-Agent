@@ -321,6 +321,9 @@ async def respond(sessionmaker: async_sessionmaker, channel_id: int, message_id:
 
         history = await _history(db, conversation, line)
 
+        import time
+
+        reply_started = time.perf_counter()
         pieces: list[str] = []
         async for chunk in generate_reply(
             line.text, provider=provider, history=history, on_message_taken=took
@@ -341,11 +344,36 @@ async def respond(sessionmaker: async_sessionmaker, channel_id: int, message_id:
             return
         await _store_line(db, conversation, speaker="agent", text=whole)
 
+        from api.channels import health
+
+        # Rule 4: the whole journey, generation to delivery, measured per channel.
+        health.note_reply("discord", channel.id, (time.perf_counter() - reply_started) * 1000)
+
 
 def schedule_reply(sessionmaker: async_sessionmaker, channel_id: int, message_id: int) -> None:
     task = asyncio.create_task(respond(sessionmaker, channel_id, message_id))
     _REPLIES.add(task)
     task.add_done_callback(_REPLIES.discard)
+
+
+async def _report_state(
+    sessionmaker: async_sessionmaker, channel_id: int, *, ok: bool, detail: str | None = None
+) -> None:
+    """Tell the health registry how this connection is doing, on its own session.
+
+    The gateway task holds no request and no session; borrowing one for the report
+    keeps the transition alert (Milestone 9) working from inside a dropped socket.
+    """
+    from api.channels import health
+
+    async with session_scope(sessionmaker) as db:
+        channel = await db.scalar(select(Channel).where(Channel.id == channel_id))
+        if channel is None:
+            return
+        if ok:
+            await health.report_ok(db, channel)
+        else:
+            await health.report_down(db, channel, detail=detail or "connection lost")
 
 
 # --- The gateway ----------------------------------------------------------------
@@ -416,6 +444,7 @@ async def _run_gateway(sessionmaker: async_sessionmaker, channel_id: int, token:
                 if kind == "READY":
                     bot_user_id = str((data.get("user") or {}).get("id") or "")
                     logger.info("discord gateway ready", extra={"channel_id": channel_id})
+                    await _report_state(sessionmaker, channel_id, ok=True)
                 elif kind == "MESSAGE_CREATE" and bot_user_id:
                     async with session_scope(sessionmaker) as db:
                         channel = await db.scalar(
@@ -445,6 +474,7 @@ async def _connection(sessionmaker: async_sessionmaker, channel_id: int, token: 
                 "discord gateway dropped",
                 extra={"channel_id": channel_id, "error": str(error)[:200]},
             )
+            await _report_state(sessionmaker, channel_id, ok=False, detail=str(error))
         await asyncio.sleep(backoff)
         backoff = min(backoff * 2, 300.0)
 
@@ -461,18 +491,14 @@ async def loop(sessionmaker: async_sessionmaker) -> None:
         while True:
             try:
                 async with session_scope(sessionmaker) as db:
-                    rows = (
-                        (
-                            await db.execute(
-                                select(Channel.id, Channel.credentials_encrypted).where(
-                                    Channel.kind == "discord", Channel.status == "active"
-                                )
-                            )
-                        )
-                        .tuples()
-                        .all()
-                    )
-                wanted = {row[0]: row[1] for row in rows if row[1]}
+                    from api.channels import health
+
+                    rows = await health.usable_channels(db, ("discord",))
+                    wanted = {
+                        row.id: row.credentials_encrypted
+                        for row in rows
+                        if row.credentials_encrypted
+                    }
 
                 for channel_id, (token, task) in list(running.items()):
                     if channel_id not in wanted or wanted[channel_id] != token or task.done():

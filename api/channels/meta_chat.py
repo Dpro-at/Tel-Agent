@@ -269,6 +269,12 @@ async def ingest(db: DbSession, channel: Channel, payload: dict[str, Any]) -> li
     lives here: a sender id equal to the channel's own id is this installation
     hearing itself, and it is dropped before it can become a conversation.
     """
+    from api.channels import health
+
+    # A signed delivery that reached this line is the platform proving the link
+    # works - the webhook channels have no poll to prove it with.
+    await health.report_ok(db, channel)
+
     needing_reply: list[int] = []
     self_id = own_id(channel)
     for event in _events_of(payload, channel.kind):
@@ -348,6 +354,9 @@ async def respond(sessionmaker: async_sessionmaker, channel_id: int, message_id:
 
         history = await _history(db, conversation, line)
 
+        import time
+
+        reply_started = time.perf_counter()
         pieces: list[str] = []
         async for chunk in generate_reply(
             line.text, provider=provider, history=history, on_message_taken=took
@@ -367,6 +376,13 @@ async def respond(sessionmaker: async_sessionmaker, channel_id: int, message_id:
             )
             return
         await _store_line(db, conversation, speaker="agent", text=whole)
+
+        from api.channels import health
+
+        # Rule 4: the whole journey, generation to delivery, measured per channel.
+        health.note_reply(
+            channel.kind, channel.id, (time.perf_counter() - reply_started) * 1000
+        )
 
 
 def schedule_reply(sessionmaker: async_sessionmaker, channel_id: int, message_id: int) -> None:

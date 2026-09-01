@@ -34,6 +34,8 @@
   "msg_backup_failed": "The nightly backup did not run.",
   "msg_backup_no_target": "No backup target is set, so no backup is being taken at all.",
   "msg_backup_unverified": "A backup was written, but reading it back to check it failed.",
+  "msg_channel_down": "The {channel} channel lost its connection. Customers writing there are not being answered.",
+  "msg_channel_recovered": "The {channel} channel is answering again.",
   "msg_mail_failed": "An email could not be sent.",
   "msg_message_taken": "{name} left a message: {reason}",
   "msg_restore_staged": "A restore from {taken_at} is staged and will run on the next restart.",
