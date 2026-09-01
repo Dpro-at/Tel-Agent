@@ -9,7 +9,10 @@ import {
   ApiError,
   conversationDetail,
   conversationList,
+  resumeAgent,
+  sendReply,
   sendWhisper,
+  takeOver,
   type Thread,
   type ThreadDetail,
   type ThreadMessage,
@@ -170,15 +173,68 @@ function Line({ message, t }: { message: ThreadMessage; t: LiveDictionary }) {
   );
 }
 
-/** The box that writes into a conversation while it is still running. */
-function WhisperBox({
-  conversationId,
+/**
+ * §A6.4's takeover markers, derived rather than stored.
+ *
+ * A non-whisper `human` line *is* the takeover speaking — no separate event row
+ * exists, and inventing one would put a line into the transcript that nobody said.
+ * So the divider is drawn where the record shows the voice changing: before the
+ * first `human` line after the agent (or the start), and before the first `agent`
+ * line after a human. The name on the join is the line's own author.
+ */
+function marker(
+  message: ThreadMessage,
+  previousBusinessSpeaker: string | null,
+  t: LiveDictionary,
+): string | null {
+  if (message.is_whisper || message.speaker === "caller") return null;
+  if (message.speaker === "human" && previousBusinessSpeaker !== "human") {
+    return interpolate(t.marker_joined, { who: message.author ?? t.speaker_human });
+  }
+  if (message.speaker === "agent" && previousBusinessSpeaker === "human") {
+    return t.marker_resumed;
+  }
+  return null;
+}
+
+function Divider({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3" role="separator">
+      <span className="bg-od-border-6 h-px flex-1" />
+      <span className="text-od-muted-4 text-[11.5px] font-medium tracking-[.04em]">
+        {label}
+      </span>
+      <span className="bg-od-border-6 h-px flex-1" />
+    </div>
+  );
+}
+
+/**
+ * The box that writes into a conversation while it is still running — the whisper
+ * outside a takeover, the reply inside one. Same box, different endpoint and words,
+ * and the words are what stop somebody coaching the agent when they are in fact
+ * speaking to the customer.
+ */
+function Composer({
+  heading,
+  note,
+  placeholder,
+  sendLabel,
+  sendingLabel,
+  notAllowed,
+  endedNote,
+  submit,
   onSent,
-  t,
 }: {
-  conversationId: number;
+  heading: string;
+  note: string;
+  placeholder: string;
+  sendLabel: string;
+  sendingLabel: string;
+  notAllowed: string;
+  endedNote: string;
+  submit: (text: string) => Promise<unknown>;
   onSent: () => void;
-  t: LiveDictionary;
 }) {
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
@@ -190,13 +246,13 @@ function WhisperBox({
     setPending(true);
     setError(null);
     try {
-      await sendWhisper(conversationId, body);
+      await submit(body);
       setText("");
       onSent();
     } catch (thrown) {
-      if (thrown instanceof ApiError && thrown.status === 403) setError(t.not_allowed);
+      if (thrown instanceof ApiError && thrown.status === 403) setError(notAllowed);
       else if (thrown instanceof ApiError && thrown.code === "conversation_closed")
-        setError(t.ended_note);
+        setError(endedNote);
       else setError(thrown instanceof Error ? thrown.message : String(thrown));
     } finally {
       setPending(false);
@@ -207,11 +263,11 @@ function WhisperBox({
     <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border p-[14px_16px]">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h3 className="text-od-muted-4 m-0 text-[13px] font-semibold tracking-[.07em] uppercase">
-          {t.whisper}
+          {heading}
         </h3>
       </div>
       <p className="text-od-faint mt-[6px] mb-0 max-w-[64ch] text-[12.5px] text-pretty">
-        {t.whisper_note}
+        {note}
       </p>
 
       <form
@@ -225,7 +281,7 @@ function WhisperBox({
           rows={2}
           value={text}
           maxLength={2000}
-          placeholder={t.whisper_placeholder}
+          placeholder={placeholder}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => {
             // The operator is typing under time pressure. Enter sends; a deliberate
@@ -242,7 +298,7 @@ function WhisperBox({
           disabled={pending || text.trim() === ""}
           className="border-od-stroke bg-od-raise-10 text-od-text hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[10px_18px] text-[13.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {pending ? t.whisper_sending : t.whisper_send}
+          {pending ? sendingLabel : sendLabel}
         </button>
       </form>
 
@@ -250,6 +306,84 @@ function WhisperBox({
         <p className="mt-2 mb-0 text-[13px] text-pretty text-[color:var(--od-red-text-6)]">
           {error}
         </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The switch between the two modes — §A6.7's *Take over*, large and unambiguous.
+ *
+ * One button, whichever direction applies. The error handling is the composer's:
+ * a viewer is told the role that is missing, and a thread that ended between polls
+ * says so rather than failing namelessly.
+ */
+function HandlingSwitch({
+  conversationId,
+  taken,
+  onChanged,
+  t,
+}: {
+  conversationId: number;
+  taken: boolean;
+  onChanged: () => void;
+  t: LiveDictionary;
+}) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function flip() {
+    setPending(true);
+    setError(null);
+    try {
+      await (taken ? resumeAgent(conversationId) : takeOver(conversationId));
+      onChanged();
+    } catch (thrown) {
+      if (thrown instanceof ApiError && thrown.status === 403) setError(t.not_allowed_intervene);
+      else if (thrown instanceof ApiError && thrown.code === "conversation_closed")
+        setError(t.ended_note);
+      else setError(thrown instanceof Error ? thrown.message : String(thrown));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => void flip()}
+        className="cursor-pointer rounded-[7px] border p-[10px_18px] text-[13.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+        style={
+          taken
+            ? {
+                borderColor: "var(--od-stroke)",
+                background: "var(--od-raise-10)",
+                color: "var(--od-text)",
+              }
+            : {
+                borderColor: "var(--od-amber-border)",
+                background: "var(--od-amber-bg)",
+                color: "var(--od-amber-text)",
+              }
+        }
+      >
+        {pending
+          ? taken
+            ? t.handing_back
+            : t.taking_over
+          : taken
+            ? t.hand_back
+            : t.take_over}
+      </button>
+      <span className="text-od-faint max-w-[48ch] text-[12.5px] text-pretty">
+        {taken ? t.taken_note : t.take_over_note}
+      </span>
+      {error === null ? null : (
+        <span className="text-[13px] text-pretty text-[color:var(--od-red-text-6)]">
+          {error}
+        </span>
       )}
     </div>
   );
@@ -292,6 +426,18 @@ function OpenThread({
   }
 
   const ended = thread.data.status !== "open";
+  const taken = thread.data.handling === "human";
+
+  // The dividers §A6.4 shows, derived from the record before it is drawn. The tracker
+  // holds the last business voice seen, so each line knows whether it is a change.
+  const rows: { message: ThreadMessage; label: string | null }[] = [];
+  let businessSpeaker: string | null = null;
+  for (const message of thread.data.messages) {
+    rows.push({ message, label: marker(message, businessSpeaker, t) });
+    if (!message.is_whisper && message.speaker !== "caller") {
+      businessSpeaker = message.speaker;
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -300,6 +446,18 @@ function OpenThread({
           <span className="text-od-text flex items-center gap-2 text-[16px] font-semibold">
             <ChannelMark id={thread.data.channel} size={14} />
             {who(thread.data, t)}
+            {taken && !ended ? (
+              <span
+                className="rounded-full border px-[9px] py-[2px] text-[11px] font-medium"
+                style={{
+                  borderColor: "var(--od-amber-border)",
+                  background: "var(--od-amber-bg)",
+                  color: "var(--od-amber-text)",
+                }}
+              >
+                {t.handling_human}
+              </span>
+            ) : null}
           </span>
           <Link
             href={`/${locale}/conversations`}
@@ -326,7 +484,39 @@ function OpenThread({
           </p>
         </div>
       ) : (
-        <WhisperBox conversationId={conversationId} onSent={thread.reload} t={t} />
+        <>
+          <HandlingSwitch
+            conversationId={conversationId}
+            taken={taken}
+            onChanged={thread.reload}
+            t={t}
+          />
+          {taken ? (
+            <Composer
+              heading={t.reply}
+              note={t.reply_note}
+              placeholder={t.reply_placeholder}
+              sendLabel={t.reply_send}
+              sendingLabel={t.reply_sending}
+              notAllowed={t.not_allowed_intervene}
+              endedNote={t.ended_note}
+              submit={(text) => sendReply(conversationId, text)}
+              onSent={thread.reload}
+            />
+          ) : (
+            <Composer
+              heading={t.whisper}
+              note={t.whisper_note}
+              placeholder={t.whisper_placeholder}
+              sendLabel={t.whisper_send}
+              sendingLabel={t.whisper_sending}
+              notAllowed={t.not_allowed}
+              endedNote={t.ended_note}
+              submit={(text) => sendWhisper(conversationId, text)}
+              onSent={thread.reload}
+            />
+          )}
+        </>
       )}
 
       <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border p-[16px_18px]">
@@ -334,8 +524,11 @@ function OpenThread({
           {t.transcript}
         </h3>
         <div className="flex flex-col gap-3">
-          {thread.data.messages.map((message) => (
-            <Line key={message.id} message={message} t={t} />
+          {rows.map(({ message, label }) => (
+            <div key={message.id} className="flex flex-col gap-3">
+              {label === null ? null : <Divider label={label} />}
+              <Line message={message} t={t} />
+            </div>
           ))}
         </div>
       </div>

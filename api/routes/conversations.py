@@ -1,9 +1,10 @@
 """The conversations screen's endpoints — the transcript archive, read.
 
-**`viewer` reads; nothing here writes.** The role matrix on the settings screen says
-what a viewer is for in its own words: "Reads calls. Changes nothing, answers
-nothing." This whole module is that sentence — every route is a GET, and the write
-path arrives with the web chat.
+**`viewer` reads; only `reception` and above intervene.** The role matrix on the
+settings screen says what a viewer is for in its own words: "Reads calls. Changes
+nothing, answers nothing." The reads here are that sentence; the writes — the whisper
+and the takeover trio below — are §A6.7's interventions, and every one of them asks
+for `reception`.
 
 **The recording path never leaves the server.** `calls.recording_path` is a filesystem
 path on the machine, and a screen has no use for it; what a screen needs to know is
@@ -458,6 +459,172 @@ async def whisper(
     await db.refresh(line)
 
     logger.info("whisper written into conversation %s by %s", row.id, user.username)
+    return MessageOut(
+        id=line.id,
+        ts_ms=line.ts_ms,
+        speaker=line.speaker,
+        text=line.text,
+        is_whisper=line.is_whisper,
+        author=user.username,
+        stt_confidence=line.stt_confidence,
+        language=line.language,
+    )
+
+
+class HandlingOut(BaseModel):
+    """What the two switches answer with: the thread, and whose it is now."""
+
+    id: int
+    handling: str
+
+
+async def _open_thread(
+    db: DbSession, workspace_id: int, conversation_id: int
+) -> Conversation | object:
+    """The thread an intervention may act on, or the refusal it gets instead.
+
+    The same two walls as the whisper's, in the same order: another workspace's id
+    answers like one that does not exist, and a thread that has ended refuses rather
+    than accepting quietly — nobody is on the other end of it to be spoken to.
+    """
+    row = await db.scalar(
+        conversations_for(workspace_id).where(Conversation.id == conversation_id)
+    )
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No such conversation.")
+    if row.status != "open":
+        return envelope_response(
+            status_code=status.HTTP_409_CONFLICT,
+            code="conversation_closed",
+            message="This conversation has ended.",
+        )
+    return row
+
+
+@router.post(
+    "/{conversation_id}/takeover",
+    response_model=HandlingOut,
+    summary="Take the conversation over from the agent",
+)
+async def take_over(
+    request: Request,
+    context: Annotated[WorkspaceContext, require_reception],
+    user: CurrentUser,
+    conversation_id: int,
+) -> object:
+    """§A6.7's second intervention: the agent goes silent and a person answers.
+
+    From this moment the widget's reply stream produces nothing and stores nothing
+    (`api/routes/public_chat.py`), and the `reply` endpoint below is what speaks. An
+    agent that kept talking would be two voices answering one customer.
+
+    **Pressing it twice is one takeover, not a conflict.** The live screen polls, so
+    two colleagues can press within a refresh of each other — the second press changes
+    nothing, and refusing it would surface as an error to somebody who merely lost
+    the race.
+    """
+    db: DbSession = request.state.db
+    row = await _open_thread(db, context.id, conversation_id)
+    if not isinstance(row, Conversation):
+        return row
+
+    row.handling = "human"
+    await db.commit()
+    logger.info("conversation %s taken over by %s", row.id, user.username)
+    return HandlingOut(id=row.id, handling="human")
+
+
+@router.post(
+    "/{conversation_id}/resume",
+    response_model=HandlingOut,
+    summary="Hand the conversation back to the agent",
+)
+async def resume(
+    request: Request,
+    context: Annotated[WorkspaceContext, require_reception],
+    user: CurrentUser,
+    conversation_id: int,
+) -> object:
+    """The takeover's other half: the agent answers the next message as before.
+
+    Idempotent for the same reason taking over is — a thread already back with the
+    agent stays there, and the answer says so.
+    """
+    db: DbSession = request.state.db
+    row = await _open_thread(db, context.id, conversation_id)
+    if not isinstance(row, Conversation):
+        return row
+
+    row.handling = "ai"
+    await db.commit()
+    logger.info("conversation %s handed back to the agent by %s", row.id, user.username)
+    return HandlingOut(id=row.id, handling="ai")
+
+
+class HumanReply(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+@router.post(
+    "/{conversation_id}/reply",
+    response_model=MessageOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Answer the customer yourself, as the business",
+)
+async def reply_as_business(
+    request: Request,
+    context: Annotated[WorkspaceContext, require_reception],
+    user: CurrentUser,
+    conversation_id: int,
+    payload: HumanReply,
+) -> object:
+    """A person typing as the agent — what §A6.7 calls *types and the agent voices it*.
+
+    On a text channel there is no voicing: the line goes to the customer as the
+    business, and the widget's thread shows it exactly as it shows the agent
+    (`_VISIBLE_SPEAKERS` folds `human` into `agent` on purpose — which desk answered
+    is the business's own business).
+
+    **Only while the thread is taken over.** Outside that mode the box a person types
+    into is the whisper: a reply landing beside the agent's own answer would be the
+    two-voices problem the `handling` flag exists to prevent.
+    """
+    db: DbSession = request.state.db
+    text = payload.text.strip()
+    if not text:
+        return envelope_response(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            code="empty_reply",
+            message="A reply needs something in it.",
+        )
+
+    row = await _open_thread(db, context.id, conversation_id)
+    if not isinstance(row, Conversation):
+        return row
+    if row.handling != "human":
+        return envelope_response(
+            status_code=status.HTTP_409_CONFLICT,
+            code="not_taken_over",
+            message="Take the conversation over first — the agent is still answering it.",
+        )
+
+    line = Message(
+        workspace_id=context.id,
+        conversation_id=row.id,
+        ts_ms=position_ms(row.started_at),
+        speaker="human",
+        text=text,
+        is_whisper=False,
+        author_user_id=user.id,
+        # Null on a text channel, and the null is §B5's own signal that this was typed.
+        stt_confidence=None,
+        language=None,
+    )
+    db.add(line)
+    await db.commit()
+    await db.refresh(line)
+
+    logger.info("human reply written into conversation %s by %s", row.id, user.username)
     return MessageOut(
         id=line.id,
         ts_ms=line.ts_ms,

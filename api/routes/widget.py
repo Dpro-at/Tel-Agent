@@ -320,25 +320,62 @@ def _page(path: str, language: str) -> str:
     if (!text.value) text.value = body;
   }}
 
+  // How many of the server's lines are already on the screen. Counted rather than
+  // timestamped: the streamed reply carries no position, so a watermark would draw it
+  // a second time when the poll catches up. The server returns at most its last 50
+  // lines, so a taken-over thread longer than that stops gaining lines from the poll -
+  // acceptable for a conversation a person is answering by hand.
+  var known = 0;
+  var streaming = false;
+  var poller = null;
+
+  async function thread() {{
+    var answer = await fetch(
+      "/public/chat/" + encodeURIComponent(PATH) + "/messages?conversation=" +
+      encodeURIComponent(conversation)
+    );
+    return answer.ok ? await answer.json() : null;
+  }}
+
   // What was said before the reload, drawn before the visitor types anything. A
   // refused handle - closed, or from a channel this is not - is dropped rather than
   // shown as an error: the next message simply starts a new thread.
   async function restore() {{
     if (!conversation) return;
     try {{
-      var answer = await fetch(
-        "/public/chat/" + encodeURIComponent(PATH) + "/messages?conversation=" +
-        encodeURIComponent(conversation)
-      );
-      if (!answer.ok) {{ forget(); return; }}
-      var thread = await answer.json();
-      thread.messages.forEach(function (line) {{
+      var got = await thread();
+      if (!got) {{ forget(); return; }}
+      got.messages.forEach(function (line) {{
         say(line.text, line.speaker === "visitor" ? "me" : "them");
       }});
+      known = got.messages.length;
     }} catch (error) {{
       // Offline, or the server is down. The handle is kept: the thread is still
       // there, and the next message continues it.
     }}
+  }}
+
+  // A colleague who took the conversation over types their answer from the dashboard,
+  // and nothing pushes it here: the reply stream ends silent while a person has the
+  // thread. So once a message went unanswered, ask the thread again every few seconds
+  // and append what is new - the same cadence the dashboard's live screen uses.
+  async function poll() {{
+    if (streaming || !conversation || !panel.classList.contains("open")) return;
+    try {{
+      var got = await thread();
+      if (!got) return;
+      got.messages.slice(known).forEach(function (line) {{
+        say(line.text, line.speaker === "visitor" ? "me" : "them");
+      }});
+      known = Math.max(known, got.messages.length);
+    }} catch (error) {{
+      // Offline. The next tick asks again.
+    }}
+  }}
+
+  function watch() {{
+    if (poller) return;
+    poller = setInterval(poll, 5000);
   }}
 
   bubble.addEventListener("click", function () {{ show(true); }});
@@ -365,13 +402,25 @@ def _page(path: str, language: str) -> str:
           line.textContent += payload.delta;
           log.scrollTop = log.scrollHeight;
         }}
-        if (payload.done) {{ source.close(); done(); }}
+        if (payload.done) {{
+          // Stored on the server the moment `done` arrived, so the poll must not
+          // draw it a second time.
+          known += 1;
+          source.close();
+          done();
+        }}
       }};
       source.onerror = function () {{
         source.close();
         if (!line.textContent) {{
           line.className = "msg note";
           line.textContent = SAYS.no_reply;
+          // A stream that ends without a word is what a taken-over conversation
+          // sounds like: the agent is silent and a person is typing the answer from
+          // the dashboard. Start asking the thread for it. (An unconfigured
+          // installation answers with words either way, so this rarely fires for
+          // any other reason.)
+          watch();
         }} else {{
           // Half an answer. The server stores a reply only when it finished, so this
           // one is not in the transcript at all - and a visitor left holding two
@@ -393,6 +442,9 @@ def _page(path: str, language: str) -> str:
     var line = say(body, "me");
     var button = form.querySelector("button");
     button.disabled = true;
+    // Paused for the whole exchange, so the poll never redraws lines this handler is
+    // in the middle of accounting for.
+    streaming = true;
     try {{
       var answer = await fetch("/public/chat/" + encodeURIComponent(PATH) + "/messages", {{
         method: "POST",
@@ -401,6 +453,8 @@ def _page(path: str, language: str) -> str:
       }});
       if (answer.ok) {{
         remember((await answer.json()).conversation);
+        // The visitor's own line is on the server now and already on the screen.
+        known += 1;
         await listen();
       }} else {{
         // One sentence for every refusal, because the server gives one. A visitor
@@ -410,6 +464,7 @@ def _page(path: str, language: str) -> str:
     }} catch (error) {{
       failed(line, body);
     }} finally {{
+      streaming = false;
       button.disabled = false;
       text.focus();
     }}
