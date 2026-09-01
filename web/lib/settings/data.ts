@@ -223,14 +223,18 @@ export const WEBHOOK_EVENT_LABEL: Record<string, Key> = {
   "knowledge.changed": "wev_knowledge_changed",
 };
 
-/** Tools Tel-Agent exposes over MCP. Write is off by default — see the warning. */
-export const OUR_TOOLS: { name: string; desc: Key; scope: "read" | "act" | "write"; on: boolean }[] = [
-  { name: "list_calls", desc: "tool_list_calls_desc", scope: "read", on: true },
-  { name: "get_assistant", desc: "tool_get_assistant_desc", scope: "read", on: true },
-  { name: "system_health", desc: "tool_system_health_desc", scope: "read", on: true },
-  { name: "place_call", desc: "tool_place_call_desc", scope: "act", on: true },
-  { name: "update_assistant", desc: "tool_update_assistant_desc", scope: "write", on: false },
-  { name: "set_routing_rule", desc: "tool_set_routing_rule_desc", scope: "write", on: false },
+/**
+ * The tools the MCP endpoint actually serves — `TOOLS` in `api/routes/mcp.py`, in the
+ * same order. The drawn list this replaces promised `place_call` and two write tools;
+ * none of them exists, and a row for a tool the server does not serve is a promise the
+ * server cannot keep. The write tools return when they are built, off by default.
+ */
+export const OUR_TOOLS: { name: string; desc: Key; scope: "read" | "act" }[] = [
+  { name: "list_conversations", desc: "tool_list_conversations_desc", scope: "read" },
+  { name: "get_conversation", desc: "tool_get_conversation_desc", scope: "read" },
+  { name: "list_assistants", desc: "tool_list_assistants_desc", scope: "read" },
+  { name: "system_health", desc: "tool_system_health_desc", scope: "read" },
+  { name: "whisper", desc: "tool_whisper_desc", scope: "act" },
 ];
 
 /**

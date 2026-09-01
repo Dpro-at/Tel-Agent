@@ -185,12 +185,17 @@ async def test_every_route_is_protected_unless_it_is_on_the_public_list(
     assert protected, "no protected routes found - the walk is lying"
 
     # Signed out. The gate runs before routing, so the method does not matter: every
-    # non-public path answers 401 whatever verb it was declared with.
+    # non-public path answers 401 whatever verb it was declared with. A machine path
+    # (`/mcp` since Milestone 7) is refused by its own gate with its own sentence -
+    # still closed, and by the credential §B9.1 assigned to it rather than a session.
+    from api.security.machine_tokens import scope_for
+
     signed_up.cookies.clear()
     for path in sorted(protected):
         response = await signed_up.get(path)
         assert response.status_code == 401, f"{path} answered {response.status_code}"
-        assert response.json()["error"]["code"] == "unauthenticated"
+        expected = "machine_token_required" if scope_for(path) else "unauthenticated"
+        assert response.json()["error"]["code"] == expected, path
 
     # And the list itself is short enough to read in one go. If it is growing, that is
     # the thing to notice. Raised from 12 when D-034 added the two invite routes,

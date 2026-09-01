@@ -123,11 +123,12 @@ async def test_another_workspaces_token_is_neither_listed_nor_removable(stage) -
     assert (await clients["wolf"].post(f"/api/tokens/{token_id}/rotate")).status_code == 404
 
 
-# The gate. Neither `/hooks/…` nor `/mcp` is served yet — the webhook receiver arrives
-# with the phone and the MCP endpoint with Milestone 6 — so a request that gets past
-# the gate ends in a 404. That is the assertion, and it is a real one: 404 means the
-# credential was accepted and routing simply had nowhere to send it, which is exactly
-# what these paths must do until they exist.
+# The gate. `/hooks/…` is not served yet — the webhook receiver arrives with the
+# phone — so a request that gets past the gate there ends in a 404. That is a real
+# assertion: 404 means the credential was accepted and routing simply had nowhere to
+# send it, which is exactly what the path must do until it exists. `/mcp` *is* served
+# (Milestone 7), so its post-gate answer is the endpoint's own; `tests/test_mcp.py`
+# owns everything past that door.
 
 
 async def test_a_machine_path_without_a_token_is_refused(stage) -> None:
@@ -159,10 +160,12 @@ async def test_a_token_for_one_path_does_not_open_the_other(stage) -> None:
     assert wrong.status_code == unknown.status_code == 401
     assert wrong.json()["error"]["message"] == unknown.json()["error"]["message"]
 
-    # And the token does open the path it was minted for.
-    assert (
-        await machine.post("/mcp", headers={"Authorization": f"Bearer {mcp}"})
-    ).status_code == 404
+    # And the token does open the path it was minted for: past the gate, the MCP
+    # endpoint answers for itself - an empty body is a JSON-RPC parse error, not a
+    # refusal at the door.
+    opened = await machine.post("/mcp", headers={"Authorization": f"Bearer {mcp}"})
+    assert opened.status_code == 200
+    assert opened.json()["error"]["code"] == -32700
 
 
 async def test_a_removed_token_stops_working(stage) -> None:
