@@ -32,6 +32,11 @@ dependencies = [
     # AES-GCM for credentials at rest (B9.2). The `cryptography` wheel carries the
     # audited primitives; nothing in this repository implements a cipher.
     "cryptography>=43.0",
+    # The Discord gateway and Slack Socket Mode are WebSocket clients (Milestone 3).
+    # Already present through `uvicorn[standard]`, but an import this repository
+    # makes is a dependency this repository declares - a transitive extra is one
+    # uvicorn release away from disappearing.
+    "websockets>=13",
 ]
 
 [project.scripts]

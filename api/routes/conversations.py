@@ -700,6 +700,65 @@ async def reply_as_business(
                 "Check the channel's credentials and try again.",
             )
 
+    if channel is not None and channel.kind == "discord":
+        import httpx
+
+        from api.channels import discord as discord_transport
+
+        room = discord_transport.reply_channel(row)
+        if not channel.credentials_encrypted or not room:
+            return envelope_response(
+                status_code=status.HTTP_409_CONFLICT,
+                code="no_bot_token",
+                message="This conversation's Discord channel has no bot token saved, "
+                "or the customer has not spoken from anywhere yet.",
+            )
+        try:
+            async with discord_transport.make_client() as client:
+                await discord_transport.send_text(
+                    client, channel.credentials_encrypted, room, text
+                )
+        except (discord_transport.DiscordError, httpx.HTTPError) as error:
+            logger.warning(
+                "discord reply not delivered",
+                extra={"conversation_id": row.id, "error": str(error)[:200]},
+            )
+            return envelope_response(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                code="not_delivered",
+                message="Discord did not accept the message, so nothing was written. "
+                "Check the channel's bot token and try again.",
+            )
+
+    if channel is not None and channel.kind == "slack":
+        import httpx
+
+        from api.channels import slack as slack_transport
+
+        credentials = slack_transport.credentials_for(channel)
+        room = slack_transport.reply_channel(row)
+        if credentials is None or not room:
+            return envelope_response(
+                status_code=status.HTTP_409_CONFLICT,
+                code="credentials_incomplete",
+                message="This conversation's Slack channel has no complete tokens "
+                "saved, or the customer has not spoken from anywhere yet.",
+            )
+        try:
+            async with slack_transport.make_client() as client:
+                await slack_transport.send_text(client, credentials[1], room, text)
+        except (slack_transport.SlackError, httpx.HTTPError) as error:
+            logger.warning(
+                "slack reply not delivered",
+                extra={"conversation_id": row.id, "error": str(error)[:200]},
+            )
+            return envelope_response(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                code="not_delivered",
+                message="Slack did not accept the message, so nothing was written. "
+                "Check the channel's tokens and try again.",
+            )
+
     if channel is not None and channel.kind == "email":
         from api.channels import email as email_transport
 

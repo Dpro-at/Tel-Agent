@@ -1227,6 +1227,57 @@ export function testMetaChatChannel(
   return api(`/api/channels/${kind}/test`, { method: "POST" });
 }
 
+// --- The Discord channel ---------------------------------------------------------
+
+export type DiscordChannel = {
+  enabled: boolean;
+  bot_token_preview: string | null;
+  bot_username: string | null;
+};
+
+export function discordChannel(): Promise<DiscordChannel> {
+  return api<DiscordChannel>("/api/channels/discord");
+}
+
+export function saveDiscordChannel(
+  fields: Partial<{ enabled: boolean; bot_token: string }>,
+): Promise<DiscordChannel> {
+  return api<DiscordChannel>("/api/channels/discord", { method: "PUT", json: fields });
+}
+
+export function testDiscordChannel(): Promise<{ ok: boolean; bot_username: string | null }> {
+  return api("/api/channels/discord/test", { method: "POST" });
+}
+
+// --- The Slack channel -----------------------------------------------------------
+
+export type SlackChannel = {
+  enabled: boolean;
+  app_token_preview: string | null;
+  bot_token_preview: string | null;
+  team_name: string | null;
+  bot_name: string | null;
+};
+
+export function slackChannel(): Promise<SlackChannel> {
+  return api<SlackChannel>("/api/channels/slack");
+}
+
+/** The pair contract: both tokens together, or neither. */
+export function saveSlackChannel(
+  fields: Partial<{ enabled: boolean; app_token: string; bot_token: string }>,
+): Promise<SlackChannel> {
+  return api<SlackChannel>("/api/channels/slack", { method: "PUT", json: fields });
+}
+
+export function testSlackChannel(): Promise<{
+  ok: boolean;
+  team_name: string | null;
+  bot_name: string | null;
+}> {
+  return api("/api/channels/slack/test", { method: "POST" });
+}
+
 // --- Routing rules ------------------------------------------------------------
 
 export type RuleAction = "pass" | "block" | "ai";
