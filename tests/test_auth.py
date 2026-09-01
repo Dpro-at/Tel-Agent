@@ -207,7 +207,12 @@ async def test_every_route_is_protected_unless_it_is_on_the_public_list(
     # guarded by an origin allowlist, a rate limit, a captcha, and a `frame-ancestors`
     # policy the browser enforces. Three at once is the largest jump this list has
     # taken, which is exactly what this number exists to make somebody notice.
-    assert len(PUBLIC_PATHS) <= 18
+    #
+    # Raised to 19 for Meta's webhooks (§B13): one entry for WhatsApp, one shared by
+    # Messenger and Instagram. Meta pushes or nothing arrives, so these doors exist;
+    # each is guarded by a long random address and a signature over the raw body,
+    # and refuses every reason identically.
+    assert len(PUBLIC_PATHS) <= 19
 
 
 async def test_an_expired_session_is_refused_and_deleted(
@@ -377,6 +382,9 @@ async def test_every_route_under_a_public_prefix_is_pinned(client) -> None:
         # long random address and the X-Hub-Signature-256 HMAC over the raw body
         # with the app secret, refused identically for every reason.
         "/public/whatsapp/{path}",
+        # The same mechanism for Messenger and Instagram - one door for the pair,
+        # with the same guards and the same identical refusal.
+        "/public/meta/{path}",
         # The widget's own document, §B14. Public for the same reason the message
         # endpoint is - a stranger's browser fetches it, on a page this installation
         # does not control. It opens no session either; what limits it is the

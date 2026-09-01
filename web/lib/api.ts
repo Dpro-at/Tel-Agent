@@ -1185,6 +1185,48 @@ export function testWhatsAppChannel(): Promise<{
   return api("/api/channels/whatsapp/test", { method: "POST" });
 }
 
+// --- Messenger and Instagram: one contract, two kinds ----------------------------
+
+export type MetaChatKind = "messenger" | "instagram";
+
+export type MetaChatChannel = {
+  enabled: boolean;
+  /** The page id for Messenger; the Instagram Business account id for Instagram. */
+  account_id: string | null;
+  /** Masked, or null. Neither secret ever leaves the server after it is saved. */
+  access_token_preview: string | null;
+  app_secret_preview: string | null;
+  /** What Meta must be given, and what it will ask back during the handshake. */
+  callback_url: string;
+  verify_token: string;
+  /** What the last connection test said this page or account is called. */
+  account_name: string | null;
+};
+
+export function metaChatChannel(kind: MetaChatKind): Promise<MetaChatChannel> {
+  return api<MetaChatChannel>(`/api/channels/${kind}`);
+}
+
+/** The WhatsApp card's contract: the two secrets travel as a pair or not at all. */
+export function saveMetaChatChannel(
+  kind: MetaChatKind,
+  fields: Partial<{
+    enabled: boolean;
+    account_id: string;
+    access_token: string;
+    app_secret: string;
+  }>,
+): Promise<MetaChatChannel> {
+  return api<MetaChatChannel>(`/api/channels/${kind}`, { method: "PUT", json: fields });
+}
+
+/** §A6.8's "Test connection": asks the Graph API who the page or account is. */
+export function testMetaChatChannel(
+  kind: MetaChatKind,
+): Promise<{ ok: boolean; account_name: string | null }> {
+  return api(`/api/channels/${kind}/test`, { method: "POST" });
+}
+
 // --- Routing rules ------------------------------------------------------------
 
 export type RuleAction = "pass" | "block" | "ai";
