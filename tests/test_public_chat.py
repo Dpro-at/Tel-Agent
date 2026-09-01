@@ -1234,3 +1234,83 @@ async def test_a_second_line_is_not_a_second_conversation_starting(
         await db.scalars(select(BackgroundJob).where(BackgroundJob.kind == "webhook"))
     ).all()
     assert [job.payload["event"] for job in queued] == ["conversation.started"]
+
+
+async def test_a_taken_over_thread_gets_no_reply_from_the_agent(stage) -> None:
+    """While a person has the thread, the agent is silent — §A6.7's takeover.
+
+    The stream must produce nothing and store nothing: an agent that answers beside
+    the colleague who took over is two voices answering one customer, and the second
+    voice lands in the archive as something the business said.
+    """
+    http, paths, db = stage
+    first = (
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "I would rather talk to a person."},
+            headers={"Origin": ALLOWED},
+        )
+    ).json()
+
+    thread = await db.scalar(
+        select(Conversation).where(Conversation.external_id == first["conversation"])
+    )
+    thread.handling = "human"
+    await db.commit()
+
+    answer = await http.get(
+        f"/public/chat/{paths['ours']}/stream",
+        params={"conversation": first["conversation"]},
+        headers={"Origin": ALLOWED},
+    )
+    # The stream opens like any other — a visitor must not learn the difference from
+    # the status line — and ends without a word.
+    assert answer.status_code == 200
+    assert answer.headers["content-type"].startswith("text/event-stream")
+    assert _events(answer.text) == []
+
+    db.expire_all()
+    rows = (await db.execute(select(Message).order_by(Message.id))).scalars().all()
+    assert [row.speaker for row in rows] == ["caller"]
+
+
+async def test_a_colleagues_reply_reaches_the_visitor_as_the_business(stage) -> None:
+    """The thread a visitor reloads shows a human line the way it shows the agent.
+
+    Which desk answered is the business's own business (`_VISIBLE_SPEAKERS`), and the
+    poll the widget runs during a takeover reads this same endpoint — so this is also
+    the delivery path for a reply typed from the live screen.
+    """
+    http, paths, db = stage
+    first = (
+        await http.post(
+            f"/public/chat/{paths['ours']}/messages",
+            json={"text": "Is anybody there?"},
+            headers={"Origin": ALLOWED},
+        )
+    ).json()
+
+    thread = await db.scalar(
+        select(Conversation).where(Conversation.external_id == first["conversation"])
+    )
+    thread.handling = "human"
+    db.add(
+        Message(
+            workspace_id=thread.workspace_id,
+            conversation_id=thread.id,
+            ts_ms=position_ms(thread.started_at),
+            speaker="human",
+            text="Yes — this is Sabine. How can I help?",
+        )
+    )
+    await db.commit()
+
+    answer = await http.get(
+        f"/public/chat/{paths['ours']}/messages",
+        params={"conversation": first["conversation"]},
+        headers={"Origin": ALLOWED},
+    )
+    assert answer.status_code == 200
+    lines = answer.json()["messages"]
+    assert [line["speaker"] for line in lines] == ["visitor", "agent"]
+    assert lines[1]["text"] == "Yes — this is Sabine. How can I help?"

@@ -373,6 +373,12 @@ async def post_message(
     return Accepted(conversation=conversation.external_id or "", message_id=message.id)
 
 
+async def _nothing() -> AsyncIterator[str]:
+    """An SSE body with nothing in it — the shape of the agent staying silent."""
+    return
+    yield  # pragma: no cover - makes this a generator; the yield is never reached
+
+
 def _new_handle() -> str:
     """The thread's public handle.
 
@@ -695,6 +701,23 @@ async def stream_reply(
     )
     if thread is None:
         return _refused()
+
+    if thread.handling == "human":
+        # A colleague took the thread over (§A6.7), and from that moment the agent is
+        # silent: generating here would be two voices answering one customer, with the
+        # second one landing in the archive as something the business said. The stream
+        # opens like any other — a visitor must not learn the difference from the
+        # status line — and ends without a word; the colleague's reply reaches them
+        # through the thread the widget polls.
+        logger.info(
+            "web chat reply withheld, a person has the thread",
+            extra={"conversation_id": thread.id},
+        )
+        return StreamingResponse(
+            _nothing(),
+            media_type="text/event-stream",
+            headers={"X-Accel-Buffering": "no", "Cache-Control": "no-store"},
+        )
 
     # The visitor's last message is what the agent is answering. Read here rather than
     # taken from the query string: a caller could otherwise ask for a reply to text the

@@ -1117,6 +1117,42 @@ export function sendWhisper(conversationId: number, text: string): Promise<Threa
   });
 }
 
+/** What the takeover switches answer with: the thread, and whose it is now. */
+export type HandlingOut = {
+  id: number;
+  handling: ThreadHandling;
+};
+
+/**
+ * Take the conversation over from the agent — §A6.7's second intervention. From this
+ * moment the agent is silent and `sendReply` is what speaks. Idempotent: two colleagues
+ * pressing within a poll of each other is one takeover, not a conflict.
+ */
+export function takeOver(conversationId: number): Promise<HandlingOut> {
+  return api<HandlingOut>(`/api/conversations/${conversationId}/takeover`, {
+    method: "POST",
+  });
+}
+
+/** Hand the conversation back — the agent answers the next message as before. */
+export function resumeAgent(conversationId: number): Promise<HandlingOut> {
+  return api<HandlingOut>(`/api/conversations/${conversationId}/resume`, {
+    method: "POST",
+  });
+}
+
+/**
+ * Answer the customer yourself, as the business. Only while the thread is taken over —
+ * outside that mode the server answers 409 `not_taken_over`, because a line beside the
+ * agent's own answer would be two voices answering one customer.
+ */
+export function sendReply(conversationId: number, text: string): Promise<ThreadMessage> {
+  return api<ThreadMessage>(`/api/conversations/${conversationId}/reply`, {
+    method: "POST",
+    json: { text },
+  });
+}
+
 export function removeRule(id: number): Promise<void> {
   return api<void>(`/api/rules/${id}`, { method: "DELETE" });
 }
