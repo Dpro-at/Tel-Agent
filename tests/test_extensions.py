@@ -277,6 +277,7 @@ def test_the_built_in_extensions_all_load() -> None:
         "email",
         "telegram",
         "web_chat",
+        "whatsapp",
     ]
     assert registry.failed == []
 
@@ -292,6 +293,7 @@ def test_web_chat_subscribes_to_incoming_messages() -> None:
         "web_chat",
         "telegram",
         "email",
+        "whatsapp",
     ]
 
 
@@ -318,9 +320,16 @@ async def test_the_catalogue_records_what_is_loaded(migrated: AsyncSession) -> N
 
     written = await sync_catalogue(migrated, registry)
 
-    assert written == 5
+    assert written == 6
     rows = {row.slug: row for row in (await migrated.execute(select(App))).scalars()}
-    assert sorted(rows) == ["agent_core", "database", "email", "telegram", "web_chat"]
+    assert sorted(rows) == [
+        "agent_core",
+        "database",
+        "email",
+        "telegram",
+        "web_chat",
+        "whatsapp",
+    ]
     assert rows["web_chat"].origin == "official"
     assert rows["web_chat"].manifest["hooks"] == ["message.received"]
 
@@ -338,4 +347,4 @@ async def test_syncing_twice_updates_rather_than_duplicates(
     await sync_catalogue(migrated, registry)
 
     rows = (await migrated.execute(select(App))).scalars().all()
-    assert len(rows) == 5
+    assert len(rows) == 6

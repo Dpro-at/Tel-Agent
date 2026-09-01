@@ -67,6 +67,7 @@ from api.routes import telegram_channel as telegram_channel_routes
 from api.routes import tokens as token_routes
 from api.routes import web_channel as web_channel_routes
 from api.routes import webhooks as webhook_routes
+from api.routes import whatsapp_channel as whatsapp_channel_routes
 from api.routes import widget as widget_routes
 from api.routes import workspaces as workspace_routes
 
@@ -195,6 +196,15 @@ TAGS_METADATA = [
             "owns, its password stored encrypted and masked on every read. Not the "
             "installation's notification SMTP: that one talks to the operator, this "
             "one talks to customers. These routes are only its settings card."
+        ),
+    },
+    {
+        "name": "whatsapp",
+        "description": (
+            "The WhatsApp channel (§B13) — the customer's own Meta application: an "
+            "access token, a phone number id, and the app secret that signs every "
+            "webhook Meta delivers. Inbound arrives on a public webhook because the "
+            "Cloud API offers nothing to poll; these routes are its settings card."
         ),
     },
     {
@@ -494,6 +504,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(mcp_routes.router)
     app.include_router(telegram_channel_routes.router)
     app.include_router(email_channel_routes.router)
+    app.include_router(whatsapp_channel_routes.router)
+    app.include_router(whatsapp_channel_routes.card)
 
     @app.get(
         "/health",

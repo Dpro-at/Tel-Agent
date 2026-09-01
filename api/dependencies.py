@@ -58,12 +58,21 @@ PUBLIC_PATHS: frozenset[str] = frozenset(
         # its own `frame-ancestors` policy instead (§B14).
         "/embed.js",
         "/widget/{path}",
+        # Meta's webhook for the WhatsApp channel (§B13). Public because Meta is the
+        # caller and holds no session; guarded by a long random address and the
+        # X-Hub-Signature-256 HMAC over the raw body with the app secret.
+        "/public/whatsapp/{path}",
     }
 )
 
 # Parameterised public routes carry a token in the path, so the request-time URL
 # never equals its pattern. The prefix is the runtime half of the two entries above.
-PUBLIC_PREFIXES: tuple[str, ...] = ("/api/invites/", "/public/chat/", "/widget/")
+PUBLIC_PREFIXES: tuple[str, ...] = (
+    "/api/invites/",
+    "/public/chat/",
+    "/public/whatsapp/",
+    "/widget/",
+)
 
 
 def is_public(path: str) -> bool:

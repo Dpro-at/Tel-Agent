@@ -95,6 +95,10 @@ EVENTS = (
     # The email channel, likewise: the mailbox password is a credential, and the
     # hosts name the customer's mail infrastructure.
     "email_channel_changed",
+    # The WhatsApp channel: two credentials from the customer's own Meta
+    # application, and the switch decides whether WhatsApp customers reach the
+    # agent at all.
+    "whatsapp_channel_changed",
     # Machine tokens — §B9.1. Each one is a credential that opens a path the
     # dashboard session cannot, so minting, rotating and removing one all need a
     # name attached afterwards. The token itself never appears in `details`.

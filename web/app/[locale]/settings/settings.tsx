@@ -30,10 +30,13 @@ import {
   saveEmailChannel,
   saveTelegramChannel,
   saveWebChannel,
+  saveWhatsAppChannel,
   sendTestMail,
   telegramChannel,
   testEmailChannel,
   testTelegramChannel,
+  testWhatsAppChannel,
+  whatsappChannel,
   testModel,
   signOutEverywhereElse,
   tokenList,
@@ -49,6 +52,7 @@ import {
   type EmailChannel,
   type TelegramChannel,
   type WebChannel,
+  type WhatsAppChannel,
   type WebhookWithSecret,
 } from "@/lib/api";
 import { interpolate } from "@/lib/i18n";
@@ -1725,6 +1729,216 @@ function ChannelsPanels({ t }: { t: SettingsDictionary }) {
 
       <TelegramCard t={t} />
       <EmailCard t={t} />
+      <WhatsAppCard t={t} />
+    </div>
+  );
+}
+
+/**
+ * The WhatsApp card — the first platform channel (§B13): the customer's own Meta
+ * application, two write-only secrets travelling as a pair, and the two values Meta
+ * asks for on its side — the callback address and the verify token — shown here
+ * because this card is where somebody stands while filling in Meta's form.
+ */
+function WhatsAppCard({ t }: { t: SettingsDictionary }) {
+  const channel = useResource<WhatsAppChannel>(() => whatsappChannel(), []);
+  const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState("");
+  const [appSecret, setAppSecret] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [tested, setTested] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const row = channel.data;
+
+  const describe = (thrown: unknown): string => {
+    if (thrown instanceof ApiError) {
+      if (thrown.code === "credentials_incomplete") return t.wa_error_incomplete;
+      if (thrown.code === "encryption_key_missing") return t.wc_error_no_key;
+      if (thrown.code === "meta_refused") return t.wa_error_refused;
+      return thrown.message;
+    }
+    return String(thrown);
+  };
+
+  const act = async (run: () => Promise<unknown>) => {
+    if (busy) return;
+    setBusy(true);
+    setProblem(null);
+    setSaved(false);
+    setTested(null);
+    try {
+      await run();
+      setSaved(true);
+      channel.reload();
+    } catch (thrown) {
+      setProblem(describe(thrown));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (row === null) return null;
+
+  const copyable = (label: string, value: string, key: string) => (
+    <div className="min-w-[240px] flex-[1_1_320px]">
+      <span className="text-od-text-3 text-[13px] font-medium">{label}</span>
+      <div className="mt-2 flex flex-wrap items-start gap-2">
+        <code
+          dir="ltr"
+          className="mono ltr-data border-od-border-6 bg-od-canvas-2 text-od-text-2 min-w-[200px] flex-[1_1_240px] rounded-[7px] border p-[9px_11px] text-start text-[12.5px] [overflow-wrap:anywhere]"
+        >
+          {value}
+        </code>
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(value);
+              setCopied(key);
+            } catch {
+              setCopied(null);
+            }
+          }}
+          className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[8px_12px] text-[12.5px] font-medium whitespace-nowrap"
+        >
+          {copied === key ? t.wc_copied : t.wc_copy}
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border p-[18px]">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-[10px]">
+        <h3 className="text-od-muted-4 m-0 text-[13px] font-semibold tracking-[.07em] uppercase">
+          {t.wa_title}
+        </h3>
+        <span className="text-od-faint max-w-[52ch] text-[12.5px] text-pretty">
+          {t.wa_note}
+        </span>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-3">
+        <label className="min-w-[200px] flex-[1_1_240px]">
+          <span className="text-od-text-3 text-[13px] font-medium">{t.wa_phone_number_id}</span>
+          <input
+            dir="ltr"
+            value={phoneNumberId ?? row.phone_number_id ?? ""}
+            onChange={(event) => setPhoneNumberId(event.target.value)}
+            className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono mt-2 w-full rounded-[7px] border p-[9px_11px] text-start text-[13px]"
+          />
+        </label>
+        <label className="min-w-[220px] flex-[1_1_280px]">
+          <span className="text-od-text-3 text-[13px] font-medium">{t.wa_access_token}</span>
+          <input
+            dir="ltr"
+            type="password"
+            value={accessToken}
+            onChange={(event) => setAccessToken(event.target.value)}
+            placeholder={row.access_token_preview ?? ""}
+            className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono mt-2 w-full rounded-[7px] border p-[9px_11px] text-start text-[13px]"
+          />
+        </label>
+        <label className="min-w-[220px] flex-[1_1_280px]">
+          <span className="text-od-text-3 text-[13px] font-medium">{t.wa_app_secret}</span>
+          <input
+            dir="ltr"
+            type="password"
+            value={appSecret}
+            onChange={(event) => setAppSecret(event.target.value)}
+            placeholder={row.app_secret_preview ?? ""}
+            className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono mt-2 w-full rounded-[7px] border p-[9px_11px] text-start text-[13px]"
+          />
+          <span className="text-od-faint-2 mt-[6px] block max-w-[62ch] text-pretty text-[12.5px]">
+            {row.access_token_preview ? t.wa_secrets_keep : t.wa_secrets_help}
+          </span>
+        </label>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-3">
+        {copyable(t.wa_callback_url, row.callback_url, "url")}
+        {copyable(t.wa_verify_token, row.verify_token, "token")}
+      </div>
+      <p className="text-od-faint mt-[8px] mb-0 max-w-[72ch] text-[12.5px] text-pretty">
+        {t.wa_webhook_note}
+      </p>
+
+      <div className="border-od-border mt-4 flex flex-wrap items-center gap-3 border-t pt-4">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() =>
+            void act(async () => {
+              const token = accessToken.trim();
+              const secret = appSecret.trim();
+              await saveWhatsAppChannel({
+                phone_number_id: (phoneNumberId ?? row.phone_number_id ?? "").trim(),
+                // The pair travels together or not at all - the server refuses half.
+                ...(token && secret ? { access_token: token, app_secret: secret } : {}),
+              });
+              setAccessToken("");
+              setAppSecret("");
+            })
+          }
+          className="border-od-stroke bg-od-raise-10 text-od-text hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[9px_16px] text-[13.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy ? t.wc_saving : t.wa_save}
+        </button>
+        <button
+          type="button"
+          disabled={busy || row.access_token_preview === null}
+          onClick={() =>
+            void act(async () => {
+              const answer = await testWhatsAppChannel();
+              setTested(answer.display_phone_number ?? "");
+            })
+          }
+          className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[8px_14px] text-[13px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {t.wa_test}
+        </button>
+        <button
+          type="button"
+          disabled={busy || row.access_token_preview === null}
+          onClick={() => void act(() => saveWhatsAppChannel({ enabled: !row.enabled }))}
+          className="border-od-stroke bg-od-raise-10 text-od-text cursor-pointer rounded-[7px] border p-[8px_14px] text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {t.wa_enabled}
+          {row.enabled ? " ✓" : ""}
+        </button>
+        {row.access_token_preview !== null ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              void act(() => saveWhatsAppChannel({ access_token: "", app_secret: "" }))
+            }
+            className="border-od-line text-od-muted-4 hover:text-od-text-2 cursor-pointer rounded-md border bg-transparent p-[7px_12px] text-[12.5px]"
+          >
+            {t.wa_secrets_clear}
+          </button>
+        ) : null}
+        <span className="text-od-faint ms-auto max-w-[44ch] text-[12.5px] text-pretty">
+          {tested !== null
+            ? interpolate(t.wa_test_ok, { number: tested || "?" })
+            : row.verified_name
+              ? interpolate(t.wa_known_number, { name: row.verified_name })
+              : row.enabled
+                ? t.wa_listening_note
+                : t.wa_enabled_off_help}
+        </span>
+      </div>
+
+      {problem !== null ? (
+        <div className="mt-3 max-w-[62ch] text-pretty text-[13px] text-[color:var(--od-red-text)]">
+          {problem}
+        </div>
+      ) : saved ? (
+        <div className="text-od-muted-5 mt-3 text-[13px]">{t.wc_saved}</div>
+      ) : null}
     </div>
   );
 }
