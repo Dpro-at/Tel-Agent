@@ -20,7 +20,6 @@ endpoint stores and acknowledges, and says nothing that implies otherwise.
 from __future__ import annotations
 
 import asyncio
-import datetime as dt
 import json
 import logging
 import secrets
@@ -39,6 +38,7 @@ from agent.providers.llm import Message as LlmMessage
 from agent.reply import reply as generate_reply
 from agent.tools import TakenMessage
 from api import llm, webhooks
+from api.conversations import position_ms
 from api.db import session_scope
 from api.errors import envelope_response
 from api.models import Channel, Conversation, Message
@@ -271,10 +271,16 @@ async def post_message(
         db.add(conversation)
         await db.flush()
 
+    # `started_at` is a server default, so on a conversation created a moment ago it is
+    # not on the object until the row is read back. Refreshing is what makes the first
+    # line of a thread sit at zero instead of raising on an unloaded attribute.
+    if started:
+        await db.refresh(conversation)
+
     message = Message(
         workspace_id=channel.workspace_id,
         conversation_id=conversation.id,
-        ts_ms=int(dt.datetime.now(dt.UTC).timestamp() * 1000),
+        ts_ms=position_ms(conversation.started_at),
         speaker="caller",
         text=payload.text,
         # Null language is the honest value until something detects it. On a text
@@ -536,7 +542,7 @@ async def _reply_stream(
         stored = Message(
             workspace_id=channel.workspace_id,
             conversation_id=conversation.id,
-            ts_ms=int(dt.datetime.now(dt.UTC).timestamp() * 1000),
+            ts_ms=position_ms(conversation.started_at),
             speaker="agent",
             text=whole,
         )

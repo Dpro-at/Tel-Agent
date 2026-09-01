@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import Settings
+from api.conversations import position_ms
 from api.main import create_app
 from api.models import Channel, Conversation, Message, Workspace
 
@@ -690,7 +691,12 @@ async def test_a_whisper_reaches_the_model_as_a_note_not_as_something_it_said(
         Message(
             workspace_id=thread.workspace_id,
             conversation_id=thread.id,
-            ts_ms=int(thread.started_at.timestamp() * 1000) + 1,
+            # A position, as every writer now stores: written before the second
+            # question is posted, so it is both earlier in the thread and lower in id
+            # — and `_history` orders by `(ts_ms, id)`, so the two agree whichever way
+            # the clock rounds. This line used to build an epoch value, which is the
+            # shape the writers themselves used to have.
+            ts_ms=position_ms(thread.started_at),
             speaker="human",
             text="Das Angebot gilt bis 30. September.",
             is_whisper=True,

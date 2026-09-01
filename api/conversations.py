@@ -22,6 +22,7 @@ message — fast on a laptop with fifty rows and catastrophic on a year of trans
 
 from __future__ import annotations
 
+import datetime as dt
 import re
 from typing import Any
 
@@ -38,6 +39,29 @@ PAGE = 50
 # line per thread; sending the whole transcript so the browser can trim it would move
 # megabytes to render kilobytes.
 PREVIEW = 160
+
+
+def position_ms(started_at: dt.datetime, at: dt.datetime | None = None) -> int:
+    """Where a line sits in its conversation, which is what `messages.ts_ms` holds.
+
+    Milliseconds from the start of the conversation, not a wall clock. The column has
+    said so since the first migration and gives the reason: on a call the position
+    within the recording is what a transcript is read against, and a clock adjustment
+    mid-call must not be able to reorder the lines.
+
+    Every writer used to call `datetime.now().timestamp()` instead, which is why this
+    function exists rather than the expression being repeated a fourth time. The two
+    screens that render it were always right; the writers were the deviation.
+
+    **Never negative.** `started_at` is a server default, so the database's clock and
+    this process's clock are not the same clock, and the first line of a conversation
+    can be written a hair "before" it began. A floor at zero costs nothing and keeps
+    `mm:ss` from having to render a negative number.
+    """
+    now = at or dt.datetime.now(dt.UTC)
+    # SQLite hands back naive datetimes for a column written aware; PostgreSQL does not.
+    started = started_at if started_at.tzinfo else started_at.replace(tzinfo=dt.UTC)
+    return max(0, int((now - started).total_seconds() * 1000))
 
 
 def is_postgres(db: DbSession) -> bool:
