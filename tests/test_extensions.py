@@ -271,7 +271,7 @@ def test_the_built_in_extensions_all_load() -> None:
     for path in BUILTIN:
         registry.load(path)
 
-    assert sorted(registry.loaded) == ["agent_core", "database", "web_chat"]
+    assert sorted(registry.loaded) == ["agent_core", "database", "telegram", "web_chat"]
     assert registry.failed == []
 
 
@@ -283,7 +283,8 @@ def test_web_chat_subscribes_to_incoming_messages() -> None:
         registry.load(path)
 
     assert [entry.slug for entry in registry.bus.listeners_for("message.received")] == [
-        "web_chat"
+        "web_chat",
+        "telegram",
     ]
 
 
@@ -310,9 +311,9 @@ async def test_the_catalogue_records_what_is_loaded(migrated: AsyncSession) -> N
 
     written = await sync_catalogue(migrated, registry)
 
-    assert written == 3
+    assert written == 4
     rows = {row.slug: row for row in (await migrated.execute(select(App))).scalars()}
-    assert sorted(rows) == ["agent_core", "database", "web_chat"]
+    assert sorted(rows) == ["agent_core", "database", "telegram", "web_chat"]
     assert rows["web_chat"].origin == "official"
     assert rows["web_chat"].manifest["hooks"] == ["message.received"]
 
@@ -330,4 +331,4 @@ async def test_syncing_twice_updates_rather_than_duplicates(
     await sync_catalogue(migrated, registry)
 
     rows = (await migrated.execute(select(App))).scalars().all()
-    assert len(rows) == 3
+    assert len(rows) == 4

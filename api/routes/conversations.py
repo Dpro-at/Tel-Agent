@@ -608,6 +608,40 @@ async def reply_as_business(
             message="Take the conversation over first — the agent is still answering it.",
         )
 
+    # On a channel with a push transport the reply is delivered *before* it is
+    # stored. The transcript is what somebody reads back to learn what a customer was
+    # told, and a line that failed to reach them must not sit in it looking like one
+    # that did — the web channel is the other way round only because its widget polls
+    # the store, so there storing *is* delivering.
+    channel = await db.scalar(select(Channel).where(Channel.id == row.channel_id))
+    if channel is not None and channel.kind == "telegram":
+        import httpx
+
+        from api.channels import telegram
+
+        if not channel.credentials_encrypted or not row.external_id:
+            return envelope_response(
+                status_code=status.HTTP_409_CONFLICT,
+                code="no_bot_token",
+                message="This conversation's Telegram channel has no bot token saved.",
+            )
+        try:
+            async with telegram.make_client() as client:
+                await telegram.send_text(
+                    client, channel.credentials_encrypted, row.external_id, text
+                )
+        except (telegram.TelegramError, httpx.HTTPError) as error:
+            logger.warning(
+                "telegram reply not delivered",
+                extra={"conversation_id": row.id, "error": str(error)},
+            )
+            return envelope_response(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                code="not_delivered",
+                message="Telegram did not accept the message, so nothing was written. "
+                "Check the channel's bot token and try again.",
+            )
+
     line = Message(
         workspace_id=context.id,
         conversation_id=row.id,

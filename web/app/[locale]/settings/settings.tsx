@@ -26,8 +26,11 @@ import {
   removeWebhook,
   rotateToken,
   rotateWebhookSecret,
+  saveTelegramChannel,
   saveWebChannel,
   sendTestMail,
+  telegramChannel,
+  testTelegramChannel,
   testModel,
   signOutEverywhereElse,
   tokenList,
@@ -40,6 +43,7 @@ import {
   type MachineScope,
   type Member,
   type MintedToken,
+  type TelegramChannel,
   type WebChannel,
   type WebhookWithSecret,
 } from "@/lib/api";
@@ -1714,6 +1718,152 @@ function ChannelsPanels({ t }: { t: SettingsDictionary }) {
           {busy ? t.wc_saving : t.wc_save}
         </button>
       </div>
+
+      <TelegramCard t={t} />
+    </div>
+  );
+}
+
+/**
+ * The Telegram card — the second channel with something real behind it (Milestone 3).
+ *
+ * The web chat card's contract, applied to a bot token: masked once saved, the mask
+ * never echoed back as an edit, the switch refusing to turn on while there is no
+ * token — and §A6.8's "Test connection", which asks Telegram `getMe` and names the
+ * bot, proving the link rather than claiming it.
+ */
+function TelegramCard({ t }: { t: SettingsDictionary }) {
+  const channel = useResource<TelegramChannel>(() => telegramChannel(), []);
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [tested, setTested] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const row = channel.data;
+
+  const describe = (thrown: unknown): string => {
+    if (thrown instanceof ApiError) {
+      if (thrown.code === "no_bot_token") return t.tg_error_no_token;
+      if (thrown.code === "encryption_key_missing") return t.wc_error_no_key;
+      if (thrown.code === "telegram_refused") return t.tg_error_refused;
+      return thrown.message;
+    }
+    return String(thrown);
+  };
+
+  const act = async (run: () => Promise<unknown>) => {
+    if (busy) return;
+    setBusy(true);
+    setProblem(null);
+    setSaved(false);
+    setTested(null);
+    try {
+      await run();
+      setSaved(true);
+      channel.reload();
+    } catch (thrown) {
+      setProblem(describe(thrown));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (row === null) return null;
+
+  return (
+    <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border p-[18px]">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-[10px]">
+        <h3 className="text-od-muted-4 m-0 text-[13px] font-semibold tracking-[.07em] uppercase">
+          {t.tg_title}
+        </h3>
+        <span className="text-od-faint max-w-[52ch] text-[12.5px] text-pretty">
+          {t.tg_note}
+        </span>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-end gap-3">
+        <label className="min-w-[240px] flex-[1_1_320px]">
+          <span className="text-od-text-3 text-[13px] font-medium">{t.tg_token_label}</span>
+          <input
+            dir="ltr"
+            type="password"
+            value={token}
+            onChange={(event) => setToken(event.target.value)}
+            placeholder={row.bot_token_preview ?? t.tg_token_placeholder}
+            className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono mt-2 w-full rounded-[7px] border p-[9px_11px] text-start text-[13px]"
+          />
+          <span className="text-od-faint-2 mt-[6px] block max-w-[62ch] text-pretty text-[12.5px]">
+            {row.bot_token_preview ? t.tg_token_keep : t.tg_token_help}
+          </span>
+        </label>
+        <button
+          type="button"
+          disabled={busy || token.trim() === ""}
+          onClick={() =>
+            void act(async () => {
+              await saveTelegramChannel({ bot_token: token.trim() });
+              setToken("");
+            })
+          }
+          className="border-od-stroke bg-od-raise-10 text-od-text hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[9px_16px] text-[13.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy ? t.wc_saving : t.tg_token_save}
+        </button>
+      </div>
+
+      <div className="border-od-border mt-4 flex flex-wrap items-center gap-3 border-t pt-4">
+        <button
+          type="button"
+          disabled={busy || row.bot_token_preview === null}
+          onClick={() =>
+            void act(async () => {
+              const answer = await testTelegramChannel();
+              setTested(answer.bot_username ?? "");
+            })
+          }
+          className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[8px_14px] text-[13px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {t.tg_test}
+        </button>
+        <button
+          type="button"
+          disabled={busy || row.bot_token_preview === null}
+          onClick={() => void act(() => saveTelegramChannel({ enabled: !row.enabled }))}
+          className="border-od-stroke bg-od-raise-10 text-od-text cursor-pointer rounded-[7px] border p-[8px_14px] text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {t.tg_enabled}
+          {row.enabled ? " ✓" : ""}
+        </button>
+        {row.bot_token_preview !== null ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void act(() => saveTelegramChannel({ bot_token: "" }))}
+            className="border-od-line text-od-muted-4 hover:text-od-text-2 cursor-pointer rounded-md border bg-transparent p-[7px_12px] text-[12.5px]"
+          >
+            {t.tg_token_clear}
+          </button>
+        ) : null}
+
+        <span className="text-od-faint ms-auto max-w-[44ch] text-[12.5px] text-pretty">
+          {tested !== null
+            ? interpolate(t.tg_test_ok, { bot: tested ? `@${tested}` : "?" })
+            : row.bot_username
+              ? interpolate(t.tg_known_bot, { bot: `@${row.bot_username}` })
+              : row.enabled
+                ? t.tg_polling_note
+                : t.tg_enabled_off_help}
+        </span>
+      </div>
+
+      {problem !== null ? (
+        <div className="mt-3 max-w-[62ch] text-pretty text-[13px] text-[color:var(--od-red-text)]">
+          {problem}
+        </div>
+      ) : saved ? (
+        <div className="text-od-muted-5 mt-3 text-[13px]">{t.wc_saved}</div>
+      ) : null}
     </div>
   );
 }

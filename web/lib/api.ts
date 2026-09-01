@@ -1061,6 +1061,36 @@ export function saveWebChannel(
   return api<WebChannel>("/api/channels/web", { method: "PUT", json: fields });
 }
 
+// --- The Telegram channel -------------------------------------------------------
+
+export type TelegramChannel = {
+  enabled: boolean;
+  /** Masked, or null. The token itself never leaves the server after it is saved. */
+  bot_token_preview: string | null;
+  /** What the last connection test said the bot is called. Null until one has run. */
+  bot_username: string | null;
+};
+
+export function telegramChannel(): Promise<TelegramChannel> {
+  return api<TelegramChannel>("/api/channels/telegram");
+}
+
+/**
+ * Any subset. `bot_token` is write-only, with the web channel's contract: omit to
+ * leave the stored one alone, send "" to remove it (which also switches the channel
+ * off), never send back the displayed mask.
+ */
+export function saveTelegramChannel(
+  fields: Partial<{ enabled: boolean; bot_token: string }>,
+): Promise<TelegramChannel> {
+  return api<TelegramChannel>("/api/channels/telegram", { method: "PUT", json: fields });
+}
+
+/** §A6.8's "Test connection": asks Telegram `getMe` with the saved token. */
+export function testTelegramChannel(): Promise<{ ok: boolean; bot_username: string | null }> {
+  return api("/api/channels/telegram/test", { method: "POST" });
+}
+
 // --- Routing rules ------------------------------------------------------------
 
 export type RuleAction = "pass" | "block" | "ai";

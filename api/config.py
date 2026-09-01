@@ -133,6 +133,11 @@ class Settings(BaseSettings):
     # It must never sit in the same place as the data it protects.
     encryption_key: str | None = None
 
+    # Where the Telegram Bot API lives. Nobody changes this in production; tests and
+    # development point it at a stand-in so the transport can be exercised without a
+    # bot, a network, or Telegram's cooperation.
+    telegram_api_base: str = "https://api.telegram.org"
+
     @property
     def version(self) -> str:
         return _installed_version()
