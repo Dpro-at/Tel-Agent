@@ -7,4 +7,5 @@ BUILTIN = (
     "api.extensions.builtin.agent_core",
     "api.extensions.builtin.database",
     "api.extensions.builtin.web_chat",
+    "api.extensions.builtin.telegram",
 )

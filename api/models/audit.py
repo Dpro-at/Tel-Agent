@@ -89,6 +89,9 @@ EVENTS = (
     # can reach the agent at all, and its reCAPTCHA secret is a credential - so a
     # change needs a name attached afterwards.
     "web_channel_changed",
+    # The Telegram channel, for the same reasons: the bot token is a credential, and
+    # the switch decides whether customers on Telegram reach the agent at all.
+    "telegram_channel_changed",
     # Machine tokens — §B9.1. Each one is a credential that opens a path the
     # dashboard session cannot, so minting, rotating and removing one all need a
     # name attached afterwards. The token itself never appears in `details`.

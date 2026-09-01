@@ -25,6 +25,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.channels import telegram as telegram_transport
 from api.config import Settings, get_settings
 from api.db import check_database, create_engine, create_sessionmaker
 from api.docs import describe
@@ -60,6 +61,7 @@ from api.routes import rules as rule_routes
 from api.routes import settings as settings_routes
 from api.routes import setup as setup_routes
 from api.routes import system as system_routes
+from api.routes import telegram_channel as telegram_channel_routes
 from api.routes import tokens as token_routes
 from api.routes import web_channel as web_channel_routes
 from api.routes import webhooks as webhook_routes
@@ -173,6 +175,15 @@ TAGS_METADATA = [
             "The web chat channel and the widget it serves (§B14). The widget's own two "
             "routes are the only unauthenticated ones in the product, guarded by an "
             "origin allowlist, a captcha and a rate limit instead of by a session."
+        ),
+    },
+    {
+        "name": "telegram",
+        "description": (
+            "The Telegram channel (§B13) — a bot from the customer's own @BotFather, "
+            "its token stored encrypted and masked on every read. The transport is "
+            "long polling, so nothing has to be opened to the internet; these routes "
+            "are only its settings card."
         ),
     },
     {
@@ -308,6 +319,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logging.getLogger("api.extensions").exception("could not sync the app catalogue")
 
     worker: asyncio.Task | None = None
+    poller: asyncio.Task | None = None
     if settings.jobs_enabled:
         try:
             async with app.state.sessionmaker() as db:
@@ -318,14 +330,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # and answering /health with the reason.
             logging.getLogger("api.jobs").exception("could not seed the core schedule")
         worker = asyncio.create_task(job_loop(app.state.sessionmaker))
+        # The Telegram transport rides the same flag: it is background machinery with
+        # the same "exactly one clock ticks" constraint, and tests drive `poll_once`
+        # directly rather than racing a loop.
+        poller = asyncio.create_task(telegram_transport.loop(app.state.sessionmaker))
 
     try:
         yield
     finally:
-        if worker is not None:
-            worker.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await worker
+        for task in (worker, poller):
+            if task is not None:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
         await engine.dispose()
 
 
@@ -465,6 +482,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(setup_routes.router)
     app.include_router(token_routes.router)
     app.include_router(mcp_routes.router)
+    app.include_router(telegram_channel_routes.router)
 
     @app.get(
         "/health",
