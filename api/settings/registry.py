@@ -83,6 +83,17 @@ REGISTRY: dict[str, Definition] = _define(
         description="Where the endpoint lives. Empty means the OpenAI-compatible "
         "default; point it at a gateway or a model on your own machine to use those.",
     ),
+    # The generic HTTP tool - §B7's escape hatch, Milestone 5. The allowlist is the
+    # whole of its safety: the model chooses the URL, and without this list it could
+    # choose this installation's own loopback. Per workspace, because integrations
+    # are the business's own.
+    Definition(
+        "http_tool.allowed_urls",
+        "workspace",
+        description="Comma-separated URL prefixes the agent's HTTP tool may call, "
+        "for example https://orders.example.com/api. Empty means the tool refuses "
+        "everything.",
+    ),
     Definition("smtp.host", "installation", description="Hostname of the mail server."),
     Definition("smtp.port", "installation", "integer", 587, description="Usually 587."),
     Definition("smtp.username", "installation", description="Leave empty for no auth."),
