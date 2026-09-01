@@ -266,6 +266,12 @@ async def ingest(db: DbSession, channel: Channel, payload: dict[str, Any]) -> li
     has gone back to Meta. A retry of a delivery already ingested is dropped by the
     message id Meta stamps on it, kept per conversation in `state_json`.
     """
+    from api.channels import health
+
+    # A signed delivery that reached this line is the platform proving the link
+    # works - the webhook channels have no poll to prove it with.
+    await health.report_ok(db, channel)
+
     needing_reply: list[int] = []
     for message in _texts_of(payload):
         wamid = str(message.get("id") or "")
@@ -348,6 +354,9 @@ async def respond(sessionmaker: async_sessionmaker, channel_id: int, message_id:
 
         history = await _history(db, conversation, line)
 
+        import time
+
+        reply_started = time.perf_counter()
         pieces: list[str] = []
         async for chunk in generate_reply(
             line.text, provider=provider, history=history, on_message_taken=took
@@ -376,6 +385,11 @@ async def respond(sessionmaker: async_sessionmaker, channel_id: int, message_id:
             )
             return
         await _store_line(db, conversation, speaker="agent", text=whole)
+
+        from api.channels import health
+
+        # Rule 4: the whole journey, generation to delivery, measured per channel.
+        health.note_reply("whatsapp", channel.id, (time.perf_counter() - reply_started) * 1000)
 
 
 def schedule_reply(sessionmaker: async_sessionmaker, channel_id: int, message_id: int) -> None:

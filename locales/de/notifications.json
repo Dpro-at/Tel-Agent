@@ -34,6 +34,8 @@
   "msg_backup_failed": "Die nächtliche Sicherung lief nicht.",
   "msg_backup_no_target": "Es ist kein Sicherungsziel gesetzt, also wird gar nicht gesichert.",
   "msg_backup_unverified": "Eine Sicherung wurde geschrieben, aber das Zurücklesen zur Prüfung schlug fehl.",
+  "msg_channel_down": "Der Kanal {channel} hat seine Verbindung verloren. Wer dort schreibt, bekommt keine Antwort.",
+  "msg_channel_recovered": "Der Kanal {channel} antwortet wieder.",
   "msg_mail_failed": "Eine E-Mail konnte nicht gesendet werden.",
   "msg_message_taken": "{name} hat eine Nachricht hinterlassen: {reason}",
   "msg_restore_staged": "Eine Wiederherstellung vom {taken_at} ist vorgemerkt und läuft beim nächsten Neustart.",

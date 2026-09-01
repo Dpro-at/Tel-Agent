@@ -36,6 +36,16 @@ const SERVICE_COPY: Record<string, { name: Key; impact: Key }> = {
   llm: { name: "service_llm", impact: "service_llm_impact" },
   stt: { name: "service_stt", impact: "service_stt_impact" },
   tts: { name: "service_tts", impact: "service_tts_impact" },
+  // Milestone 9: one row per channel kind that exists, straight from the
+  // transports' own reports. The `latency_ms` on these rows is the last reply's
+  // whole journey, generation to delivery, not a probe.
+  channel_telegram: { name: "service_ch_telegram", impact: "service_ch_telegram_impact" },
+  channel_email: { name: "service_ch_email", impact: "service_ch_email_impact" },
+  channel_whatsapp: { name: "service_ch_whatsapp", impact: "service_ch_whatsapp_impact" },
+  channel_messenger: { name: "service_ch_messenger", impact: "service_ch_messenger_impact" },
+  channel_instagram: { name: "service_ch_instagram", impact: "service_ch_instagram_impact" },
+  channel_discord: { name: "service_ch_discord", impact: "service_ch_discord_impact" },
+  channel_slack: { name: "service_ch_slack", impact: "service_ch_slack_impact" },
 };
 
 const LOG_FILTERS: { id: LogFilter; label: Key }[] = [

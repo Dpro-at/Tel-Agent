@@ -443,6 +443,9 @@ async def _reply_and_send(
 
     history = await _history(db, conversation, incoming)
 
+    import time
+
+    started = time.perf_counter()
     pieces: list[str] = []
     async for chunk in generate_reply(
         incoming.text, provider=provider, history=history, on_message_taken=took
@@ -463,6 +466,11 @@ async def _reply_and_send(
         in_reply_to=state.get("last_message_id") or None,
     )
     await _store_line(db, conversation, speaker="agent", text=whole)
+
+    from api.channels import health
+
+    # Rule 4: the whole journey, generation to delivery, measured per channel.
+    health.note_reply("email", channel.id, (time.perf_counter() - started) * 1000)
 
 
 async def _handle_inbound(
@@ -504,15 +512,11 @@ async def _handle_inbound(
 
 
 async def _active_channels(db: DbSession) -> list[Channel]:
-    return list(
-        (
-            await db.execute(
-                select(Channel).where(Channel.kind == "email", Channel.status == "active")
-            )
-        )
-        .scalars()
-        .all()
-    )
+    from api.channels import health
+
+    # The decrypt-safe loader: a row saved under a key this installation no longer
+    # has is reported down and skipped, instead of taking the whole pass with it.
+    return await health.usable_channels(db, ("email",))
 
 
 async def poll_once(
@@ -530,11 +534,16 @@ async def poll_once(
         try:
             arrived = await fetch(config)
         except (EmailError, OSError) as error:
-            logger.warning(
-                "email poll failed",
-                extra={"channel_id": channel_id, "error": str(error)[:200]},
-            )
+            # Told to the health registry, which raises the tray alert on the
+            # transition and logs it - one warning per outage, not one per pass.
+            from api.channels import health
+
+            await health.report_down(db, channel, detail=str(error))
             continue
+
+        from api.channels import health
+
+        await health.report_ok(db, channel)
         for mail in arrived:
             try:
                 await _handle_inbound(db, send, config, channel, mail)

@@ -175,6 +175,54 @@ async def _web_channel(db: DbSession) -> Service:
     return Service("web_channel", "ok", detail=f"{live} live")
 
 
+async def _channels(db: DbSession) -> list[Service]:
+    """One row per channel kind that exists — Milestone 9's real checks.
+
+    The truth comes from the transports themselves, through the health registry:
+    a poller reports every pass, a socket on connect and drop, a webhook channel on
+    every signed delivery and on the five-minute probe. What this row adds is the
+    reading: several channels of one kind fold into one row carrying the worst
+    state, a kind whose channels are all disabled reads `not_configured` (the web
+    row's own rule: switched off is not set up), and an enabled channel the
+    registry has not heard from yet reads `degraded` with the reason — which after
+    a restart is exactly true for as long as it lasts.
+    """
+    from api.channels import health
+    from api.models import Channel
+
+    kinds = ("telegram", "email", "whatsapp", "messenger", "instagram", "discord", "slack")
+    rows = (await db.execute(select(Channel).where(Channel.kind.in_(kinds)))).scalars().all()
+    reports = health.snapshot()
+
+    services: list[Service] = []
+    for kind in kinds:
+        of_kind = [row for row in rows if row.kind == kind]
+        if not of_kind:
+            continue
+        active = [row for row in of_kind if row.status == "active"]
+        if not active:
+            services.append(Service(f"channel_{kind}", "not_configured"))
+            continue
+
+        worst: State = "ok"
+        detail: str | None = None
+        latency: float | None = None
+        for row in active:
+            report = reports.get((kind, row.id))
+            if report is None:
+                if worst == "ok":
+                    worst = "degraded"
+                    detail = "nothing heard from it yet"
+                continue
+            if report.state == "down":
+                worst = "down"
+                detail = report.detail
+            if report.last_reply_ms is not None:
+                latency = report.last_reply_ms
+        services.append(Service(f"channel_{kind}", worst, latency, detail))
+    return services
+
+
 async def _llm(db: DbSession) -> Service:
     """The model, as this installation resolves one - the store first, then `.env`.
 
@@ -210,6 +258,7 @@ async def collect(db: DbSession, settings: Settings) -> dict[str, Any]:
     mail_service = await _mail(db, settings)
     web_channel = await _web_channel(db)
     model = await _llm(db)
+    channel_rows = await _channels(db)
 
     services = [
         # The API answered this request, so it is up by construction. Said explicitly
@@ -218,6 +267,7 @@ async def collect(db: DbSession, settings: Settings) -> dict[str, Any]:
         database,
         mail_service,
         web_channel,
+        *channel_rows,
         model,
         *(Service(name, "not_configured") for name in UNBUILT),
     ]

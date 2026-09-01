@@ -88,6 +88,41 @@ async def _health_probe(db: DbSession) -> None:
     # "unreachable" - a probe that manufactures the failure it is watching for.
     await db.execute(text("SELECT 1"))
 
+    # Milestone 9's other half: the webhook channels. The polling and socket
+    # transports prove their own liveness on every pass; a webhook channel only
+    # hears from its platform when a customer writes, so between deliveries this
+    # beat asks the platform directly - one cheap credentials read per channel per
+    # five minutes, reported to the same registry the health screen reads.
+    await _probe_webhook_channels(db)
+
+
+async def _probe_webhook_channels(db: DbSession) -> None:
+    import httpx
+
+    from api.channels import health, meta_chat, whatsapp
+
+    rows = await health.usable_channels(db, ("whatsapp", "messenger", "instagram"))
+    for channel in rows:
+        try:
+            if channel.kind == "whatsapp":
+                credentials = whatsapp.credentials_for(channel)
+                number = str((channel.settings_json or {}).get("phone_number_id") or "")
+                if credentials is None or not number:
+                    continue
+                async with whatsapp.make_client() as client:
+                    await whatsapp.fetch_number(client, credentials[0], number)
+            else:
+                credentials = meta_chat.credentials_for(channel)
+                account = meta_chat.own_id(channel)
+                if credentials is None or not account:
+                    continue
+                async with meta_chat.make_client() as client:
+                    await meta_chat.fetch_account(client, credentials[0], account, channel.kind)
+        except (whatsapp.WhatsAppError, meta_chat.MetaChatError, httpx.HTTPError) as error:
+            await health.report_down(db, channel, detail=str(error))
+        else:
+            await health.report_ok(db, channel)
+
 
 @task("backup_nightly")
 async def _backup_nightly(db: DbSession) -> None:
