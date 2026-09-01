@@ -25,7 +25,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.channels import discord as discord_transport
 from api.channels import email as email_transport
+from api.channels import slack as slack_transport
 from api.channels import telegram as telegram_transport
 from api.config import Settings, get_settings
 from api.db import check_database, create_engine, create_sessionmaker
@@ -50,6 +52,7 @@ from api.routes import backup as backup_routes
 from api.routes import catalogue as catalogue_routes
 from api.routes import contacts as contact_routes
 from api.routes import conversations as conversation_routes
+from api.routes import discord_channel as discord_channel_routes
 from api.routes import email_channel as email_channel_routes
 from api.routes import home as home_routes
 from api.routes import invites as invite_routes
@@ -63,6 +66,7 @@ from api.routes import recovery as recovery_routes
 from api.routes import rules as rule_routes
 from api.routes import settings as settings_routes
 from api.routes import setup as setup_routes
+from api.routes import slack_channel as slack_channel_routes
 from api.routes import system as system_routes
 from api.routes import telegram_channel as telegram_channel_routes
 from api.routes import tokens as token_routes
@@ -227,6 +231,24 @@ TAGS_METADATA = [
         ),
     },
     {
+        "name": "discord",
+        "description": (
+            "The Discord channel (§B13) — a bot from the customer's own developer "
+            "portal, listening on the gateway WebSocket because Discord offers "
+            "nothing else for conversational messages. DMs always answer; server "
+            "channels only when mentioned. These routes are its settings card."
+        ),
+    },
+    {
+        "name": "slack",
+        "description": (
+            "The Slack channel (§B13) — Socket Mode, so nothing is exposed to the "
+            "internet: two tokens from the customer's own Slack app, the app-level "
+            "one opening the socket and the bot one speaking. DMs always answer; "
+            "channels only as app mentions. These routes are its settings card."
+        ),
+    },
+    {
         "name": "webhooks",
         "description": (
             "Where this installation posts what happened, and the secret that signs it. "
@@ -374,6 +396,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # `poll_once` directly rather than racing a loop.
         background.append(asyncio.create_task(telegram_transport.loop(app.state.sessionmaker)))
         background.append(asyncio.create_task(email_transport.loop(app.state.sessionmaker)))
+        background.append(asyncio.create_task(discord_transport.loop(app.state.sessionmaker)))
+        background.append(asyncio.create_task(slack_transport.loop(app.state.sessionmaker)))
 
     try:
         yield
@@ -528,6 +552,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(meta_chat_routes.router)
     app.include_router(meta_chat_routes.messenger_card)
     app.include_router(meta_chat_routes.instagram_card)
+    app.include_router(discord_channel_routes.router)
+    app.include_router(slack_channel_routes.router)
 
     @app.get(
         "/health",

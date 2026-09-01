@@ -17,6 +17,7 @@ import {
   changePassword,
   createInvite,
   currentUser,
+  discordChannel,
   emailChannel,
   changeWebhook,
   membersList,
@@ -28,15 +29,20 @@ import {
   removeWebhook,
   rotateToken,
   rotateWebhookSecret,
+  saveDiscordChannel,
   saveEmailChannel,
   saveMetaChatChannel,
+  saveSlackChannel,
   saveTelegramChannel,
   saveWebChannel,
   saveWhatsAppChannel,
   sendTestMail,
+  slackChannel,
   telegramChannel,
+  testDiscordChannel,
   testEmailChannel,
   testMetaChatChannel,
+  testSlackChannel,
   testTelegramChannel,
   testWhatsAppChannel,
   whatsappChannel,
@@ -52,9 +58,11 @@ import {
   type MachineScope,
   type Member,
   type MintedToken,
+  type DiscordChannel,
   type EmailChannel,
   type MetaChatChannel,
   type MetaChatKind,
+  type SlackChannel,
   type TelegramChannel,
   type WebChannel,
   type WhatsAppChannel,
@@ -1755,6 +1763,304 @@ function ChannelsPanels({ t }: { t: SettingsDictionary }) {
           knownAs: t.ig_known_as,
         }}
       />
+      <DiscordCard t={t} />
+      <SlackCard t={t} />
+    </div>
+  );
+}
+
+/**
+ * The Discord card — the Telegram card's contract: one bot token from the
+ * customer's own developer portal. The one thing this card cannot do it says
+ * plainly: the MESSAGE CONTENT intent lives in the portal, and a bot without it
+ * hears every message as empty.
+ */
+function DiscordCard({ t }: { t: SettingsDictionary }) {
+  const channel = useResource<DiscordChannel>(() => discordChannel(), []);
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [tested, setTested] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const row = channel.data;
+
+  const describe = (thrown: unknown): string => {
+    if (thrown instanceof ApiError) {
+      if (thrown.code === "no_bot_token") return t.dc_error_no_token;
+      if (thrown.code === "encryption_key_missing") return t.wc_error_no_key;
+      if (thrown.code === "discord_refused") return t.dc_error_refused;
+      return thrown.message;
+    }
+    return String(thrown);
+  };
+
+  const act = async (run: () => Promise<unknown>) => {
+    if (busy) return;
+    setBusy(true);
+    setProblem(null);
+    setSaved(false);
+    setTested(null);
+    try {
+      await run();
+      setSaved(true);
+      channel.reload();
+    } catch (thrown) {
+      setProblem(describe(thrown));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (row === null) return null;
+
+  return (
+    <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border p-[18px]">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-[10px]">
+        <h3 className="text-od-muted-4 m-0 text-[13px] font-semibold tracking-[.07em] uppercase">
+          {t.dc_title}
+        </h3>
+        <span className="text-od-faint max-w-[52ch] text-[12.5px] text-pretty">
+          {t.dc_note}
+        </span>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-end gap-3">
+        <label className="min-w-[240px] flex-[1_1_320px]">
+          <span className="text-od-text-3 text-[13px] font-medium">{t.dc_token_label}</span>
+          <input
+            dir="ltr"
+            type="password"
+            value={token}
+            onChange={(event) => setToken(event.target.value)}
+            placeholder={row.bot_token_preview ?? ""}
+            className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono mt-2 w-full rounded-[7px] border p-[9px_11px] text-start text-[13px]"
+          />
+          <span className="text-od-faint-2 mt-[6px] block max-w-[62ch] text-pretty text-[12.5px]">
+            {row.bot_token_preview ? t.tg_token_keep : t.dc_token_help}
+          </span>
+        </label>
+        <button
+          type="button"
+          disabled={busy || token.trim() === ""}
+          onClick={() =>
+            void act(async () => {
+              await saveDiscordChannel({ bot_token: token.trim() });
+              setToken("");
+            })
+          }
+          className="border-od-stroke bg-od-raise-10 text-od-text hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[9px_16px] text-[13.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy ? t.wc_saving : t.tg_token_save}
+        </button>
+      </div>
+
+      <div className="border-od-border mt-4 flex flex-wrap items-center gap-3 border-t pt-4">
+        <button
+          type="button"
+          disabled={busy || row.bot_token_preview === null}
+          onClick={() =>
+            void act(async () => {
+              const answer = await testDiscordChannel();
+              setTested(answer.bot_username ?? "");
+            })
+          }
+          className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[8px_14px] text-[13px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {t.tg_test}
+        </button>
+        <button
+          type="button"
+          disabled={busy || row.bot_token_preview === null}
+          onClick={() => void act(() => saveDiscordChannel({ enabled: !row.enabled }))}
+          className="border-od-stroke bg-od-raise-10 text-od-text cursor-pointer rounded-[7px] border p-[8px_14px] text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {t.dc_enabled}
+          {row.enabled ? " ✓" : ""}
+        </button>
+        {row.bot_token_preview !== null ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void act(() => saveDiscordChannel({ bot_token: "" }))}
+            className="border-od-line text-od-muted-4 hover:text-od-text-2 cursor-pointer rounded-md border bg-transparent p-[7px_12px] text-[12.5px]"
+          >
+            {t.tg_token_clear}
+          </button>
+        ) : null}
+        <span className="text-od-faint ms-auto max-w-[44ch] text-[12.5px] text-pretty">
+          {tested !== null
+            ? interpolate(t.dc_known_bot, { bot: tested || "?" })
+            : row.bot_username
+              ? interpolate(t.dc_known_bot, { bot: row.bot_username })
+              : row.enabled
+                ? t.dc_listening_note
+                : t.dc_enabled_off_help}
+        </span>
+      </div>
+
+      {problem !== null ? (
+        <div className="mt-3 max-w-[62ch] text-pretty text-[13px] text-[color:var(--od-red-text)]">
+          {problem}
+        </div>
+      ) : saved ? (
+        <div className="text-od-muted-5 mt-3 text-[13px]">{t.wc_saved}</div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The Slack card — the pair contract without a callback: Socket Mode means nothing
+ * to paste on Slack's side beyond the two tokens minted in the customer's own app.
+ */
+function SlackCard({ t }: { t: SettingsDictionary }) {
+  const channel = useResource<SlackChannel>(() => slackChannel(), []);
+  const [appToken, setAppToken] = useState("");
+  const [botToken, setBotToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [tested, setTested] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const row = channel.data;
+
+  const describe = (thrown: unknown): string => {
+    if (thrown instanceof ApiError) {
+      if (thrown.code === "credentials_incomplete") return t.sl_error_incomplete;
+      if (thrown.code === "encryption_key_missing") return t.wc_error_no_key;
+      if (thrown.code === "slack_refused") return t.sl_error_refused;
+      return thrown.message;
+    }
+    return String(thrown);
+  };
+
+  const act = async (run: () => Promise<unknown>) => {
+    if (busy) return;
+    setBusy(true);
+    setProblem(null);
+    setSaved(false);
+    setTested(null);
+    try {
+      await run();
+      setSaved(true);
+      channel.reload();
+    } catch (thrown) {
+      setProblem(describe(thrown));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (row === null) return null;
+
+  return (
+    <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border p-[18px]">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-[10px]">
+        <h3 className="text-od-muted-4 m-0 text-[13px] font-semibold tracking-[.07em] uppercase">
+          {t.sl_title}
+        </h3>
+        <span className="text-od-faint max-w-[52ch] text-[12.5px] text-pretty">
+          {t.sl_note}
+        </span>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-3">
+        <label className="min-w-[220px] flex-[1_1_280px]">
+          <span className="text-od-text-3 text-[13px] font-medium">{t.sl_app_token}</span>
+          <input
+            dir="ltr"
+            type="password"
+            value={appToken}
+            onChange={(event) => setAppToken(event.target.value)}
+            placeholder={row.app_token_preview ?? "xapp-…"}
+            className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono mt-2 w-full rounded-[7px] border p-[9px_11px] text-start text-[13px]"
+          />
+        </label>
+        <label className="min-w-[220px] flex-[1_1_280px]">
+          <span className="text-od-text-3 text-[13px] font-medium">{t.sl_bot_token}</span>
+          <input
+            dir="ltr"
+            type="password"
+            value={botToken}
+            onChange={(event) => setBotToken(event.target.value)}
+            placeholder={row.bot_token_preview ?? "xoxb-…"}
+            className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono mt-2 w-full rounded-[7px] border p-[9px_11px] text-start text-[13px]"
+          />
+          <span className="text-od-faint-2 mt-[6px] block max-w-[62ch] text-pretty text-[12.5px]">
+            {row.app_token_preview ? t.wa_secrets_keep : t.sl_secrets_help}
+          </span>
+        </label>
+      </div>
+
+      <div className="border-od-border mt-4 flex flex-wrap items-center gap-3 border-t pt-4">
+        <button
+          type="button"
+          disabled={busy || appToken.trim() === "" || botToken.trim() === ""}
+          onClick={() =>
+            void act(async () => {
+              await saveSlackChannel({
+                app_token: appToken.trim(),
+                bot_token: botToken.trim(),
+              });
+              setAppToken("");
+              setBotToken("");
+            })
+          }
+          className="border-od-stroke bg-od-raise-10 text-od-text hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[9px_16px] text-[13.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy ? t.wc_saving : t.sl_save}
+        </button>
+        <button
+          type="button"
+          disabled={busy || row.bot_token_preview === null}
+          onClick={() =>
+            void act(async () => {
+              const answer = await testSlackChannel();
+              setTested(answer.team_name ?? "");
+            })
+          }
+          className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[8px_14px] text-[13px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {t.tg_test}
+        </button>
+        <button
+          type="button"
+          disabled={busy || row.bot_token_preview === null}
+          onClick={() => void act(() => saveSlackChannel({ enabled: !row.enabled }))}
+          className="border-od-stroke bg-od-raise-10 text-od-text cursor-pointer rounded-[7px] border p-[8px_14px] text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {t.sl_enabled}
+          {row.enabled ? " ✓" : ""}
+        </button>
+        {row.bot_token_preview !== null ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void act(() => saveSlackChannel({ app_token: "", bot_token: "" }))}
+            className="border-od-line text-od-muted-4 hover:text-od-text-2 cursor-pointer rounded-md border bg-transparent p-[7px_12px] text-[12.5px]"
+          >
+            {t.wa_secrets_clear}
+          </button>
+        ) : null}
+        <span className="text-od-faint ms-auto max-w-[44ch] text-[12.5px] text-pretty">
+          {tested !== null
+            ? interpolate(t.sl_test_ok, { team: tested || "?" })
+            : row.team_name
+              ? interpolate(t.sl_test_ok, { team: row.team_name })
+              : row.enabled
+                ? t.sl_listening_note
+                : t.sl_enabled_off_help}
+        </span>
+      </div>
+
+      {problem !== null ? (
+        <div className="mt-3 max-w-[62ch] text-pretty text-[13px] text-[color:var(--od-red-text)]">
+          {problem}
+        </div>
+      ) : saved ? (
+        <div className="text-od-muted-5 mt-3 text-[13px]">{t.wc_saved}</div>
+      ) : null}
     </div>
   );
 }

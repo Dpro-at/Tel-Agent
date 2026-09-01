@@ -144,6 +144,12 @@ class Settings(BaseSettings):
     # Messenger and Instagram speak to the same Graph API; a separate setting so a
     # test can stand in for one product without impersonating the other.
     meta_api_base: str = "https://graph.facebook.com/v23.0"
+    # Discord's REST API. The gateway address is fetched from it, so a stand-in for
+    # this base controls both halves of that transport.
+    discord_api_base: str = "https://discord.com/api/v10"
+    # Slack's Web API. Socket Mode's WebSocket address is fetched from it, so the
+    # same stand-in rule holds.
+    slack_api_base: str = "https://slack.com/api"
 
     @property
     def version(self) -> str:

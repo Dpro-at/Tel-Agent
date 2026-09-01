@@ -102,6 +102,10 @@ EVENTS = (
     # Messenger and Instagram: the same reasoning, on the same Meta application.
     "messenger_channel_changed",
     "instagram_channel_changed",
+    # Discord and Slack close the messaging trio's platform half: bot tokens are
+    # credentials, and each switch decides who reaches the agent.
+    "discord_channel_changed",
+    "slack_channel_changed",
     # Machine tokens — §B9.1. Each one is a credential that opens a path the
     # dashboard session cannot, so minting, rotating and removing one all need a
     # name attached afterwards. The token itself never appears in `details`.
