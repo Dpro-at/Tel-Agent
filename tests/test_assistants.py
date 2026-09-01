@@ -241,9 +241,11 @@ async def test_the_tool_list_is_served_with_what_each_one_waits_for(stage) -> No
     assert len(tools) == 7
     assert by_name["search_knowledge"]["available"] is True
     assert by_name["search_knowledge"]["waiting_on"] is None
-    # And the ones that are not built say which subsystem they wait for.
-    assert by_name["transfer_call"]["available"] is False
-    assert by_name["transfer_call"]["waiting_on"] == "phone"
+    # Milestone 5: the two phone-named tools carry D-017's meaning - a call is a
+    # conversation - so they stopped waiting on the phone.
+    assert by_name["transfer_call"]["available"] is True
+    assert by_name["end_call"]["available"] is True
+    # And the one that is not built says which subsystem it waits for.
     assert by_name["check_calendar"]["waiting_on"] == "calendar"
 
 
@@ -275,7 +277,7 @@ async def test_tools_are_given_and_taken_away(stage) -> None:
         (["make_coffee"], "unknown_tool"),
         # Real in §B7, and its subsystem is not built - switching it on would be a
         # setting that silently does nothing on the first call that needs it.
-        (["transfer_call"], "tool_unavailable"),
+        (["check_calendar"], "tool_unavailable"),
         (["search_knowledge", "check_calendar"], "tool_unavailable"),
     ],
 )

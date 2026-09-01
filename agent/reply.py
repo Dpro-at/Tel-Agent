@@ -30,7 +30,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 
 from agent.providers.llm import LLMProvider, Message
 from agent.providers.llm.base import TextDelta, ToolCall
-from agent.tools import BUILTIN, BY_NAME, TakenMessage, ToolError
+from agent.tools import BUILTIN, TakenMessage, Tool, ToolError
 from agent.tools import parse as parse_taken_message
 
 logger = logging.getLogger("agent.reply")
@@ -92,14 +92,16 @@ def _conversation(text: str, history: Sequence[Message] | None) -> list[Message]
     return messages
 
 
-async def _run(call: ToolCall, on_message_taken: MessageTaken | None) -> str:
+async def _run(
+    call: ToolCall, by_name: dict[str, Tool], on_message_taken: MessageTaken | None
+) -> str:
     """One tool call, and the sentence the model is handed back.
 
     Every failure is answered rather than raised. A model that is told "that is not a
     tool" or "name is required" asks the visitor the question it skipped; a model whose
     turn ends in a traceback leaves somebody mid-conversation with a broken page.
     """
-    tool = BY_NAME.get(call.name)
+    tool = by_name.get(call.name)
     if tool is None:
         logger.warning("the model called a tool that does not exist", extra={"tool": call.name})
         return f"There is no tool called {call.name!r}."
@@ -131,6 +133,7 @@ async def reply(
     provider: LLMProvider | None = None,
     history: Sequence[Message] | None = None,
     on_message_taken: MessageTaken | None = None,
+    tools: Sequence[Tool] | None = None,
 ) -> AsyncIterator[str]:
     """The agent's answer, in the pieces it becomes available in.
 
@@ -154,6 +157,11 @@ async def reply(
             yield word
         return
 
+    # The channel decides what the model may do (§B7): the caller hands the set in,
+    # already bound to its conversation, and the default is the channel-free minimum.
+    offered = list(tools) if tools is not None else list(BUILTIN)
+    by_name = {tool.name: tool for tool in offered}
+
     messages = _conversation(text, history)
 
     for _round in range(MAX_TOOL_ROUNDS):
@@ -164,7 +172,7 @@ async def reply(
         # an answer behind: the route stores the reply only when the stream ends
         # normally, so letting this raise keeps a broken generation out of the
         # transcript.
-        async for event in provider.stream(messages, BUILTIN):
+        async for event in provider.stream(messages, offered):
             if isinstance(event, TextDelta):
                 spoken.append(event.text)
                 yield event.text
@@ -196,7 +204,7 @@ async def reply(
                 {
                     "role": "tool",
                     "tool_call_id": call.id,
-                    "content": await _run(call, on_message_taken),
+                    "content": await _run(call, by_name, on_message_taken),
                 }
             )
 

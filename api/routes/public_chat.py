@@ -502,6 +502,17 @@ async def _reply_stream(
             extra={"conversation_id": conversation.id, "urgent": taken.urgent},
         )
 
+    from api.agent_tools import toolset
+
+    # §B7: the tools, bound to this conversation. Built per reply because the
+    # closures carry the thread - which is what lets transfer and close act on the
+    # right one without trusting the model to name it.
+    tools = toolset(
+        request.app.state.sessionmaker,
+        workspace_id=channel.workspace_id,
+        conversation_id=conversation.id,
+    )
+
     pieces: list[str] = []
     # Rule 4: measured from the first call, not from the first complaint. Time to first
     # token is the number the phone milestone lives or dies on (~250 ms of an 800 ms
@@ -509,7 +520,7 @@ async def _reply_stream(
     started = time.perf_counter()
     try:
         async for chunk in generate_reply(
-            text, provider=provider, history=history, on_message_taken=took
+            text, provider=provider, history=history, on_message_taken=took, tools=tools
         ):
             if await request.is_disconnected():
                 logger.info(

@@ -236,6 +236,21 @@ function modelFields(t: SettingsDictionary): FieldCopy[] {
   ];
 }
 
+/**
+ * The generic HTTP tool's one setting — §B7's escape hatch, Milestone 5. The
+ * allowlist is the whole of the tool's safety, which is why the help copy says what
+ * an empty list means instead of implying it is permissive.
+ */
+function httpToolFields(t: SettingsDictionary): FieldCopy[] {
+  return [
+    {
+      key: "http_tool.allowed_urls",
+      label: t.f_http_allowed,
+      help: t.f_http_allowed_help,
+    },
+  ];
+}
+
 function backupFields(t: SettingsDictionary): FieldCopy[] {
   return [
     { key: "backup.target_path", label: t.f_backup_path, help: t.f_backup_path_help },
@@ -420,6 +435,12 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
                         <SectionHead title={t.smtp_title} note={t.live_note} />
                         <LiveSettings fields={mailFields(t)} labels={liveLabels(t)} />
                         <MailTestRow t={t} />
+                      </div>
+                    ) : null}
+                    {tab === "integrations" ? (
+                      <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border">
+                        <SectionHead title={t.http_tool_title} note={t.http_tool_note} />
+                        <LiveSettings fields={httpToolFields(t)} labels={liveLabels(t)} />
                       </div>
                     ) : null}
                     {tab === "recording" ? (

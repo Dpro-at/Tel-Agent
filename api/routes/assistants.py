@@ -132,11 +132,14 @@ _TOOL_NEEDS: dict[str, str | None] = {
     "search_knowledge": None,
     "http_request": None,
     "send_notification": None,
-    # Each of these waits on a subsystem that is not built. The name is the subsystem,
-    # so the screen can say which one without a second table of excuses.
+    # The two phone-named tools carry D-017's meaning - a call is a conversation -
+    # so they no longer wait on the phone: `transfer_call` is §A6.7's takeover,
+    # agent-initiated, and `end_call` is the polite close on any channel.
+    "transfer_call": None,
+    "end_call": None,
+    # Waits on the subsystem the name says. The screen names it without a second
+    # table of excuses.
     "check_calendar": "calendar",
-    "transfer_call": "phone",
-    "end_call": "phone",
 }
 
 AVAILABLE_TOOLS = tuple(name for name, waiting_on in _TOOL_NEEDS.items() if waiting_on is None)

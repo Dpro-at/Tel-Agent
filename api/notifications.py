@@ -65,6 +65,10 @@ MESSAGES: dict[str, frozenset[str]] = {
     # said travels as `detail`, shown as machine output.
     "channel_down": frozenset({"channel"}),
     "channel_recovered": frozenset({"channel"}),
+    # Milestone 5, the tools that talk to the tray. What the agent wanted to say
+    # travels as `detail` - it is the model's prose, machine output by definition.
+    "agent_notification": frozenset(),
+    "transfer_requested": frozenset(),
 }
 
 # Longer than this and it stops being a hint and starts being a log. The full text is

@@ -270,9 +270,20 @@ async def _reply_and_send(
     import time
 
     started = time.perf_counter()
+    from api.agent_tools import toolset
+    from api.db import create_sessionmaker
+
+    # §B7's tools, bound to this conversation. The factory is derived from this
+    # session's own engine: the tools open their own short sessions mid-generation.
+    tools = toolset(
+        create_sessionmaker(db.bind),
+        workspace_id=channel.workspace_id,
+        conversation_id=conversation.id,
+    )
+
     pieces: list[str] = []
     async for chunk in generate_reply(
-        incoming.text, provider=provider, history=history, on_message_taken=took
+        incoming.text, provider=provider, history=history, on_message_taken=took, tools=tools
     ):
         pieces.append(chunk)
     whole = "".join(pieces)

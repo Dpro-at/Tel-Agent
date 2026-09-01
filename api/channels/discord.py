@@ -324,9 +324,18 @@ async def respond(sessionmaker: async_sessionmaker, channel_id: int, message_id:
         import time
 
         reply_started = time.perf_counter()
+        from api.agent_tools import toolset
+
+        # §B7's tools, bound to this conversation.
+        tools = toolset(
+            sessionmaker,
+            workspace_id=channel.workspace_id,
+            conversation_id=conversation.id,
+        )
+
         pieces: list[str] = []
         async for chunk in generate_reply(
-            line.text, provider=provider, history=history, on_message_taken=took
+            line.text, provider=provider, history=history, on_message_taken=took, tools=tools
         ):
             pieces.append(chunk)
         whole = "".join(pieces)
