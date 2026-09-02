@@ -39,12 +39,22 @@ the database and publishes events; it does not serve the UI.
 
 ## Right now
 
-Milestone 0. The model interface exists and has one implementation behind it - an
-OpenAI-compatible `/chat/completions` endpoint, streaming - and `reply.py` is what the
-web chat route consumes. `tools/` holds the first built-in tool, `take_message`, which
-the model is offered on every turn. `stt/`, `tts/`, `session/` and `routing/` are still
-empty: this structure is where that code goes as it grows, not an instruction to build
-it all now.
+The model interface exists and has one implementation behind it - an OpenAI-compatible
+`/chat/completions` endpoint, streaming - and `reply.py` is what every channel consumes.
+`tools/` holds the built-in tools the model is offered.
+
+Milestone 11's software core is now in place, ahead of the live line it cannot be
+closed without: `providers/stt/base.py` and `providers/tts/base.py` are §B3's two
+missing interfaces (partials and finals in, audio chunks out, `cancel()` mandatory),
+and `session/turn.py` is the turn-taker that speaks a streamed reply through them and
+stops the instant the caller cuts in - the barge-in that Rule 3 makes non-optional,
+with the end-of-speech-to-first-audio latency Rule 4 logs. All of it runs on fakes in
+`tests/test_voice_turn.py`; no provider, no SIP, no key. What is still to come, and is
+blocked on a bought number and real provider keys: the Deepgram/ElevenLabs
+implementations, the LiveKit/SIP transport that feeds audio in and plays it out, and
+the `api/` side that stores a call beside every other conversation. `routing/` is a
+stub - the rules engine itself lives at `api/routing.py` (Milestone 4), which the phone
+will call once caller ID is settled on a live line.
 
 Configuration comes from the environment, in `config.py`. That file exists rather than
 importing `api.config` because this package never imports from `api/` - at Milestone 11
