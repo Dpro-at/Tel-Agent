@@ -146,6 +146,27 @@ REGISTRY: dict[str, Definition] = _define(
         description="Announce that the call is recorded. Austria requires both parties "
         "to be aware, so this defaults on and turning it off is a decision.",
     ),
+    # The calendar the agent checks - §B7's `check_calendar`, Milestone 5. CalDAV
+    # (Nextcloud, iCloud, any standards server) reached with a URL and an app password;
+    # empty URL means no calendar, which the tool reports rather than guessing at.
+    # Per workspace, because two businesses on one installation keep different calendars.
+    Definition(
+        "calendar.caldav_url",
+        "workspace",
+        description="The CalDAV calendar's address, from Nextcloud, iCloud or any "
+        "standards server. Empty means the agent has no calendar to check.",
+    ),
+    Definition(
+        "calendar.caldav_username",
+        "workspace",
+        description="The CalDAV account's username.",
+    ),
+    Definition(
+        "calendar.caldav_password",
+        "workspace",
+        secret=True,
+        description="An app-specific password for the CalDAV account. Stored encrypted.",
+    ),
 )
 
 

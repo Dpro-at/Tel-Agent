@@ -233,6 +233,61 @@ def toolset(
             "will be answered."
         )
 
+    async def check_calendar(arguments: dict[str, Any]) -> str:
+        import datetime as dt
+
+        from agent.providers.calendar import CalDAVCalendar, CalendarError
+        from api.settings import store
+
+        async with session_scope(sessionmaker) as db:
+            url = str(
+                await store.get(db, "calendar.caldav_url", workspace_id=workspace_id) or ""
+            ).strip()
+            username = str(
+                await store.get(db, "calendar.caldav_username", workspace_id=workspace_id) or ""
+            )
+            password = str(
+                await store.get(db, "calendar.caldav_password", workspace_id=workspace_id) or ""
+            )
+        if not url:
+            return (
+                "No calendar is connected, so availability cannot be checked. Offer to "
+                "take a message so somebody can confirm a time."
+            )
+
+        # The window the model is asking about. A day is the useful default - "are you
+        # free Tuesday" - and an explicit range narrows it. Parsed defensively: the
+        # dates are text a model produced.
+        day = str(arguments.get("date") or "").strip()
+        try:
+            if day:
+                start = dt.datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=dt.UTC)
+            else:
+                start = dt.datetime.now(dt.UTC).replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+        except ValueError:
+            return "Give the date to check as YYYY-MM-DD."
+        end = start + dt.timedelta(days=1)
+
+        calendar = CalDAVCalendar(url=url, username=username, password=password)
+        try:
+            busy = await calendar.busy(start, end)
+        except CalendarError as error:
+            logger.warning("check_calendar failed: %s", error)
+            return (
+                "The calendar could not be reached just now. Offer to take a message "
+                "rather than promising a time."
+            )
+        if not busy:
+            return f"The calendar is free all day on {start:%Y-%m-%d}."
+        periods = "; ".join(f"{b.start:%H:%M}-{b.end:%H:%M} UTC" for b in busy)
+        return (
+            f"On {start:%Y-%m-%d} the business is busy at: {periods}. It is free at any "
+            "other time that day. Propose a free time and offer to note it down - never "
+            "tell the customer it is booked, only that you will pass it on to confirm."
+        )
+
     return [
         *BUILTIN,
         Tool(
@@ -325,5 +380,25 @@ def toolset(
             ),
             parameters={"type": "object", "properties": {}, "additionalProperties": False},
             run=end_call,
+        ),
+        Tool(
+            name="check_calendar",
+            description=(
+                "Check whether the business is free on a given day before offering a "
+                "time. Use it whenever a customer asks about availability or wants an "
+                "appointment. You may propose a free time and offer to note it down; "
+                "you cannot book it - a person confirms."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "The day to check, as YYYY-MM-DD. Omit for today.",
+                    }
+                },
+                "additionalProperties": False,
+            },
+            run=check_calendar,
         ),
     ]

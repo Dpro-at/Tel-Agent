@@ -253,6 +253,19 @@ function httpToolFields(t: SettingsDictionary): FieldCopy[] {
   ];
 }
 
+/**
+ * The calendar the agent checks — §B7's `check_calendar`, Milestone 5. CalDAV, so it
+ * covers Nextcloud and iCloud with an app password; empty URL means no calendar, which
+ * the tool reports to the caller rather than the screen implying a fault.
+ */
+function calendarFields(t: SettingsDictionary): FieldCopy[] {
+  return [
+    { key: "calendar.caldav_url", label: t.f_caldav_url, help: t.f_caldav_url_help },
+    { key: "calendar.caldav_username", label: t.f_caldav_username },
+    { key: "calendar.caldav_password", label: t.f_caldav_password },
+  ];
+}
+
 function backupFields(t: SettingsDictionary): FieldCopy[] {
   return [
     { key: "backup.target_path", label: t.f_backup_path, help: t.f_backup_path_help },
@@ -440,9 +453,15 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
                       </div>
                     ) : null}
                     {tab === "integrations" ? (
-                      <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border">
-                        <SectionHead title={t.http_tool_title} note={t.http_tool_note} />
-                        <LiveSettings fields={httpToolFields(t)} labels={liveLabels(t)} />
+                      <div className="flex flex-col gap-4">
+                        <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border">
+                          <SectionHead title={t.http_tool_title} note={t.http_tool_note} />
+                          <LiveSettings fields={httpToolFields(t)} labels={liveLabels(t)} />
+                        </div>
+                        <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border">
+                          <SectionHead title={t.calendar_title} note={t.calendar_note} />
+                          <LiveSettings fields={calendarFields(t)} labels={liveLabels(t)} />
+                        </div>
                       </div>
                     ) : null}
                     {tab === "recording" ? (
