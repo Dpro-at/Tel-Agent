@@ -1,10 +1,10 @@
 """Routing rules — the three columns on the rules screen.
 
-**The record, not the engine.** Which rules exist is the dashboard's business;
-applying them to a live call is the agent's, at Milestone 11. So nothing here has
-a `hits` counter or an execution order — neither is a fact until something matches
-calls against rules, and drawing them before then would be the screen inventing
-data.
+**The record; the engine is `api/routing.py` since Milestone 4.** Which rules
+exist is the dashboard's business; applying them is the engine's, and the text
+channels call it on every arriving contact. Still no `hits` counter and no
+execution order column: matching order (exact before prefix, longer before
+shorter) is the engine's own, and a counter is a feature nobody has asked for.
 
 **"When did this number last call" is real, though**, and §A6.5 asks for it: rule
 and consequence in one view. It is answered from the archive — the latest phone
@@ -20,7 +20,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Request, Response, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
 from api.dependencies import CurrentUser
@@ -40,7 +40,7 @@ _PREFIX = re.compile(r"^\+[1-9]\d{1,13}\*$")
 
 class RuleOut(BaseModel):
     id: int
-    e164_or_pattern: str
+    pattern: str
     action: str
     note: str | None
     created_at: str
@@ -53,7 +53,7 @@ class RuleOut(BaseModel):
 def _out(row: Rule) -> RuleOut:
     return RuleOut(
         id=row.id,
-        e164_or_pattern=row.e164_or_pattern,
+        pattern=row.pattern,
         action=row.action,
         note=row.note,
         created_at=row.created_at.isoformat(),
@@ -61,11 +61,29 @@ def _out(row: Rule) -> RuleOut:
 
 
 def _normalise(raw: str) -> str | None:
-    """The pattern as stored: digits and `+`, a trailing `*` kept if present."""
-    cleaned = re.sub(r"[\s\-()]", "", raw)
-    if _E164.fullmatch(cleaned) or _PREFIX.fullmatch(cleaned):
-        return cleaned
-    return None
+    """The pattern as stored.
+
+    Two families since Milestone 4. A phone shape - `+` and digits, optionally ending
+    in `*` - keeps #89's cleaning, so `+43 1 402-8811` stores as one number. Anything
+    else is a channel identity - an email address, a Telegram @username, a Slack or
+    Discord user id - stored lowercased (matching is case-insensitive, and showing an
+    operator a casing the matcher ignores would be a small lie) with the trailing `*`
+    still meaning prefix. Whitespace inside an identity is refused rather than
+    stripped: no channel hands out identities with spaces, and silently repairing a
+    paste hides the mistake it carries.
+    """
+    phone_shaped = re.sub(r"[\s\-()]", "", raw)
+    if _E164.fullmatch(phone_shaped) or _PREFIX.fullmatch(phone_shaped):
+        return phone_shaped
+    identity = raw.strip().lower()
+    if len(identity) < 2 or len(identity) > 320 or re.search(r"\s", identity):
+        return None
+    # `*` only as a trailing prefix marker, with a real stem before it: a star in
+    # the middle promises glob matching the engine does not do, and a bare `*` -
+    # "match everyone" - is a policy, not a rule about somebody.
+    if "*" in identity[:-1] or identity == "*":
+        return None
+    return identity
 
 
 def _missing() -> object:
@@ -80,20 +98,41 @@ def _missing() -> object:
 async def _last_call(
     db: DbSession, workspace_id: int, pattern: str
 ) -> tuple[str, str | None] | None:
-    """The most recent phone conversation whose caller matches `pattern`."""
-    query = (
+    """The most recent contact matching `pattern`, on any channel.
+
+    Two lookups, latest wins: a phone call by caller number (`calls.from_e164`), and
+    any conversation by its `external_id` - which is the same identity the rules
+    engine matches on, so what this shows is what the rule actually governs.
+    """
+
+    def _matching(query, column):  # noqa: ANN001, ANN202 - two ORM shapes, one filter
+        if pattern.endswith("*"):
+            return query.where(func.lower(column).like(pattern[:-1].lower() + "%"))
+        return query.where(func.lower(column) == pattern.lower())
+
+    by_call = _matching(
         select(Conversation.started_at, Conversation.handling)
         .join(Call, Call.conversation_id == Conversation.id)
-        .where(Conversation.workspace_id == workspace_id)
+        .where(Conversation.workspace_id == workspace_id),
+        Call.from_e164,
     )
-    if pattern.endswith("*"):
-        query = query.where(Call.from_e164.like(pattern[:-1] + "%"))
-    else:
-        query = query.where(Call.from_e164 == pattern)
-    row = (await db.execute(query.order_by(Conversation.started_at.desc()).limit(1))).first()
-    if row is None:
+    by_identity = _matching(
+        select(Conversation.started_at, Conversation.handling).where(
+            Conversation.workspace_id == workspace_id
+        ),
+        Conversation.external_id,
+    )
+
+    latest = None
+    for query in (by_call, by_identity):
+        row = (
+            await db.execute(query.order_by(Conversation.started_at.desc()).limit(1))
+        ).first()
+        if row is not None and (latest is None or row[0] > latest[0]):
+            latest = row
+    if latest is None:
         return None
-    started_at, handling = row
+    started_at, handling = latest
     return started_at.isoformat(), handling
 
 
@@ -118,7 +157,7 @@ async def list_rules(
     answers = []
     for row in rows:
         answer = _out(row)
-        called = await _last_call(db, context.id, row.e164_or_pattern)
+        called = await _last_call(db, context.id, row.pattern)
         if called is not None:
             answer.last_called_at, answer.last_handling = called
         answers.append(answer)
@@ -126,7 +165,7 @@ async def list_rules(
 
 
 class NewRule(BaseModel):
-    e164_or_pattern: str = Field(min_length=2, max_length=25)
+    pattern: str = Field(min_length=2, max_length=320)
     action: str
     note: str | None = Field(default=None, max_length=200)
 
@@ -144,8 +183,9 @@ def _checked(payload_action: str, raw_pattern: str) -> tuple[str, None] | tuple[
         return None, envelope_response(
             status_code=status.HTTP_400_BAD_REQUEST,
             code="invalid_pattern",
-            message="A rule matches a full number like +43664123456, or a prefix "
-            "ending in * like +43720*.",
+            message="A rule matches a full number like +43664123456, an identity "
+            "like boss@example.com or @username, or a prefix ending in * like "
+            "+43720*. No spaces.",
         )
     return pattern, None
 
@@ -161,24 +201,24 @@ async def add_rule(
 ) -> object:
     db: DbSession = request.state.db
 
-    pattern, refused = _checked(payload.action, payload.e164_or_pattern)
+    pattern, refused = _checked(payload.action, payload.pattern)
     if pattern is None:
         return refused
 
     clash = await db.scalar(
-        select(Rule).where(Rule.workspace_id == context.id, Rule.e164_or_pattern == pattern)
+        select(Rule).where(Rule.workspace_id == context.id, Rule.pattern == pattern)
     )
     if clash is not None:
         return envelope_response(
             status_code=status.HTTP_409_CONFLICT,
             code="rule_exists",
-            message="A rule for this number already exists. Move it instead of "
+            message="A rule for this identity already exists. Move it instead of "
             "adding a second one.",
         )
 
     note = payload.note.strip() if payload.note else None
     row = Rule(
-        workspace_id=context.id, e164_or_pattern=pattern, action=payload.action, note=note
+        workspace_id=context.id, pattern=pattern, action=payload.action, note=note
     )
     db.add(row)
     await db.flush()
@@ -239,7 +279,7 @@ async def change_rule(
         username=acting_name,
         details={
             "workspace_id": context.id,
-            "pattern": answer.e164_or_pattern,
+            "pattern": answer.pattern,
             "from": was,
             "to": answer.action,
         },
@@ -266,7 +306,7 @@ async def remove_rule(
     if row is None:
         return _missing()
 
-    pattern = row.e164_or_pattern
+    pattern = row.pattern
     acting_id, acting_name = user.id, user.username
     await db.delete(row)
     await db.commit()

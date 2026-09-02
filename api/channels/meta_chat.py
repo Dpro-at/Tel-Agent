@@ -42,7 +42,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from agent.config import ConfigurationError
 from agent.reply import reply as generate_reply
 from agent.tools import TakenMessage
-from api import llm, webhooks
+from api import llm, routing, webhooks
 from api.config import get_settings
 from api.conversations import position_ms
 from api.db import session_scope
@@ -286,7 +286,20 @@ async def ingest(db: DbSession, channel: Channel, payload: dict[str, Any]) -> li
         if not body:
             continue
 
+        # Milestone 4: the rules engine, before anything is stored.
+        decision = await routing.decide(
+            db, workspace_id=channel.workspace_id, identities=[sender_id]
+        )
+        if decision.action == "block":
+            logger.info(
+                "meta message dropped by rule",
+                extra={"channel_id": channel.id, "pattern": decision.pattern},
+            )
+            continue
+
         conversation, started = await _conversation_for(db, channel, sender_id)
+        if decision.action == "pass":
+            await routing.apply_pass(db, conversation, decision)
         state = dict((conversation.state_json or {}).get("meta") or {})
         if mid and state.get("last_mid") == mid:
             logger.info(

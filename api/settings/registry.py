@@ -94,6 +94,23 @@ REGISTRY: dict[str, Definition] = _define(
         "for example https://orders.example.com/api. Empty means the tool refuses "
         "everything.",
     ),
+    # Business hours - §A6.5, Milestone 4. Read by the rules engine
+    # (api/routing.py): outside them a `pass` rule degrades to `ai`, because there
+    # is nobody at the desk to pass to. Per workspace, like the recording notice -
+    # two businesses on one installation keep different hours.
+    Definition(
+        "routing.hours",
+        "workspace",
+        description="Business hours, for example 'mo-fr 08:00-18:00' or just "
+        "'08:00-18:00'. Outside them the agent always answers. Empty means rules "
+        "that pass to a person apply around the clock.",
+    ),
+    Definition(
+        "routing.timezone",
+        "workspace",
+        description="IANA name the hours are read in, for example Europe/Vienna. "
+        "Empty means the server's own clock.",
+    ),
     Definition("smtp.host", "installation", description="Hostname of the mail server."),
     Definition("smtp.port", "installation", "integer", 587, description="Usually 587."),
     Definition("smtp.username", "installation", description="Leave empty for no auth."),

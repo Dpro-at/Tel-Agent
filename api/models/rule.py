@@ -30,14 +30,16 @@ class Rule(Base):
     __tablename__ = "rules"
     # One rule per pattern per workspace: two rows for the same number with two
     # actions would leave the agent to pick one silently.
-    __table_args__ = (UniqueConstraint("workspace_id", "e164_or_pattern", name="rule_pattern"),)
+    __table_args__ = (UniqueConstraint("workspace_id", "pattern", name="rule_pattern"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     workspace_id: Mapped[int] = workspace_fk()
-    # An exact E.164, or a prefix ending in `*` — the two shapes a person can type
-    # about a caller they have not met. Anything richer (groups, hours, anonymous
-    # callers) needs columns of its own and arrives with the feature that reads it.
-    e164_or_pattern: Mapped[str] = mapped_column(String(20), nullable=False)
+    # A channel identity, exact or as a prefix ending in `*`: an E.164, an email
+    # address, a Telegram chat id or @username, a Slack or Discord user id — Milestone
+    # 4 renamed this from `e164_or_pattern` because a matcher built phone-only would
+    # have been written twice (the roadmap's own words). 320 fits the longest of
+    # them, an email address. Matching is `api/routing.py`'s, case-insensitive.
+    pattern: Mapped[str] = mapped_column(String(320), nullable=False)
     action: Mapped[str] = mapped_column(
         enum_column(*RULE_ACTIONS, name="rule_action"), nullable=False
     )

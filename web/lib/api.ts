@@ -1297,7 +1297,7 @@ export type RuleAction = "pass" | "block" | "ai";
 export type RoutingRule = {
   id: number;
   /** An exact E.164, or a prefix ending in `*` — the only two shapes a rule takes. */
-  e164_or_pattern: string;
+  pattern: string;
   action: RuleAction;
   note: string | null;
   created_at: string;
@@ -1318,7 +1318,7 @@ export function addRule(
 ): Promise<RoutingRule> {
   return api<RoutingRule>("/api/rules", {
     method: "POST",
-    json: { e164_or_pattern: pattern, action, note: note || null },
+    json: { pattern, action, note: note || null },
   });
 }
 

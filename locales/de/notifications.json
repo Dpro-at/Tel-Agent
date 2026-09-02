@@ -40,6 +40,7 @@
   "msg_mail_failed": "Eine E-Mail konnte nicht gesendet werden.",
   "msg_message_taken": "{name} hat eine Nachricht hinterlassen: {reason}",
   "msg_restore_staged": "Eine Wiederherstellung vom {taken_at} ist vorgemerkt und läuft beim nächsten Neustart.",
+  "msg_routed_to_person": "Eine Regel hat dieses Gespräch an eine Person übergeben.",
   "msg_task_failed": "Die geplante Aufgabe {task} ist fehlgeschlagen.",
   "msg_transfer_requested": "Der Assistent bittet darum, dass eine Person ein Gespräch übernimmt.",
   "msg_web_chat_started": "Jemand hat auf Ihrer Website einen Chat begonnen: „{preview}“",

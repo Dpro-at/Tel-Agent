@@ -31,6 +31,8 @@ from api.models import (
     Conversation,
     Membership,
     Message,
+    Notification,
+    Rule,
     User,
     Webhook,
     Workspace,
@@ -411,3 +413,58 @@ async def test_an_undelivered_reply_is_not_written_into_the_record(stage) -> Non
     db.expire_all()
     last = await db.scalar(select(Message).order_by(Message.id.desc()).limit(1))
     assert last.id == before.id
+
+
+# --- Milestone 4: the rules engine, end to end through this transport -------------
+
+
+async def test_a_blocked_identity_leaves_no_trace(stage) -> None:
+    """Like a blocked caller who never rings through: nothing stored, nothing sent,
+    and the offset still advances so the message is not retried forever."""
+    _, ids, fake, db = stage
+    db.add(Rule(workspace_id=ids["workspace"], pattern="700", action="block"))
+    await db.commit()
+    fake.updates = [_update(11, 700, "It is me again!")]
+
+    async with fake.client() as client:
+        handled = await telegram.poll_once(db, client)
+    assert handled == 1
+
+    db.expire_all()
+    assert await db.scalar(select(Conversation)) is None
+    assert await db.scalar(select(Message)) is None
+    assert fake.sent == []
+
+
+async def test_a_pass_identity_gets_a_person_not_the_agent(stage) -> None:
+    """§A6.5's first column: straight through. The agent stays silent, the thread is
+    marked for a person, and the tray says so once - not once per message."""
+    _, ids, fake, db = stage
+    db.add(Rule(workspace_id=ids["workspace"], pattern="700", action="pass", note="The boss"))
+    await db.commit()
+    fake.updates = [_update(11, 700, "Call me back.")]
+
+    async with fake.client() as client:
+        assert await telegram.poll_once(db, client) == 1
+
+    db.expire_all()
+    thread = await db.scalar(select(Conversation).where(Conversation.external_id == "700"))
+    assert thread is not None
+    assert thread.handling == "human"
+    # The message is in the record; no generated answer follows it.
+    rows = (await db.execute(select(Message).order_by(Message.id))).scalars().all()
+    assert [(r.speaker, r.text) for r in rows] == [("caller", "Call me back.")]
+    assert fake.sent == []
+
+    tray = (await db.execute(select(Notification))).scalars().all()
+    assert [t.message_key for t in tray] == ["routed_to_person"]
+    assert tray[0].detail == "700"
+
+    # A second message keeps the silence and does not notify again.
+    fake.updates = [_update(12, 700, "Hello? Anybody?")]
+    async with fake.client() as client:
+        assert await telegram.poll_once(db, client) == 1
+    db.expire_all()
+    tray = (await db.execute(select(Notification))).scalars().all()
+    assert [t.message_key for t in tray] == ["routed_to_person"]
+    assert fake.sent == []

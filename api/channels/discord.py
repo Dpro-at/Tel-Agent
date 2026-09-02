@@ -41,7 +41,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from agent.config import ConfigurationError
 from agent.reply import reply as generate_reply
 from agent.tools import TakenMessage
-from api import llm, webhooks
+from api import llm, routing, webhooks
 from api.config import get_settings
 from api.conversations import position_ms
 from api.db import session_scope
@@ -247,7 +247,24 @@ async def ingest(
         return None
 
     user_id = str(event["author"]["id"])
+    # Milestone 4: the rules engine, before anything is stored. The username is
+    # offered alongside the id - it is the name an operator can actually see.
+    username = str(event["author"].get("username") or "")
+    decision = await routing.decide(
+        db,
+        workspace_id=channel.workspace_id,
+        identities=[user_id] + ([f"@{username}"] if username else []),
+    )
+    if decision.action == "block":
+        logger.info(
+            "discord message dropped by rule",
+            extra={"channel_id": channel.id, "pattern": decision.pattern},
+        )
+        return None
+
     conversation, started = await _conversation_for(db, channel, user_id)
+    if decision.action == "pass":
+        await routing.apply_pass(db, conversation, decision)
 
     state = dict((conversation.state_json or {}).get("discord") or {})
     event_id = str(event.get("id") or "")

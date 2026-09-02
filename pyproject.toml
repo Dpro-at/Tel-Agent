@@ -41,6 +41,11 @@ dependencies = [
     # channel transport and the webhook sender speak HTTP through it. It used to
     # sit only in [dev], which the Docker image was first to notice.
     "httpx>=0.28",
+    # The IANA time-zone database as a package, because the OS one cannot be assumed:
+    # Windows ships none, and a slim container drops it. Without this `zoneinfo` cannot
+    # read `Europe/Vienna`, and Milestone 4's business hours fall back to the server
+    # clock - silently answering at the wrong times. `zoneinfo` uses it automatically.
+    "tzdata>=2024.1",
 ]
 
 [project.scripts]

@@ -5,10 +5,12 @@ import { useState } from "react";
 import { Sidebar } from "@/components/shell/sidebar";
 import {
   addRule,
+  allSettings,
   ApiError,
   changeRule,
   removeRule,
   rulesList,
+  saveSettings,
   type RoutingRule,
   type RuleAction,
 } from "@/lib/api";
@@ -169,10 +171,10 @@ export function RoutingRules({ locale, t }: { locale: Locale; t: RulesDictionary
                 <input
                   value={pattern}
                   onChange={(event) => setPattern(event.target.value)}
-                  placeholder="+43 664 123456"
+                  placeholder="+43 664 123456 · boss@example.com · @username"
                   dir="ltr"
                   required
-                  maxLength={25}
+                  maxLength={320}
                   className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono ltr-data rounded-lg border p-[9px_13px] text-start outline-none"
                 />
               </label>
@@ -316,7 +318,7 @@ export function RoutingRules({ locale, t }: { locale: Locale; t: RulesDictionary
                               dir="ltr"
                               className="mono ltr-data text-od-text text-start text-[13.5px] font-medium"
                             >
-                              {rule.e164_or_pattern}
+                              {rule.pattern}
                             </span>
                           </div>
                           {rule.note ? (
@@ -390,8 +392,101 @@ export function RoutingRules({ locale, t }: { locale: Locale; t: RulesDictionary
             })}
           </div>
         ) : null}
+
+        <BusinessHours t={t} />
       </div>
     </div>
+  );
+}
+
+/**
+ * §A6.5's other item on this screen: business hours. Outside them the agent always
+ * answers — a `pass` rule holds only while somebody is at the desk to pass to.
+ * Two workspace settings behind `/api/settings`; `block` ignores the clock.
+ */
+function BusinessHours({ t }: { t: RulesDictionary }) {
+  const stored = useResource(() => allSettings(), []);
+  const [hours, setHours] = useState<string | null>(null);
+  const [timezone, setTimezone] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [state, setState] = useState<"idle" | "saved" | "failed">("idle");
+
+  const current = (key: string): string => {
+    const row = stored.data?.find((entry) => entry.key === key);
+    return row?.value === null || row?.value === undefined ? "" : String(row.value);
+  };
+  const shownHours = hours ?? current("routing.hours");
+  const shownTimezone = timezone ?? current("routing.timezone");
+
+  const save = async () => {
+    setSaving(true);
+    setState("idle");
+    try {
+      await saveSettings({
+        "routing.hours": shownHours.trim(),
+        "routing.timezone": shownTimezone.trim(),
+      });
+      setState("saved");
+    } catch {
+      setState("failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="border-od-line bg-od-panel-deep-3 mt-5 max-w-[720px] rounded-[10px] border p-[16px_18px]">
+      <h3 className="text-od-muted-4 m-0 text-[13px] font-semibold tracking-[.07em] uppercase">
+        {t.hours_title}
+      </h3>
+      <p className="text-od-faint mt-[6px] mb-0 max-w-[70ch] text-[12.5px] text-pretty">
+        {t.hours_note}
+      </p>
+      <div className="mt-3 flex flex-wrap items-end gap-[14px]">
+        <label className="flex min-w-[200px] flex-[1_1_220px] flex-col gap-[6px]">
+          <span className="text-od-faint text-[11px] font-semibold tracking-[.08em] uppercase">
+            {t.hours_field}
+          </span>
+          <input
+            value={shownHours}
+            onChange={(event) => setHours(event.target.value)}
+            placeholder="mo-fr 08:00-18:00"
+            dir="ltr"
+            className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono ltr-data rounded-lg border p-[9px_13px] text-start outline-none"
+          />
+        </label>
+        <label className="flex min-w-[180px] flex-[1_1_200px] flex-col gap-[6px]">
+          <span className="text-od-faint text-[11px] font-semibold tracking-[.08em] uppercase">
+            {t.hours_timezone}
+          </span>
+          <input
+            value={shownTimezone}
+            onChange={(event) => setTimezone(event.target.value)}
+            placeholder="Europe/Vienna"
+            dir="ltr"
+            className="border-od-border-6 bg-od-canvas-2 text-od-text-2 mono ltr-data rounded-lg border p-[9px_13px] text-start outline-none"
+          />
+        </label>
+        <button
+          type="button"
+          disabled={saving || stored.data === null}
+          onClick={() => void save()}
+          className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-lg border p-[9px_15px] font-medium disabled:cursor-default disabled:opacity-50"
+        >
+          {t.hours_save}
+        </button>
+      </div>
+      {state === "saved" ? (
+        <p className="m-0 mt-[8px] text-[12.5px] text-[color:var(--od-green-text)]">
+          {t.hours_saved}
+        </p>
+      ) : null}
+      {state === "failed" ? (
+        <p className="m-0 mt-[8px] text-[12.5px] text-[color:var(--od-red-text-6)]">
+          {t.hours_failed}
+        </p>
+      ) : null}
+    </section>
   );
 }
 

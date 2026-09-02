@@ -51,7 +51,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from agent.config import ConfigurationError
 from agent.reply import reply as generate_reply
 from agent.tools import TakenMessage
-from api import llm, webhooks
+from api import llm, routing, webhooks
 from api.conversations import position_ms
 from api.db import session_scope
 from api.models import Channel, Conversation, Message
@@ -498,7 +498,21 @@ async def _handle_inbound(
     if not arrived.text:
         return
 
+    # Milestone 4: the rules engine, before anything is stored. The sender address
+    # is the identity a rule is written against; a blocked one leaves no trace.
+    decision = await routing.decide(
+        db, workspace_id=channel.workspace_id, identities=[arrived.sender]
+    )
+    if decision.action == "block":
+        logger.info(
+            "email dropped by rule",
+            extra={"channel_id": channel.id, "pattern": decision.pattern},
+        )
+        return
+
     conversation, started = await _conversation_for(db, channel, arrived.sender)
+    if decision.action == "pass":
+        await routing.apply_pass(db, conversation, decision)
     remember_thread(conversation, subject=arrived.subject, message_id=arrived.message_id)
     line = await _store_line(db, conversation, speaker="caller", text=arrived.text)
     await _announce(db, channel, conversation, line, started)

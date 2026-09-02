@@ -42,7 +42,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from agent.config import ConfigurationError
 from agent.reply import reply as generate_reply
 from agent.tools import TakenMessage
-from api import llm, webhooks
+from api import llm, routing, webhooks
 from api.config import get_settings
 from api.conversations import position_ms
 from api.db import session_scope
@@ -320,7 +320,24 @@ async def _handle_update(
         # "[photo]" would be a promise the archive cannot keep.
         return
 
+    # Milestone 4: the rules engine, before anything is stored. A rule about the
+    # chat id or about the @username is a rule about this person; a blocked one
+    # leaves no trace, exactly like a blocked caller who never rings through.
+    username = str((message.get("from") or {}).get("username") or "")
+    identities = [str(chat_id)] + ([f"@{username}"] if username else [])
+    decision = await routing.decide(
+        db, workspace_id=channel.workspace_id, identities=identities
+    )
+    if decision.action == "block":
+        logger.info(
+            "telegram message dropped by rule",
+            extra={"channel_id": channel.id, "pattern": decision.pattern},
+        )
+        return
+
     conversation, started = await _conversation_for(db, channel, str(chat_id))
+    if decision.action == "pass":
+        await routing.apply_pass(db, conversation, decision)
     line = await _store_line(db, conversation, speaker="caller", text=str(text))
     await _announce(db, channel, conversation, line, started)
 
