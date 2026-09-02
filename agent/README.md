@@ -60,12 +60,20 @@ the response). Both are exercised against stand-ins in `tests/test_voice_provide
 and no cost. `config.py` reads their env (`DEEPGRAM_*`, `ELEVENLABS_*`) the same way it
 reads the model's, and `configured_stt()`/`configured_tts()` build them.
 
-What is still to come, blocked on a bought number and a LiveKit account: the LiveKit/
-SIP transport that feeds the call's audio into `DeepgramSTT` and plays `ElevenLabsTTS`
-out — the `CallTransport` `api/channels/phone.py` already defined. The `api/` side that
-stores a call in the same archive is done (`phone.run_call`). `routing/` is a stub -
-the rules engine lives at `api/routing.py` (Milestone 4), which the phone already calls
-on the caller ID.
+The transport's codec-free core is built too: `session/audio.py`'s `CallAudioBridge`
+turns a media room into the `CallTransport` `run_call` consumes — inbound frames into
+`DeepgramSTT`, `ElevenLabsTTS` out through the room — behind a tiny `RoomAudio` seam, so
+the whole thing is exercised in `tests/test_audio_bridge.py` with a fake room and the
+real providers against their stand-ins: a whole call, frames in to frames out, stored
+in the archive.
+
+The one piece no fake can finish is `session/livekit_room.py` — the actual LiveKit
+binding that joins a room and moves RTP. It is written against the documented SDK API
+but **not proven**, because its whole job is real audio through a real connection; it is
+a *verify* when the LiveKit account and the number exist, not a *write* (Rule 2). The
+`livekit` SDK is the optional `voice` extra so the core installs without it. `routing/`
+is a stub - the rules engine lives at `api/routing.py` (Milestone 4), which the phone
+already calls on the caller ID.
 
 Configuration comes from the environment, in `config.py`. That file exists rather than
 importing `api.config` because this package never imports from `api/` - at Milestone 11

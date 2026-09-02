@@ -177,12 +177,21 @@ DEFAULT_TTS_OUTPUT_FORMAT = "ulaw_8000"
 
 @dataclass(frozen=True)
 class SttSettings:
-    """Which speech-to-text service listens, and in what language."""
+    """Which speech-to-text service listens, in what language, and over which codec.
+
+    `encoding` and `sample_rate` are the transport's business, not the installer's: a
+    direct SIP call is μ-law 8 kHz, but a LiveKit room hands the agent 16-bit PCM at
+    the room's rate, and Deepgram must be told which. They default to the SIP case and
+    the LiveKit transport overrides them - so the same provider serves both media paths
+    without a transcode on either.
+    """
 
     api_key: str
     model: str
     language: str
     base_url: str
+    encoding: str = "mulaw"
+    sample_rate: int = 8000
 
 
 @dataclass(frozen=True)
@@ -213,6 +222,18 @@ def stt_settings() -> SttSettings | None:
         language=_clean("STT_LANGUAGE") or "de",
         base_url=_clean("DEEPGRAM_BASE_URL").rstrip("/") or DEFAULT_STT_BASE_URL,
     )
+
+
+def _replace_codec(settings: SttSettings, *, encoding: str, sample_rate: int) -> SttSettings:
+    """The same STT configuration, re-coded for a transport's media format.
+
+    A transport knows its audio format and the installer does not, so the transport
+    calls this rather than asking the operator to set a codec they cannot know. Kept
+    here beside `SttSettings` so the field names have one home.
+    """
+    import dataclasses
+
+    return dataclasses.replace(settings, encoding=encoding, sample_rate=sample_rate)
 
 
 @lru_cache(maxsize=1)

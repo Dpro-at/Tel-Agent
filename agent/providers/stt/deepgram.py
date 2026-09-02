@@ -41,11 +41,11 @@ from agent.providers.stt.base import Final, Partial, Transcript
 
 logger = logging.getLogger("agent.stt")
 
-# What the transport carries: G.711 μ-law, 8 kHz, one channel. Punctuation on, because a
-# transcript line without it reads worse and Deepgram's costs nothing.
-_AUDIO_PARAMS = {
-    "encoding": "mulaw",
-    "sample_rate": "8000",
+# The knobs that do not depend on the transport's codec. `interim_results` is what
+# makes the partials arrive at all; punctuation is on because a transcript line without
+# it reads worse and Deepgram's costs nothing. The encoding and sample rate come from
+# the settings, because a SIP call is μ-law 8 kHz and a LiveKit room is 16-bit PCM.
+_FIXED_PARAMS = {
     "channels": "1",
     "interim_results": "true",
     "punctuate": "true",
@@ -64,7 +64,9 @@ class DeepgramSTT:
 
     def _url(self) -> str:
         params = {
-            **_AUDIO_PARAMS,
+            **_FIXED_PARAMS,
+            "encoding": self._settings.encoding,
+            "sample_rate": str(self._settings.sample_rate),
             "model": self._settings.model,
             "language": self._settings.language,
         }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from agent.session.audio import CallAudioBridge, RoomAudio
 from agent.session.turn import AudioSink, TurnResult, speak
 
-__all__ = ["AudioSink", "TurnResult", "speak"]
+__all__ = ["AudioSink", "CallAudioBridge", "RoomAudio", "TurnResult", "speak"]

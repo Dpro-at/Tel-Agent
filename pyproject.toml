@@ -54,6 +54,13 @@ dependencies = [
 tel-agent = "api.__main__:main"
 
 [project.optional-dependencies]
+# The phone's media transport (Milestone 11). Optional because the core - every text
+# channel, the whole dashboard - runs without it: only the LiveKit room binding in
+# `agent/session/livekit_room.py` imports it, lazily. Install with `.[voice]` when
+# wiring the phone against a LiveKit account.
+voice = [
+    "livekit>=0.17",
+]
 dev = [
     "ruff>=0.14",
     "pytest>=8.3",
