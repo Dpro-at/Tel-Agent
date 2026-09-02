@@ -40,6 +40,7 @@
   "msg_mail_failed": "An email could not be sent.",
   "msg_message_taken": "{name} left a message: {reason}",
   "msg_restore_staged": "A restore from {taken_at} is staged and will run on the next restart.",
+  "msg_routed_to_person": "A rule handed this conversation to a person.",
   "msg_task_failed": "The scheduled task {task} failed.",
   "msg_transfer_requested": "The agent asked for a person to take a conversation over.",
   "msg_web_chat_started": "Somebody started a chat on your website: “{preview}”",

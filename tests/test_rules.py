@@ -52,10 +52,10 @@ async def stage(migrated: AsyncSession, settings: Settings, database_url: str):
 
     rules = {
         "exact": Rule(
-            workspace_id=mine.id, e164_or_pattern="+43664123456", action="pass", note="Staff"
+            workspace_id=mine.id, pattern="+43664123456", action="pass", note="Staff"
         ),
-        "prefix": Rule(workspace_id=mine.id, e164_or_pattern="+43720*", action="block"),
-        "theirs": Rule(workspace_id=theirs.id, e164_or_pattern="+4915790000000", action="ai"),
+        "prefix": Rule(workspace_id=mine.id, pattern="+43720*", action="block"),
+        "theirs": Rule(workspace_id=theirs.id, pattern="+4915790000000", action="ai"),
     }
     migrated.add_all(rules.values())
     await migrated.flush()
@@ -99,7 +99,7 @@ async def stage(migrated: AsyncSession, settings: Settings, database_url: str):
 async def test_list_is_scoped_and_carries_the_last_call(stage) -> None:
     clients, _ = stage
     listed = (await clients["mohamed"].get("/api/rules")).json()
-    assert [row["e164_or_pattern"] for row in listed] == ["+43664123456", "+43720*"]
+    assert [row["pattern"] for row in listed] == ["+43664123456", "+43720*"]
 
     exact, prefix = listed
     assert exact["last_called_at"] is not None
@@ -110,7 +110,7 @@ async def test_list_is_scoped_and_carries_the_last_call(stage) -> None:
     assert prefix["last_called_at"] > exact["last_called_at"]
 
     theirs = (await clients["wolf"].get("/api/rules")).json()
-    assert [row["e164_or_pattern"] for row in theirs] == ["+4915790000000"]
+    assert [row["pattern"] for row in theirs] == ["+4915790000000"]
     # No call from that exact number is stored, so the line honestly says nothing.
     assert theirs[0]["last_called_at"] is None
 
@@ -120,7 +120,7 @@ async def test_a_viewer_reads_and_cannot_write(stage) -> None:
     assert (await clients["lukas"].get("/api/rules")).status_code == 200
     assert (
         await clients["lukas"].post(
-            "/api/rules", json={"e164_or_pattern": "+431234567", "action": "block"}
+            "/api/rules", json={"pattern": "+431234567", "action": "block"}
         )
     ).status_code == 403
     assert (
@@ -133,27 +133,41 @@ async def test_the_pattern_grammar(stage) -> None:
     clients, _ = stage
     added = await clients["mohamed"].post(
         "/api/rules",
-        json={"e164_or_pattern": "+43 1 402-8811", "action": "ai", "note": "  Customers  "},
+        json={"pattern": "+43 1 402-8811", "action": "ai", "note": "  Customers  "},
     )
     assert added.status_code == 201
-    assert added.json()["e164_or_pattern"] == "+4314028811"
+    assert added.json()["pattern"] == "+4314028811"
     assert added.json()["note"] == "Customers"
 
     prefix = await clients["mohamed"].post(
-        "/api/rules", json={"e164_or_pattern": "+49 157*", "action": "block"}
+        "/api/rules", json={"pattern": "+49 157*", "action": "block"}
     )
     assert prefix.status_code == 201
-    assert prefix.json()["e164_or_pattern"] == "+49157*"
+    assert prefix.json()["pattern"] == "+49157*"
 
-    for wrong in ("014028811", "+43123", "*43720", "+43*720", "group: customers"):
+    # Milestone 4 widened the grammar: an identity - an email, a handle, a bare
+    # numeric chat id - is a valid pattern now, stored lowercased. What stays
+    # refused is whitespace and a star anywhere but the end.
+    for identity, stored in (
+        ("Boss@Example.com", "boss@example.com"),
+        ("@hans_maulwurf", "@hans_maulwurf"),
+        ("014028811", "014028811"),
+    ):
+        added = await clients["mohamed"].post(
+            "/api/rules", json={"pattern": identity, "action": "block"}
+        )
+        assert added.status_code == 201, identity
+        assert added.json()["pattern"] == stored
+
+    for wrong in ("*43720", "+43*720", "group: customers", "a b"):
         refused = await clients["mohamed"].post(
-            "/api/rules", json={"e164_or_pattern": wrong, "action": "block"}
+            "/api/rules", json={"pattern": wrong, "action": "block"}
         )
         assert refused.status_code == 400, wrong
         assert refused.json()["error"]["code"] == "invalid_pattern"
 
     action = await clients["mohamed"].post(
-        "/api/rules", json={"e164_or_pattern": "+43111222333", "action": "shout"}
+        "/api/rules", json={"pattern": "+43111222333", "action": "shout"}
     )
     assert action.status_code == 400
     assert action.json()["error"]["code"] == "invalid_action"
@@ -162,7 +176,7 @@ async def test_the_pattern_grammar(stage) -> None:
 async def test_one_rule_per_pattern(stage) -> None:
     clients, _ = stage
     again = await clients["mohamed"].post(
-        "/api/rules", json={"e164_or_pattern": "+43 664 123 456", "action": "block"}
+        "/api/rules", json={"pattern": "+43 664 123 456", "action": "block"}
     )
     assert again.status_code == 409
     assert again.json()["error"]["code"] == "rule_exists"
@@ -187,7 +201,7 @@ async def test_removing_a_rule(stage) -> None:
     clients, ids = stage
     assert (await clients["mohamed"].delete(f"/api/rules/{ids['prefix']}")).status_code == 204
     listed = (await clients["mohamed"].get("/api/rules")).json()
-    assert "+43720*" not in [row["e164_or_pattern"] for row in listed]
+    assert "+43720*" not in [row["pattern"] for row in listed]
 
 
 async def test_a_foreign_id_reads_as_missing(stage) -> None:

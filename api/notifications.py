@@ -69,6 +69,9 @@ MESSAGES: dict[str, frozenset[str]] = {
     # travels as `detail` - it is the model's prose, machine output by definition.
     "agent_notification": frozenset(),
     "transfer_requested": frozenset(),
+    # Milestone 4: a routing rule handed an arriving conversation straight to a
+    # person. The rule's pattern travels as detail.
+    "routed_to_person": frozenset(),
 }
 
 # Longer than this and it stops being a hint and starts being a log. The full text is

@@ -40,6 +40,7 @@
   "msg_mail_failed": "تعذّر إرسال بريد إلكتروني.",
   "msg_message_taken": "ترك {name} رسالة: {reason}",
   "msg_restore_staged": "استرجاع من {taken_at} مُسجَّل وسينفَّذ عند إعادة التشغيل القادمة.",
+  "msg_routed_to_person": "قاعدةٌ سلّمت هذه المحادثة إلى شخص.",
   "msg_task_failed": "فشلت المهمة المجدولة {task}.",
   "msg_transfer_requested": "طلب المساعد أن يستلم شخصٌ إحدى المحادثات.",
   "msg_web_chat_started": "بدأ أحدهم محادثة على موقعك: «{preview}»",

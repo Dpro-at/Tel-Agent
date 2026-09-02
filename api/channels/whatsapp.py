@@ -42,7 +42,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from agent.config import ConfigurationError
 from agent.reply import reply as generate_reply
 from agent.tools import TakenMessage
-from api import llm, webhooks
+from api import llm, routing, webhooks
 from api.config import get_settings
 from api.conversations import position_ms
 from api.db import session_scope
@@ -279,7 +279,24 @@ async def ingest(db: DbSession, channel: Channel, payload: dict[str, Any]) -> li
         if not body:
             continue
 
-        conversation, started = await _conversation_for(db, channel, str(message["from"]))
+        # Milestone 4: the rules engine, before anything is stored. `wa_id` is the
+        # number without `+`, so both spellings are offered to the matcher.
+        wa_id = str(message["from"])
+        decision = await routing.decide(
+            db,
+            workspace_id=channel.workspace_id,
+            identities=[wa_id, "+" + wa_id.removeprefix("+")],
+        )
+        if decision.action == "block":
+            logger.info(
+                "whatsapp message dropped by rule",
+                extra={"channel_id": channel.id, "pattern": decision.pattern},
+            )
+            continue
+
+        conversation, started = await _conversation_for(db, channel, wa_id)
+        if decision.action == "pass":
+            await routing.apply_pass(db, conversation, decision)
         state = dict((conversation.state_json or {}).get("whatsapp") or {})
         if wamid and state.get("last_wamid") == wamid:
             logger.info(
