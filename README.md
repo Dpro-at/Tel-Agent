@@ -253,6 +253,15 @@ the rules cannot drift apart.
 Found a security problem? **Do not open a public issue** — see
 [`SECURITY.md`](SECURITY.md).
 
+### The people who built it
+
+Every face here wrote part of Tel-Agent. The grid updates itself as new contributors
+land — a translation counts.
+
+<a href="https://github.com/Dpro-at/Tel-Agent/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Dpro-at/Tel-Agent" alt="Tel-Agent contributors">
+</a>
+
 ---
 
 ## License
