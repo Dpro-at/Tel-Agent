@@ -49,12 +49,23 @@ missing interfaces (partials and finals in, audio chunks out, `cancel()` mandato
 and `session/turn.py` is the turn-taker that speaks a streamed reply through them and
 stops the instant the caller cuts in - the barge-in that Rule 3 makes non-optional,
 with the end-of-speech-to-first-audio latency Rule 4 logs. All of it runs on fakes in
-`tests/test_voice_turn.py`; no provider, no SIP, no key. What is still to come, and is
-blocked on a bought number and real provider keys: the Deepgram/ElevenLabs
-implementations, the LiveKit/SIP transport that feeds audio in and plays it out, and
-the `api/` side that stores a call beside every other conversation. `routing/` is a
-stub - the rules engine itself lives at `api/routing.py` (Milestone 4), which the phone
-will call once caller ID is settled on a live line.
+`tests/test_voice_turn.py`; no provider, no SIP, no key.
+
+The two concrete providers §B3 names for v1 are in place behind those interfaces:
+`providers/stt/deepgram.py` (Deepgram's streaming WebSocket — interims as `Partial`s,
+`is_final` as `Final`s, μ-law 8 kHz to match a SIP call) and `providers/tts/eleven
+labs.py` (ElevenLabs' streaming endpoint, `ulaw_8000` output, cancellation by closing
+the response). Both are exercised against stand-ins in `tests/test_voice_providers.py`
+— a WebSocket server for Deepgram, an httpx `MockTransport` for ElevenLabs — so no key
+and no cost. `config.py` reads their env (`DEEPGRAM_*`, `ELEVENLABS_*`) the same way it
+reads the model's, and `configured_stt()`/`configured_tts()` build them.
+
+What is still to come, blocked on a bought number and a LiveKit account: the LiveKit/
+SIP transport that feeds the call's audio into `DeepgramSTT` and plays `ElevenLabsTTS`
+out — the `CallTransport` `api/channels/phone.py` already defined. The `api/` side that
+stores a call in the same archive is done (`phone.run_call`). `routing/` is a stub -
+the rules engine lives at `api/routing.py` (Milestone 4), which the phone already calls
+on the caller ID.
 
 Configuration comes from the environment, in `config.py`. That file exists rather than
 importing `api.config` because this package never imports from `api/` - at Milestone 11
