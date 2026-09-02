@@ -150,3 +150,93 @@ def llm_settings() -> LlmSettings | None:
     the owner saved over what an installer wrote once - see §B9.2.
     """
     return settings_from(**environment_values(), names=ENVIRONMENT_NAMES)
+
+
+# --- The voice providers - Milestone 11, §B3 -------------------------------------
+#
+# STT and TTS join the model at the phone, and they are configured the same way and for
+# the same reason: the standalone agent process has no settings screen, so the
+# environment describes them, and `None` means "not configured" rather than a failure.
+# The real key lives encrypted in the database once a dashboard exists (§B9.2); these
+# read the installer's/standalone path.
+
+# Deepgram's streaming endpoint speaks over WebSocket, so the base is `wss://`. The
+# model and language are the two knobs Rule 4 cares about - `nova-2` is the current
+# streaming model, and German is the target the accuracy bar is set against.
+DEFAULT_STT_BASE_URL = "wss://api.deepgram.com"
+DEFAULT_STT_MODEL = "nova-2"
+
+# ElevenLabs, and the two choices a phone forces. `eleven_turbo_v2_5` is the low-latency
+# model - Rule 3's budget does not survive the quality-first one - and `ulaw_8000` is
+# G.711 μ-law at 8 kHz, which is what a SIP call carries (SIP_CODEC=PCMU); asking for
+# mp3 would mean transcoding on the media thread, which Rule 3 forbids.
+DEFAULT_TTS_BASE_URL = "https://api.elevenlabs.io"
+DEFAULT_TTS_MODEL = "eleven_turbo_v2_5"
+DEFAULT_TTS_OUTPUT_FORMAT = "ulaw_8000"
+
+
+@dataclass(frozen=True)
+class SttSettings:
+    """Which speech-to-text service listens, and in what language."""
+
+    api_key: str
+    model: str
+    language: str
+    base_url: str
+
+
+@dataclass(frozen=True)
+class TtsSettings:
+    """Which text-to-speech service speaks, in which voice, at which codec."""
+
+    api_key: str
+    voice_id: str
+    model: str
+    output_format: str
+    base_url: str
+
+
+@lru_cache(maxsize=1)
+def stt_settings() -> SttSettings | None:
+    """The speech-to-text the environment describes, or `None`.
+
+    A key alone is enough: model and language have working defaults, so an installer
+    who set `DEEPGRAM_API_KEY` gets German nova-2 without four more variables. No key is
+    the honest "no STT", which the phone reports rather than failing a call.
+    """
+    key = _clean("DEEPGRAM_API_KEY")
+    if not key:
+        return None
+    return SttSettings(
+        api_key=key,
+        model=_clean("DEEPGRAM_MODEL") or DEFAULT_STT_MODEL,
+        language=_clean("STT_LANGUAGE") or "de",
+        base_url=_clean("DEEPGRAM_BASE_URL").rstrip("/") or DEFAULT_STT_BASE_URL,
+    )
+
+
+@lru_cache(maxsize=1)
+def tts_settings() -> TtsSettings | None:
+    """The text-to-speech the environment describes, or `None`.
+
+    Both the key and a voice are required, because ElevenLabs has no default voice and a
+    call with no voice cannot speak - unlike the language, which STT can default. A key
+    without a voice is the half-configuration `settings_from` refuses for the model, and
+    it raises here for the same reason: a silent fallback would be found on a live call.
+    """
+    key = _clean("ELEVENLABS_API_KEY")
+    if not key:
+        return None
+    voice = _clean("ELEVENLABS_VOICE_ID")
+    if not voice:
+        raise ConfigurationError(
+            "ELEVENLABS_API_KEY is set but ELEVENLABS_VOICE_ID is empty. Set a voice, "
+            "or clear the key to run without a voice."
+        )
+    return TtsSettings(
+        api_key=key,
+        voice_id=voice,
+        model=_clean("ELEVENLABS_MODEL_ID") or DEFAULT_TTS_MODEL,
+        output_format=_clean("ELEVENLABS_OUTPUT_FORMAT") or DEFAULT_TTS_OUTPUT_FORMAT,
+        base_url=_clean("ELEVENLABS_BASE_URL").rstrip("/") or DEFAULT_TTS_BASE_URL,
+    )
