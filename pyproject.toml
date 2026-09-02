@@ -37,6 +37,10 @@ dependencies = [
     # makes is a dependency this repository declares - a transitive extra is one
     # uvicorn release away from disappearing.
     "websockets>=13",
+    # A runtime dependency since Milestone 3, not just the test client: every
+    # channel transport and the webhook sender speak HTTP through it. It used to
+    # sit only in [dev], which the Docker image was first to notice.
+    "httpx>=0.28",
 ]
 
 [project.scripts]

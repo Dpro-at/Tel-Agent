@@ -43,6 +43,10 @@ function contentSecurityPolicy(): string {
 
 const config: NextConfig = {
   reactStrictMode: true,
+  // The Docker image runs `node server.js` from this bundle: the server plus only the
+  // files it traces, instead of the whole node_modules tree. Harmless in development,
+  // which never reads it.
+  output: "standalone",
   async headers() {
     return [
       {

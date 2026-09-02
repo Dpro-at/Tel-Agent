@@ -165,17 +165,28 @@ generated.
 
 ## Quick start
 
-Not available yet. Once Milestone 9 lands, this section becomes:
-
 ```bash
 git clone https://github.com/Dpro-at/Tel-Agent.git
 cd Tel-Agent
-cp .env.example .env    # add your API keys
-docker compose up -d
+cp .env.example .env
+# set ENCRYPTION_KEY in .env - generate one with: openssl rand -hex 32
+docker compose up -d --build
 ```
 
-Until then, see [`docs/SPEC.md`](docs/SPEC.md) for the full design and
-[`CLAUDE.md`](CLAUDE.md) for the development rules.
+Then open **http://localhost:3000**. The first visit creates the administrator —
+there are no default credentials. The API and its documentation are on
+http://localhost:8000/docs, and conversations live on the `tel-agent-data`
+volume (SQLite by default; a `postgres` profile is in `docker-compose.yml`).
+
+Both ports are published on **loopback only**. Reaching the installation from
+other machines is a decision made in `.env` — the `TEL_AGENT_*` block there
+lists the three values to change and why the dashboard image is rebuilt for it.
+On a server, put a reverse proxy terminating TLS in front instead.
+
+**Running it without Docker** stays supported and documented — contributors need
+to run the code without rebuilding an image on every edit. See
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for the manual run, [`docs/SPEC.md`](docs/SPEC.md)
+for the full design and [`CLAUDE.md`](CLAUDE.md) for the development rules.
 
 ### Requirements when it ships
 
