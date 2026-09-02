@@ -217,9 +217,7 @@ async def add_rule(
         )
 
     note = payload.note.strip() if payload.note else None
-    row = Rule(
-        workspace_id=context.id, pattern=pattern, action=payload.action, note=note
-    )
+    row = Rule(workspace_id=context.id, pattern=pattern, action=payload.action, note=note)
     db.add(row)
     await db.flush()
     answer = _out(row)

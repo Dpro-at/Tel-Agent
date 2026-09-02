@@ -260,9 +260,7 @@ async def ingest(
 
     user_id = str(event["user"])
     # Milestone 4: the rules engine, before anything is stored.
-    decision = await routing.decide(
-        db, workspace_id=channel.workspace_id, identities=[user_id]
-    )
+    decision = await routing.decide(db, workspace_id=channel.workspace_id, identities=[user_id])
     if decision.action == "block":
         logger.info(
             "slack message dropped by rule",
