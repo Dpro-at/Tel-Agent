@@ -157,6 +157,14 @@ differently on each.
 TEST_POSTGRES_URL=postgresql+asyncpg://user:pass@localhost:5432/telagent_test pytest
 ```
 
+No PostgreSQL on the machine? `docker-compose.dev.yml` starts a throwaway one with
+matching credentials:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d
+TEST_POSTGRES_URL=postgresql+asyncpg://telagent:telagent@localhost:5432/telagent_test pytest
+```
+
 Without it you get the SQLite half and no failure. With it you get both.
 
 **On Windows:** `lint-imports` crashes with a `UnicodeEncodeError` when its output is

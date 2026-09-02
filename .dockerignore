@@ -1,0 +1,19 @@
+# What never enters a build context. The images copy source and build the rest
+# themselves, so everything machine-local, generated or secret stays out - which
+# keeps the context small and keeps `.env` from ever being baked into a layer.
+.git
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+*.egg-info
+.env
+*.db
+*.db-*
+var/
+web/node_modules
+web/.next
+web/out
+tests/
+docs/
+internal/

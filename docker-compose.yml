@@ -1,0 +1,99 @@
+# Tel-Agent - the one-command install (§B10).
+#
+#   cp .env.example .env        # set ENCRYPTION_KEY (openssl rand -hex 32)
+#   docker compose up -d --build
+#
+# Dashboard on http://localhost:3000, API on http://localhost:8000. Both are
+# published on loopback only (§B9): reaching an installation from elsewhere goes
+# through a private network, a VPN, or a reverse proxy terminating TLS - see the
+# Docker section in README.md, including how the TEL_AGENT_* variables below
+# rebuild the dashboard for another hostname.
+#
+# The database is SQLite on the `tel-agent-data` volume by default. To run on
+# PostgreSQL instead:
+#
+#   docker compose --profile postgres up -d --build
+#
+# with TEL_AGENT_DATABASE_URL set in .env to
+# postgresql+asyncpg://telagent:${TEL_AGENT_POSTGRES_PASSWORD}@db/telagent
+#
+# The optional bundled n8n (§B10's automation profile) is reached on
+# http://localhost:5678 and talks to the API like any other machine client:
+#
+#   docker compose --profile automation up -d
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    restart: unless-stopped
+    environment:
+      # Refused empty on purpose: an installation without a key stores every
+      # user-entered credential nowhere, and finding that out at the first save
+      # is worse than at `up`.
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env - generate one with openssl rand -hex 32}"
+      ENVIRONMENT: ${TEL_AGENT_ENVIRONMENT:-production}
+      DATABASE_URL: ${TEL_AGENT_DATABASE_URL:-sqlite+aiosqlite:////data/tel-agent.db}
+      CORS_ORIGINS: ${TEL_AGENT_WEB_ORIGIN:-http://localhost:3000}
+      TRUSTED_HOSTS: ${TEL_AGENT_TRUSTED_HOSTS:-localhost,127.0.0.1}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+    volumes:
+      - tel-agent-data:/data
+    ports:
+      # Loopback by default. Publish wider only on purpose, e.g. 0.0.0.0:8000.
+      - "${TEL_AGENT_API_LISTEN:-127.0.0.1:8000}:8000"
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${TEL_AGENT_PUBLIC_API_URL:-http://localhost:8000}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${TEL_AGENT_WEB_LISTEN:-127.0.0.1:3000}:3000"
+
+  db:
+    image: postgres:17-alpine
+    profiles: ["postgres"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: telagent
+      # No default on purpose (no default credentials, §B9). Left unset, the
+      # postgres image itself refuses to initialise and says why - a `:?` guard
+      # here would instead break `docker compose up` for people not using this
+      # profile at all, because interpolation runs before profiles are applied.
+      POSTGRES_PASSWORD: ${TEL_AGENT_POSTGRES_PASSWORD:-}
+      POSTGRES_DB: telagent
+    volumes:
+      - tel-agent-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telagent -d telagent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # §B10's optional automation profile. n8n reaches the API over the compose
+  # network as http://api:8000, authenticating like any other machine client -
+  # a webhook target, or a machine token minted on the API tab.
+  n8n:
+    image: n8nio/n8n:latest
+    profiles: ["automation"]
+    restart: unless-stopped
+    volumes:
+      - tel-agent-n8n:/home/node/.n8n
+    ports:
+      - "${TEL_AGENT_N8N_LISTEN:-127.0.0.1:5678}:5678"
+
+volumes:
+  tel-agent-data:
+  tel-agent-postgres:
+  tel-agent-n8n:

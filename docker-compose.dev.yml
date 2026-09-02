@@ -1,0 +1,24 @@
+# Development helpers - never the product. The product's own containers are in
+# docker-compose.yml; contributors run the code directly (CONTRIBUTING.md) so an
+# edit does not cost an image rebuild. What this file provides is the second half
+# of the test matrix: a PostgreSQL to point TEST_POSTGRES_URL at.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#   TEST_POSTGRES_URL=postgresql+asyncpg://telagent:telagent@localhost:5432/telagent_test pytest
+
+services:
+  test-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: telagent
+      # Throwaway by definition: this database holds test rows on a developer's
+      # machine and is dropped and rebuilt on every run.
+      POSTGRES_PASSWORD: telagent
+      POSTGRES_DB: telagent_test
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telagent -d telagent_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
