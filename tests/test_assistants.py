@@ -245,8 +245,11 @@ async def test_the_tool_list_is_served_with_what_each_one_waits_for(stage) -> No
     # conversation - so they stopped waiting on the phone.
     assert by_name["transfer_call"]["available"] is True
     assert by_name["end_call"]["available"] is True
-    # And the one that is not built says which subsystem it waits for.
-    assert by_name["check_calendar"]["waiting_on"] == "calendar"
+    # Milestone 5's last tool: check_calendar reads a CalDAV calendar and is available;
+    # whether it can answer depends on a calendar being configured, which it reports at
+    # call time rather than the screen greying it out. Every §B7 tool is built now.
+    assert by_name["check_calendar"]["available"] is True
+    assert by_name["check_calendar"]["waiting_on"] is None
 
 
 async def test_an_assistant_starts_with_no_tools(stage) -> None:
@@ -271,23 +274,15 @@ async def test_tools_are_given_and_taken_away(stage) -> None:
     assert emptied.json()["tools"] == []
 
 
-@pytest.mark.parametrize(
-    ("tools", "code"),
-    [
-        (["make_coffee"], "unknown_tool"),
-        # Real in §B7, and its subsystem is not built - switching it on would be a
-        # setting that silently does nothing on the first call that needs it.
-        (["check_calendar"], "tool_unavailable"),
-        (["search_knowledge", "check_calendar"], "tool_unavailable"),
-    ],
-)
-async def test_a_tool_that_cannot_run_cannot_be_switched_on(stage, tools, code) -> None:
+async def test_an_unknown_tool_cannot_be_switched_on(stage) -> None:
+    """Every §B7 tool is built now, so `tool_unavailable` has no real tool to fire on;
+    what remains refused is a name this product has never had."""
     clients, ids = stage
     refused = await clients["mohamed"].patch(
-        f"/api/assistants/{ids['lena']}", json={"tools": tools}
+        f"/api/assistants/{ids['lena']}", json={"tools": ["make_coffee"]}
     )
     assert refused.status_code == 400
-    assert refused.json()["error"]["code"] == code
+    assert refused.json()["error"]["code"] == "unknown_tool"
 
 
 async def test_tools_can_be_set_when_creating_one(stage) -> None:

@@ -156,9 +156,11 @@ _TOOL_NEEDS: dict[str, str | None] = {
     # agent-initiated, and `end_call` is the polite close on any channel.
     "transfer_call": None,
     "end_call": None,
-    # Waits on the subsystem the name says. The screen names it without a second
-    # table of excuses.
-    "check_calendar": "calendar",
+    # Reads a CalDAV calendar (Milestone 5). Available as a tool; whether it can
+    # actually answer depends on a calendar being configured in Settings, which the
+    # tool reports at call time rather than the screen greying it out - an assistant
+    # may be given the tool before the operator connects the calendar.
+    "check_calendar": None,
 }
 
 AVAILABLE_TOOLS = tuple(name for name, waiting_on in _TOOL_NEEDS.items() if waiting_on is None)

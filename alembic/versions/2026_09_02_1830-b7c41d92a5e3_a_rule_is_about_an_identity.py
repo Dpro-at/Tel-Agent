@@ -19,6 +19,7 @@ tests/test_migrations.py has nothing to say here - `messages_fts` belongs to
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "b7c41d92a5e3"
