@@ -127,6 +127,62 @@ view) or Milestone 11 (web chat), whichever arrives first. The reference
 implementation and five rejected alternatives are in
 `internal/brand-explorations/scroll-test/orb-lab/`.
 
+**2026-09-02 — A relay service for self-hosted installations.**
+A self-hosted installation sits behind a router on a private network, and that is a
+problem twice over: the owner cannot reach their own dashboard from outside, and —
+more importantly — **the messaging channels cannot work at all**. WhatsApp, Messenger,
+Instagram and Telegram deliver messages by calling a public HTTPS webhook; a server on
+a LAN has no such address, so the setup story becomes "get a public IP, open ports,
+obtain a domain, configure TLS" — which ends most non-technical installations before
+they begin.
+
+The relay collapses that to nothing. Tel-Agent runs relay servers in a few regions;
+the installation opens an **outbound** tunnel to the nearest one (no port forwarding,
+no static IP at the customer's end) and receives a stable public address such as
+`name.tel-agent.com`. That one URL then serves as:
+
+1. the **webhook endpoint** the messaging platforms deliver to,
+2. the **public chat page and embed widget** address,
+3. **remote access** to the dashboard and the future desktop/mobile apps.
+
+Properties that are part of the idea, not optional extras:
+
+- **The relay stores nothing.** It forwards traffic; conversations, recordings and
+  credentials stay on the customer's machine. TLS terminates at the installation
+  (passthrough), so the relay cannot read what it carries. That is the promise that
+  makes self-hosting meaningful, and it must survive implementation.
+- **Voice never crosses the relay.** Call media takes its own path (§CLAUDE.md, SIP
+  section). The relay carries text, webhooks and dashboard traffic only — this keeps
+  both latency and bandwidth honest.
+- **Custom domains.** A customer points `agent.their-company.com` at the relay via
+  CNAME; certificates are issued automatically. Same mechanics as any hosted platform
+  with custom domains.
+- **Region-aware routing** — an installation connects to the nearest relay, chosen
+  automatically.
+- **Optional, always.** A technical user with their own public endpoint never needs
+  it; the direct path stays first-class.
+
+How the choice is presented — clarified 2026-09-02, because it decides whether the
+open edition stays trustworthy:
+
+- **The relay client ships inside the open edition**, not as a separate download.
+  The settings screen offers one choice with three answers: local network only
+  (the default), *my own public address* (a field for the user's domain or reverse
+  proxy), or *connect to the relay* (one button, an account, a stable address).
+- **Off by default, always.** The installation never contacts our servers until the
+  owner explicitly turns the relay on. A self-hosted program that phones home
+  unasked forfeits exactly the trust self-hosting exists to provide.
+- **The own-address path is first-class**, on the same screen, never buried. Making
+  our path easy must never make the user's own path harder.
+- **The relay server itself is a hosted service run by Tel-Agent Cloud** and, like
+  number reselling above, never enters the open edition. What lands in this
+  repository is the client half: the tunnel the installation opens, pointed at
+  whatever the user configures.
+
+Deferred because Milestone 0 is the only milestone, and the relay matters at
+Milestone 3 (messaging channels) at the earliest. The commercial side is recorded
+in `internal/DECISIONS.md` (D-033).
+
 **2026-08-20 — Redraw the logo as clean vector, and draw a 16 px icon.**
 Everything in `docs/brand/tel-agent-logo/` is traced from raster artwork, not drawn.
 It renders correctly and scales, but the full-colour marks are ~200 colour-band

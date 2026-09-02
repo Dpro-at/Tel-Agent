@@ -81,3 +81,24 @@ def test_a_key_with_no_voice_is_a_refused_half_configuration(
     with pytest.raises(ConfigurationError) as caught:
         tts_settings()
     assert "ELEVENLABS_VOICE_ID" in str(caught.value)
+
+
+def test_a_transport_recodes_stt_for_its_own_media_format(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The default is the SIP case (μ-law 8 kHz); a LiveKit room is 16-bit PCM, and the
+    transport re-codes the settings without touching the key or the language."""
+    from agent.config import _replace_codec
+
+    monkeypatch.setenv("DEEPGRAM_API_KEY", "dg-key")
+    base = stt_settings()
+    assert (base.encoding, base.sample_rate) == ("mulaw", 8000)
+
+    room = _replace_codec(base, encoding="linear16", sample_rate=48000)
+    assert (room.encoding, room.sample_rate) == ("linear16", 48000)
+    # Everything else is carried through unchanged.
+    assert (room.api_key, room.model, room.language) == (
+        base.api_key,
+        base.model,
+        base.language,
+    )
