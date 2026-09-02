@@ -234,9 +234,7 @@ async def test_send_test_reports_a_failure_instead_of_raising(
     http, _, hook_id, _, _ = stage
 
     def fake_client(*args, **kwargs):
-        return AsyncClient(
-            transport=httpx.MockTransport(lambda request: httpx.Response(500))
-        )
+        return AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(500)))
 
     monkeypatch.setattr(httpx, "AsyncClient", fake_client)
 
