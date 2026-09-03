@@ -52,11 +52,11 @@ class LiveKitRoom:
 
     def __init__(
         self,
-        room,
-        source,
+        room,  # noqa: ANN001 - rtc.Room; the voice extra is imported lazily
+        source,  # noqa: ANN001 - rtc.AudioSource, same reason
         *,
-        from_e164,
-        sample_rate: int = ROOM_SAMPLE_RATE,  # noqa: ANN001
+        from_e164: str,
+        sample_rate: int = ROOM_SAMPLE_RATE,
     ) -> None:
         self.from_e164 = from_e164
         self._room = room
