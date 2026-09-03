@@ -159,6 +159,22 @@ class Settings(BaseSettings):
     def debug(self) -> bool:
         return self.environment == "development"
 
+    @field_validator("encryption_key", mode="before")
+    @classmethod
+    def _empty_key_is_no_key(cls, value: object) -> object:
+        """`ENCRYPTION_KEY=""` reads as absent, the same answer every reader gives.
+
+        A `.env` line left blank produces an empty string, which is not None to a
+        presence check and not a key to `crypto.load_key` — two answers to one
+        question, and the kind of divergence that surfaces as tests passing on one
+        machine and failing on another. Normalised here, at the boundary, so
+        `key_available()`, the production validator and the encrypted column all
+        agree on what was configured.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @field_validator("cors_origins", "trusted_hosts", mode="before")
     @classmethod
     def _split_comma_separated(cls, value: object) -> object:
