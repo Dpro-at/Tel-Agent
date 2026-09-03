@@ -161,3 +161,44 @@ async def test_the_password_never_appears_in_the_answer(stage, monkeypatch) -> N
 async def test_the_window_is_capped_at_a_week(stage) -> None:
     answer = await stage.get("/api/calendar/availability?days=30")
     assert answer.status_code == 422
+
+
+# --- The settings screen's Test button --------------------------------------------
+
+
+async def test_the_calendar_test_says_not_configured_before_credentials(stage) -> None:
+    answer = await stage.post("/api/settings/calendar/test")
+    assert answer.status_code == 409
+    assert answer.json()["error"]["code"] == "calendar_not_configured"
+
+
+async def test_the_calendar_test_reaches_a_working_calendar(stage, monkeypatch) -> None:
+    await _connect(stage)
+    _caldav_stands_in(monkeypatch, lambda request: httpx.Response(200, text=_VFREEBUSY))
+
+    answer = await stage.post("/api/settings/calendar/test")
+    assert answer.status_code == 200
+    body = answer.json()
+    assert body["reached"] is True
+    assert body["source"] == "https://cal.test/dav/"
+
+
+async def test_the_calendar_test_reports_refused_credentials(stage, monkeypatch) -> None:
+    await _connect(stage)
+    _caldav_stands_in(monkeypatch, lambda request: httpx.Response(401))
+
+    answer = await stage.post("/api/settings/calendar/test")
+    assert answer.status_code == 502
+    assert answer.json()["error"]["code"] == "calendar_refused"
+
+
+async def test_the_calendar_test_reports_an_unanswering_server(stage, monkeypatch) -> None:
+    await _connect(stage)
+
+    def unreachable(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("no route to host")
+
+    _caldav_stands_in(monkeypatch, unreachable)
+    answer = await stage.post("/api/settings/calendar/test")
+    assert answer.status_code == 502
+    assert answer.json()["error"]["code"] == "calendar_unreachable"

@@ -300,3 +300,84 @@ async def test_model(
         )
 
     return ModelTested(reached=True, model=settings.model, base_url=settings.base_url)
+
+
+class CalendarTested(BaseModel):
+    reached: bool
+    # The collection address that answered - configuration, not a secret; the
+    # username and password stay server-side, like everywhere else on this screen.
+    source: str
+
+
+@router.post(
+    "/calendar/test",
+    response_model=CalendarTested,
+    summary="Ask the configured calendar for one free-busy day, and report what happened",
+)
+async def test_calendar(
+    request: Request, context: Annotated[WorkspaceContext, require_admin]
+) -> object:
+    """Prove the saved CalDAV credentials reach a calendar, before a caller finds out.
+
+    The probe is the cheapest real question the provider can ask: one day's free-busy
+    report. Reachability, sign-in and "this URL is actually a calendar collection" are
+    all proven by it; what the busy periods say does not matter here.
+
+    The same three refusals the availability endpoint distinguishes, as designed
+    answers rather than tracebacks - this is the button somebody presses when
+    credentials stop working.
+    """
+    import datetime as dt
+
+    from agent.providers.calendar import CalDAVCalendar, CalendarError
+    from api.settings import store as settings_store
+
+    db: DbSession = request.state.db
+
+    url = str(
+        await settings_store.get(db, "calendar.caldav_url", workspace_id=context.id) or ""
+    ).strip()
+    if not url:
+        return envelope_response(
+            status_code=status.HTTP_409_CONFLICT,
+            code="calendar_not_configured",
+            message="No calendar is connected. Fill in the CalDAV address and the app "
+            "password above, save, then test.",
+        )
+    username = str(
+        await settings_store.get(db, "calendar.caldav_username", workspace_id=context.id) or ""
+    )
+    password = str(
+        await settings_store.get(db, "calendar.caldav_password", workspace_id=context.id) or ""
+    )
+
+    calendar = CalDAVCalendar(url=url, username=username, password=password)
+    start = dt.datetime.now(dt.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    try:
+        await calendar.busy(start, start + dt.timedelta(days=1))
+    except CalendarError as error:
+        logger.warning("the calendar test failed: %s", error)
+        if error.status in (401, 403):
+            return envelope_response(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                code="calendar_refused",
+                message=f"The calendar server answered {error.status}. The username or "
+                "the app password is most likely wrong or revoked.",
+            )
+        if error.status is not None:
+            # The server answered, just not with a free-busy report - a 404 is usually
+            # a URL that is not a calendar collection, a 500 is the server's own day.
+            return envelope_response(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                code="calendar_unreachable",
+                message=f"The server answered {error.status} instead of a free-busy "
+                "report. Check that the URL points at a calendar collection.",
+            )
+        return envelope_response(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="calendar_unreachable",
+            message="Nothing answered at that address. Check the URL, and that this "
+            "machine can reach the calendar server.",
+        )
+
+    return CalendarTested(reached=True, source=url)

@@ -428,5 +428,11 @@
   "wev_conversation_ended": "Ein Gespräch ist beendet",
   "wev_conversation_started": "Ein Gespräch hat begonnen",
   "wev_knowledge_changed": "Eine Wissensquelle wurde geändert",
-  "wev_message_received": "Eine Nachricht ist eingegangen"
+  "wev_message_received": "Eine Nachricht ist eingegangen",
+  "calendar_test": "Kalender testen",
+  "calendar_testing": "Kalender wird gefragt…",
+  "calendar_test_reached": "Der Kalender hat geantwortet.",
+  "calendar_test_not_configured": "Noch kein Kalender verbunden. Oben die CalDAV-Adresse und das App-Passwort eintragen, dann speichern.",
+  "calendar_test_refused": "Der Kalender hat die Anmeldung abgelehnt.",
+  "calendar_test_unreachable": "Der Kalender konnte nicht gelesen werden."
 }

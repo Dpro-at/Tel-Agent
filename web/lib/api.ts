@@ -469,6 +469,12 @@ export function testModel(): Promise<{ reached: boolean; model: string; base_url
   return api("/api/settings/llm/test", { method: "POST" });
 }
 
+/** One free-busy day from the configured CalDAV calendar, to prove the saved
+ *  credentials reach it - the cheapest real question the provider can ask. */
+export function testCalendar(): Promise<{ reached: boolean; source: string }> {
+  return api("/api/settings/calendar/test", { method: "POST" });
+}
+
 // --- Members and workspaces ----------------------------------------------------
 
 export type MemberRole = "owner" | "admin" | "reception" | "viewer" | "invited";
