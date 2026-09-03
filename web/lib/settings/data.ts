@@ -140,23 +140,15 @@ export const SECTIONS: Partial<Record<(typeof TABS)[number]["id"], Section>> = {
   users: { title: "sec_users_title", body: "sec_users_body", fields: [] },
   api: { title: "sec_api_title", body: "sec_api_body", fields: [] },
   mcp: { title: "sec_mcp_title", body: "sec_mcp_body", fields: [] },
+  // No fields: the calendar row was a drawing under the wired CalDAV panel that
+  // replaced it - and its help copy promised booking, which the calendar rule forbids.
+  // The SMS gateway row waits for Milestone 11 like SMS itself; a control with no
+  // backend is removed, not drawn, and a drawing must not carry a real vendor's name
+  // with an invented failure beside it.
   integrations: {
     title: "sec_integrations_title",
     body: "sec_integrations_body",
-    fields: [
-      {
-        id: "calendar",
-        label: "f_calendar",
-        help: "f_calendar_help",
-        control: { kind: "select", valueText: "CalDAV — wagner-partner.at" },
-      },
-      {
-        id: "smsgw",
-        label: "f_sms_gw",
-        help: "f_sms_gw_help",
-        control: { kind: "input", valueText: "sms77.io", mono: true, invalid: true },
-      },
-    ],
+    fields: [],
   },
   // The model endpoint row that used to sit here is gone: it is a real field now, in
   // the wired panel at the top of this tab. What is left are still drawings.
