@@ -144,9 +144,7 @@ def _duration(text: str) -> dt.timedelta | None:
     rather than guessed."""
     import re
 
-    match = re.fullmatch(
-        r"P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?", text
-    )
+    match = re.fullmatch(r"P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?", text)
     if match is None or not any(match.groups()):
         return None
     days, hours, minutes, seconds = (int(part) if part else 0 for part in match.groups())

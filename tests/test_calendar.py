@@ -132,9 +132,7 @@ async def stage(migrated: AsyncSession, settings: Settings, database_url: str):
                 "/api/auth/login", json={"username": "mohamed", "password": PASSWORD}
             )
         ).status_code == 200
-        offered = toolset(
-            app.state.sessionmaker, workspace_id=workspace.id, conversation_id=1
-        )
+        offered = toolset(app.state.sessionmaker, workspace_id=workspace.id, conversation_id=1)
         tool = next(t for t in offered if t.name == "check_calendar")
         try:
             yield http, tool
