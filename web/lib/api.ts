@@ -697,6 +697,38 @@ export function homeSummary(since: Date): Promise<HomeSummary> {
 }
 
 /**
+ * The calendar screen's week — busy periods from the connected CalDAV source, with no
+ * names and no details, because RFC 4791's free-busy report carries none.
+ *
+ * `state` is part of the answer rather than an HTTP failure: `unconfigured` (nothing
+ * connected), `rejected` (the server refused the credentials) and `unreachable` (no
+ * answer at all) each need different words on the screen, and all three still have a
+ * screen to draw.
+ */
+export type CalendarState = "ok" | "unconfigured" | "rejected" | "unreachable";
+
+export type BusyPeriod = {
+  start: string; // UTC ISO instants; the browser places them on the reader's clock
+  end: string;
+};
+
+export type Availability = {
+  state: CalendarState;
+  source: string | null;
+  start: string;
+  days: number;
+  busy: BusyPeriod[];
+  hours: string | null;
+  timezone: string | null;
+};
+
+export function getAvailability(start: string, days: number): Promise<Availability> {
+  return api<Availability>(
+    `/api/calendar/availability?start=${encodeURIComponent(start)}&days=${days}`,
+  );
+}
+
+/**
  * The catalogue — what the business sells, and the only prices the assistant may
  * quote. Nothing ships in here.
  *
