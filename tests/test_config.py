@@ -42,6 +42,25 @@ def test_production_starts_once_the_key_is_present() -> None:
     assert settings.debug is False
 
 
+def test_an_empty_encryption_key_reads_as_absent_everywhere() -> None:
+    """`ENCRYPTION_KEY=""` in a `.env` must mean the same thing in every reader.
+
+    It used to read as *present* to `settings.encryption_key is not None` and as
+    *absent* to `crypto.key_available()` — two answers to one question. Normalised at
+    the settings boundary, so every reader downstream agrees. Whitespace is the same
+    case wearing a space.
+    """
+    for raw in ("", "   "):
+        assert _settings(encryption_key=raw).encryption_key is None
+
+
+def test_an_empty_key_still_refuses_production() -> None:
+    with pytest.raises(ValidationError) as error:
+        _settings(environment="production", encryption_key="")
+
+    assert "ENCRYPTION_KEY" in str(error.value)
+
+
 def test_a_synchronous_database_driver_is_refused() -> None:
     """A blocking driver stalls the event loop, and only under load."""
     with pytest.raises(ValidationError) as error:
