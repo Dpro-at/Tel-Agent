@@ -252,12 +252,16 @@ async def test_a_whole_call_runs_through_the_bridge_and_lands_in_the_archive(sta
     call = await db.scalar(select(Call).where(Call.conversation_id == conversation_id))
     assert call is not None
     rows = (
-        await db.execute(
-            select(Message)
-            .where(Message.conversation_id == conversation_id)
-            .order_by(Message.ts_ms, Message.id)
+        (
+            await db.execute(
+                select(Message)
+                .where(Message.conversation_id == conversation_id)
+                .order_by(Message.ts_ms, Message.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert [(r.speaker, r.text) for r in rows] == [
         ("caller", "Are you open on Saturday?"),
         ("agent", "Yes, we are open until noon."),

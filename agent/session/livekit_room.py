@@ -51,7 +51,12 @@ class LiveKitRoom:
     """
 
     def __init__(
-        self, room, source, *, from_e164, sample_rate: int = ROOM_SAMPLE_RATE  # noqa: ANN001
+        self,
+        room,
+        source,
+        *,
+        from_e164,
+        sample_rate: int = ROOM_SAMPLE_RATE,  # noqa: ANN001
     ) -> None:
         self.from_e164 = from_e164
         self._room = room
