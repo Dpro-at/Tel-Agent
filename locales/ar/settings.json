@@ -428,5 +428,11 @@
   "wev_conversation_ended": "انتهت محادثة",
   "wev_conversation_started": "بدأت محادثة",
   "wev_knowledge_changed": "تغيّر مصدر معرفة",
-  "wev_message_received": "وصلت رسالة"
+  "wev_message_received": "وصلت رسالة",
+  "calendar_test": "اختبار التقويم",
+  "calendar_testing": "جارٍ سؤال التقويم…",
+  "calendar_test_reached": "أجاب التقويم.",
+  "calendar_test_not_configured": "لا يوجد تقويم متصل بعد. املأ عنوان CalDAV وكلمة مرور التطبيق أعلاه ثم احفظ.",
+  "calendar_test_refused": "رفض التقويم تسجيل الدخول.",
+  "calendar_test_unreachable": "تعذّرت قراءة التقويم."
 }

@@ -47,6 +47,7 @@ import {
   testWebhook,
   testWhatsAppChannel,
   whatsappChannel,
+  testCalendar,
   testModel,
   signOutEverywhereElse,
   tokenList,
@@ -461,6 +462,7 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
                         <div className="border-od-line bg-od-panel-deep-3 rounded-[10px] border">
                           <SectionHead title={t.calendar_title} note={t.calendar_note} />
                           <LiveSettings fields={calendarFields(t)} labels={liveLabels(t)} />
+                          <CalendarTestRow t={t} />
                         </div>
                       </div>
                     ) : null}
@@ -588,6 +590,74 @@ function ModelTestRow({ t }: { t: SettingsDictionary }) {
         className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-md border p-[8px_14px] text-[13px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? t.model_testing : t.model_test}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The calendar panel's proof: one free-busy day from the saved CalDAV credentials.
+ * Reachability, sign-in and "this URL is a calendar collection" in one probe; what
+ * the busy periods say does not matter here.
+ */
+function CalendarTestRow({ t }: { t: SettingsDictionary }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ text: string; machine?: string; bad?: boolean } | null>(
+    null,
+  );
+
+  async function run() {
+    setBusy(true);
+    setResult(null);
+    try {
+      const outcome = await testCalendar();
+      setResult({ text: t.calendar_test_reached, machine: outcome.source });
+    } catch (thrown) {
+      if (thrown instanceof ApiError) {
+        if (thrown.code === "calendar_not_configured") {
+          setResult({ text: t.calendar_test_not_configured, bad: true });
+        } else if (thrown.code === "calendar_refused") {
+          setResult({ text: t.calendar_test_refused, machine: thrown.message, bad: true });
+        } else if (thrown.code === "calendar_unreachable") {
+          setResult({ text: t.calendar_test_unreachable, machine: thrown.message, bad: true });
+        } else {
+          setResult({ text: thrown.message, bad: true });
+        }
+      } else {
+        setResult({ text: thrown instanceof Error ? thrown.message : String(thrown), bad: true });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-[18px] gap-y-3 border-t border-[color:var(--od-raise-6)] p-[14px_18px]">
+      <div
+        className="max-w-[60ch] text-[13px] text-pretty"
+        style={{ color: result?.bad ? "var(--od-red-text-6)" : "var(--od-muted-5)" }}
+      >
+        {result ? (
+          <>
+            {result.text}
+            {result.machine ? (
+              <>
+                {" "}
+                <span dir="ltr" className="mono ltr-data">
+                  {result.machine}
+                </span>
+              </>
+            ) : null}
+          </>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void run()}
+        className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-md border p-[8px_14px] text-[13px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {busy ? t.calendar_testing : t.calendar_test}
       </button>
     </div>
   );
