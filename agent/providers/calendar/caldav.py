@@ -79,7 +79,10 @@ class CalDAVCalendar:
         except httpx.HTTPError as error:
             raise CalendarError(f"the calendar could not be reached: {error}") from error
         if response.status_code >= 300:
-            raise CalendarError(f"the calendar server answered {response.status_code}")
+            raise CalendarError(
+                f"the calendar server answered {response.status_code}",
+                status=response.status_code,
+            )
         return _parse_freebusy(response.text)
 
 

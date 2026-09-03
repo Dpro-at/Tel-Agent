@@ -49,6 +49,7 @@ from api.routes import apps as apps_routes
 from api.routes import assistants as assistant_routes
 from api.routes import auth as auth_routes
 from api.routes import backup as backup_routes
+from api.routes import calendar as calendar_routes
 from api.routes import catalogue as catalogue_routes
 from api.routes import contacts as contact_routes
 from api.routes import conversations as conversation_routes
@@ -167,6 +168,14 @@ TAGS_METADATA = [
             "What the agent is allowed to read before it answers. Adding a source "
             "changes the answers a customer gets, so it is recorded like a change to "
             "the assistant rather than like a file upload."
+        ),
+    },
+    {
+        "name": "calendar",
+        "description": (
+            "The free-busy week from the connected CalDAV source — busy periods with "
+            "no names and no details, because RFC 4791's free-busy report carries "
+            "none. Read only: the agent proposes and confirms, it never books (§B7)."
         ),
     },
     {
@@ -542,6 +551,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(contact_routes.router)
     app.include_router(home_routes.router)
     app.include_router(catalogue_routes.router)
+    app.include_router(calendar_routes.router)
     app.include_router(setup_routes.router)
     app.include_router(token_routes.router)
     app.include_router(mcp_routes.router)

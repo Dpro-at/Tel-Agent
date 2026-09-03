@@ -34,7 +34,16 @@ class Busy:
 
 
 class CalendarError(RuntimeError):
-    """The calendar could not be read. The tool turns this into a sentence, not a crash."""
+    """The calendar could not be read. The tool turns this into a sentence, not a crash.
+
+    `status` carries the HTTP status when the server answered one, else None. Refused
+    credentials (401/403) and no answer at all need different advice on a screen, and
+    parsing the message text to tell them apart would be the fragile version of this.
+    """
+
+    def __init__(self, message: str, *, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 class CalendarProvider(Protocol):
