@@ -1,0 +1,18 @@
+{
+  "title": "Voer de code in",
+  "sent_to": "Er ging een zescijferige code naar {address}. Die is tien minuten geldig.",
+  "digit_label": "Cijfer {position} van {total}",
+  "submit": "Doorgaan",
+  "submit_offline": "Server niet bereikbaar",
+  "wrong_code": "Die code klopt niet. Nog {attempts} pogingen voordat je een nieuwe code nodig hebt.",
+  "expired_title": "Deze code is verlopen",
+  "expired_body": "Codes zijn tien minuten geldig. Vraag een nieuwe aan - de oude werkt niet meer, ook niet als je hem terugvindt.",
+  "expires_in": "Verloopt over {time}",
+  "resend": "Nieuwe code sturen",
+  "resend_prompt_expired": "Niets meer om op te wachten",
+  "back": "Terug naar inloggen",
+  "self_hosted": "Zelf gehost · er verlaat niets deze machine",
+  "offline_title": "Deze browser kan je Tel-Agent-server niet bereiken",
+  "offline_body": "Geen antwoord van {host}. Je gesprekken blijven ongemoeid als de machine nog draait — dit is een netwerkprobleem tussen jou en die machine. Controleer of je op het bedrijfsnetwerk zit of met de VPN verbonden bent.",
+  "offline_retry": "Verbinding opnieuw proberen"
+}
