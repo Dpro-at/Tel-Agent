@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import ar from "../../../../locales/ar/update.json";
 import de from "../../../../locales/de/update.json";
 import en from "../../../../locales/en/update.json";
+import es from "../../../../locales/es/update.json";
+import nl from "../../../../locales/nl/update.json";
 
 import { pickDictionary } from "@/lib/i18n";
 import { isLocale } from "@/lib/locales";
@@ -16,7 +18,7 @@ export default async function UpdatePage({ params }: { params: Promise<{ locale:
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
 
-  const t = pickDictionary<UpdateDictionary>(locale, { en, de, ar });
+  const t = pickDictionary<UpdateDictionary>(locale, { en, de, ar, es, nl });
 
   return <Update locale={locale} t={t} />;
 }

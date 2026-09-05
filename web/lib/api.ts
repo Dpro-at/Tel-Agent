@@ -149,7 +149,7 @@ export function currentUser(): Promise<Me> {
 }
 
 /** The interface language of the signed-in account — the committed tier only. */
-export function updateMyLocale(locale: "en" | "de" | "ar"): Promise<Me> {
+export function updateMyLocale(locale: "en" | "de" | "ar" | "es" | "nl"): Promise<Me> {
   return api<Me>("/api/auth/me", { method: "PATCH", json: { locale } });
 }
 

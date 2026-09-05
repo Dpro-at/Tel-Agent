@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import ar from "../../../../../locales/ar/invite.json";
 import de from "../../../../../locales/de/invite.json";
 import en from "../../../../../locales/en/invite.json";
+import es from "../../../../../locales/es/invite.json";
+import nl from "../../../../../locales/nl/invite.json";
 
 import { pickDictionary } from "@/lib/i18n";
 import { isLocale } from "@/lib/locales";
@@ -20,7 +22,7 @@ export default async function InvitePage({
   const { locale, token } = await params;
   if (!isLocale(locale)) notFound();
 
-  const t = pickDictionary<InviteDictionary>(locale, { en, de, ar });
+  const t = pickDictionary<InviteDictionary>(locale, { en, de, ar, es, nl });
 
   return <AcceptInvite locale={locale} token={token} t={t} />;
 }

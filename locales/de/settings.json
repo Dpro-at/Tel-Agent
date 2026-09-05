@@ -101,7 +101,7 @@
   "f_keep_tr": "Mitschriften aufbewahren",
   "f_keep_tr_help": "Mitschriften bleiben durchsuchbar, auch wenn das Audio weg ist.",
   "f_lang": "Systemsprache",
-  "f_lang_help_general": "Die Vorgabe für die gesamte Installation: Bildschirme, Antworten des Assistenten, E-Mails, Exporte und Benachrichtigungen. Deutsch, Englisch und Arabisch sind vollständig übersetzt.",
+  "f_lang_help_general": "Der Standard für die gesamte Installation: Bildschirme, Assistent-Antworten, E-Mails, Exporte und Benachrichtigungen. Englisch, Deutsch, Arabisch, Spanisch und Niederländisch sind vollständig übersetzt.",
   "f_lang_help_profile": "Gilt für alles, was Sie sehen, und alles, was in Ihrem Namen hinausgeht — Bildschirme, E-Mails, Exporte und Benachrichtigungen.",
   "f_line_lost": "Leitung hat die Registrierung verloren",
   "f_llm_base_url": "Endpunkt",

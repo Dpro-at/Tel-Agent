@@ -101,7 +101,7 @@
   "f_keep_tr": "Keep transcripts for",
   "f_keep_tr_help": "Transcripts stay searchable after the audio is gone.",
   "f_lang": "System language",
-  "f_lang_help_general": "The default across the whole installation: screens, assistant replies, emails, exports and notifications. German, English and Arabic are fully translated.",
+  "f_lang_help_general": "The default across the whole installation: screens, assistant replies, emails, exports and notifications. English, German, Arabic, Spanish and Dutch are fully translated.",
   "f_lang_help_profile": "Applies to everything you see and everything sent in your name — screens, emails, exports and notifications.",
   "f_line_lost": "Line lost registration",
   "f_llm_base_url": "Endpoint",

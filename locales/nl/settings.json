@@ -101,7 +101,7 @@
   "f_keep_tr": "Transcripts bewaren",
   "f_keep_tr_help": "Transcripts blijven doorzoekbaar nadat de audio weg is.",
   "f_lang": "Systeemtaal",
-  "f_lang_help_general": "De standaard voor de hele installatie: schermen, antwoorden van de assistent, e-mails, exports en meldingen. Duits, Engels en Arabisch zijn volledig vertaald.",
+  "f_lang_help_general": "De standaard voor de hele installatie: schermen, assistent-antwoorden, e-mails, exports en meldingen. Engels, Duits, Arabisch, Spaans en Nederlands zijn volledig vertaald.",
   "f_lang_help_profile": "Geldt voor alles wat je ziet en alles wat in jouw naam wordt verzonden — schermen, e-mails, exports en meldingen.",
   "f_line_lost": "Lijn verloor registratie",
   "f_llm_base_url": "Endpoint",

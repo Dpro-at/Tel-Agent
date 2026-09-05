@@ -150,10 +150,10 @@ def _js_string(value: str) -> str:
 # are looking for is the one beside every other locale file.
 LOCALES = Path(__file__).resolve().parents[2] / "locales"
 
-# The three a release blocks on (locales/README.md). A channel set to anything else -
-# or to nothing - is served English, because a half-translated chat window is worse
-# than one language spoken consistently.
-SPOKEN = ("en", "de", "ar")
+# The languages a release blocks on (locales/README.md). A channel set to anything
+# else - or to nothing - is served English, because a half-translated chat window is
+# worse than one language spoken consistently.
+SPOKEN = ("en", "de", "ar", "es", "nl")
 RIGHT_TO_LEFT = ("ar",)
 
 

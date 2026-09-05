@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import ar from "../../../locales/ar/incoming-call.json";
 import de from "../../../locales/de/incoming-call.json";
 import en from "../../../locales/en/incoming-call.json";
+import es from "../../../locales/es/incoming-call.json";
+import nl from "../../../locales/nl/incoming-call.json";
 
 import { interpolate, pickDictionary } from "@/lib/i18n";
 import type { Locale } from "@/lib/locales";
@@ -15,7 +17,13 @@ import type { Locale } from "@/lib/locales";
  * by every screen that can receive a call.
  */
 type Dictionary = typeof en;
-const DICTIONARIES = { en, de: de as Dictionary, ar: ar as Dictionary };
+const DICTIONARIES = {
+  en,
+  de: de as Dictionary,
+  ar: ar as Dictionary,
+  es: es as Dictionary,
+  nl: nl as Dictionary,
+};
 type Key = keyof Dictionary;
 
 /** Seconds a person is given before the assistant picks up on its own. */

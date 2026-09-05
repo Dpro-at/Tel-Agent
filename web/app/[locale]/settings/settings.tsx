@@ -517,10 +517,12 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
 }
 
 /** A language is named in itself, never translated. */
-const LANGUAGES: { id: "en" | "de" | "ar"; endonym: string }[] = [
+const LANGUAGES: { id: "en" | "de" | "ar" | "es" | "nl"; endonym: string }[] = [
   { id: "en", endonym: "English" },
   { id: "de", endonym: "Deutsch" },
   { id: "ar", endonym: "العربية" },
+  { id: "es", endonym: "Español" },
+  { id: "nl", endonym: "Nederlands" },
 ];
 
 /**
@@ -779,7 +781,7 @@ function ProfilePanels({ t }: { t: SettingsDictionary }) {
     (entry) => entry.event === "password_changed" || entry.event === "password_reset",
   );
 
-  async function switchLanguage(next: "en" | "de" | "ar") {
+  async function switchLanguage(next: "en" | "de" | "ar" | "es" | "nl") {
     if (switching !== null || next === account.locale) return;
     setSwitching(next);
     setOutcome(null);

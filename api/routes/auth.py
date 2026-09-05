@@ -196,9 +196,9 @@ class ProfileUpdate(BaseModel):
     locale: str | None = Field(default=None, max_length=12)
 
 
-# The committed tier (locales/README.md): the three languages a release blocks on.
+# The committed tier (locales/README.md): the languages a release blocks on.
 # A community locale becomes selectable here when it is registered, not before.
-SUPPORTED_LOCALES = ("en", "de", "ar")
+SUPPORTED_LOCALES = ("en", "de", "ar", "es", "nl")
 
 
 @router.patch("/me", summary="Update the signed-in account", response_model=Me)

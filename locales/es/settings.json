@@ -61,7 +61,7 @@
   "f_keep_tr": "Conservar transcripciones durante",
   "f_keep_tr_help": "Las transcripciones siguen siendo buscables incluso después de eliminar el audio.",
   "f_lang": "Idioma del sistema",
-  "f_lang_help_general": "El idioma predeterminado en toda la instalación: pantallas, respuestas del asistente, correos, exportaciones y notificaciones. Alemán, inglés y árabe están completamente traducidos.",
+  "f_lang_help_general": "El valor por defecto de toda la instalación: pantallas, respuestas del asistente, correos, exportaciones y notificaciones. Inglés, alemán, árabe, español y neerlandés están traducidos por completo.",
   "f_lang_help_profile": "Se aplica a todo lo que ves y a todo lo que se envía en tu nombre: pantallas, correos, exportaciones y notificaciones.",
   "f_line_lost": "Pérdida de registro de línea",
   "f_loglevel": "Nivel de registro",

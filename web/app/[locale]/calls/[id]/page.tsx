@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import ar from "../../../../../locales/ar/call-detail.json";
 import de from "../../../../../locales/de/call-detail.json";
 import en from "../../../../../locales/en/call-detail.json";
+import es from "../../../../../locales/es/call-detail.json";
+import nl from "../../../../../locales/nl/call-detail.json";
 
 import { pickDictionary } from "@/lib/i18n";
 import { isLocale } from "@/lib/locales";
@@ -22,7 +24,7 @@ export default async function CallDetailPage({
   const conversationId = Number(id);
   if (!Number.isInteger(conversationId) || conversationId < 1) notFound();
 
-  const t = pickDictionary<CallDetailDictionary>(locale, { en, de, ar });
+  const t = pickDictionary<CallDetailDictionary>(locale, { en, de, ar, es, nl });
 
   return <CallDetail locale={locale} t={t} id={conversationId} />;
 }

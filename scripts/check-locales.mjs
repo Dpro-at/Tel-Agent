@@ -17,7 +17,7 @@
  *   node scripts/check-locales.mjs --list        # every missing key, not just counts
  *
  * Two tiers, as in locales/README.md. Only the committed locales gate anything: this
- * exits 1 when `de` or `ar` is missing a key, and 0 when a community language is
+ * exits 1 when a committed locale (de, ar, es, nl) is missing a key, and 0 when a community language is
  * behind — falling behind is precisely what a community locale is allowed to do.
  */
 
@@ -30,7 +30,7 @@ const LOCALES_DIR = join(ROOT, "locales");
 const SOURCE = "en";
 
 /** Kept current by the project. A gap in one of these fails the check. */
-const COMMITTED = new Set(["en", "de", "ar"]);
+const COMMITTED = new Set(["en", "de", "ar", "es", "nl"]);
 
 const args = process.argv.slice(2);
 const showAll = args.includes("--list");
