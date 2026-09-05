@@ -1,0 +1,3 @@
+#!/bin/sh
+launchctl bootout system/com.dpro.tel-agent.web 2>/dev/null || true
+launchctl bootout system/com.dpro.tel-agent.api 2>/dev/null || true

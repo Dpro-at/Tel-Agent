@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+mkdir -p '/Library/Application Support/Tel-Agent'
+if [ ! -f /Library/Tel-Agent/.env ]; then cp /Library/Tel-Agent/.env.template /Library/Tel-Agent/.env; fi
+chmod 600 /Library/Tel-Agent/.env
+launchctl bootstrap system /Library/LaunchDaemons/com.dpro.tel-agent.api.plist
+launchctl bootstrap system /Library/LaunchDaemons/com.dpro.tel-agent.web.plist
+USER="$(stat -f%Su /dev/console)"
+if [ "$USER" != "root" ]; then sudo -u "$USER" open http://localhost:38471 || true; fi

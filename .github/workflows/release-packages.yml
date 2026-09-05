@@ -17,6 +17,40 @@ permissions:
   contents: write
 
 jobs:
+  macos:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: macos-13
+          - arch: arm64
+            runner: macos-14
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build the dashboard
+        run: cd web && npm ci && npm run build
+      - name: Build the unsigned package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          [ "$GITHUB_REF_TYPE" = tag ] || VERSION="0.0.0-$(git rev-parse --short HEAD)"
+          sh packaging/macos/build-tree.sh ${{ matrix.arch }} "$RUNNER_TEMP/tel-agent-macos"
+          pkgbuild --root "$RUNNER_TEMP/tel-agent-macos/root" --scripts "$RUNNER_TEMP/tel-agent-macos/scripts" --identifier at.dpro.tel-agent --version "$VERSION" --install-location / "dist/Tel-Agent-$VERSION-macos-${{ matrix.arch }}-unsigned.pkg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tel-agent-macos-${{ matrix.arch }}
+          path: dist/*.pkg
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/*.pkg --clobber
+
   windows:
     runs-on: windows-latest
     steps:
