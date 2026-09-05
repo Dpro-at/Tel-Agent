@@ -37,13 +37,14 @@ jobs:
 
       # The dashboard, built with the default NEXT_PUBLIC_API_URL - the packaged
       # edition serves the standard localhost case, same as the published image.
+      # No NODE_ENV=production on this step: it would make `npm ci` skip the
+      # devDependencies the build itself needs (Tailwind's postcss plugin was the
+      # one that failed). `next build` sets production mode on its own.
       - name: Build the dashboard
         run: |
           cd web
           npm ci
           npm run build
-        env:
-          NODE_ENV: production
 
       - name: Stage the file tree
         run: |
