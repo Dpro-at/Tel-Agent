@@ -30,5 +30,12 @@
   "error_rule_exists": "Ya existe una regla para este número. Muévela en lugar de crear otra.",
   "error_offline_title": "No se pudo conectar con el servidor",
   "error_failed_title": "No se pudieron cargar las reglas",
-  "retry": "Intentar de nuevo"
+  "retry": "Intentar de nuevo",
+  "hours_failed": "No se pudo guardar. Inténtalo de nuevo.",
+  "hours_field": "Horario",
+  "hours_note": "Fuera de él el agente siempre responde — una regla que pasa a una persona solo vale mientras haya alguien. El bloqueo ignora el reloj. Como mo-fr 08:00-18:00, o 08:00-18:00 para todos los días; vacío significa las veinticuatro horas.",
+  "hours_save": "Guardar",
+  "hours_saved": "Guardado.",
+  "hours_timezone": "Zona horaria (IANA)",
+  "hours_title": "Horario del negocio"
 }

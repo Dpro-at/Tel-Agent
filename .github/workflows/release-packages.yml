@@ -63,10 +63,14 @@ jobs:
             # A dispatch run on a branch: a version that cannot be mistaken for a release.
             VERSION="0.0.0~$(git rev-parse --short HEAD)"
           fi
+          # nfpm does not expand env vars in `contents` paths, so the config is
+          # resolved with envsubst first and nfpm reads the concrete file.
+          export VERSION ARCH="${{ matrix.arch }}" STAGE="$RUNNER_TEMP/stage"
+          envsubst '$VERSION $ARCH $STAGE' \
+            < packaging/linux/nfpm.yaml > "$RUNNER_TEMP/nfpm.resolved.yaml"
           mkdir -p dist
           for format in deb rpm; do
-            VERSION="$VERSION" ARCH="${{ matrix.arch }}" STAGE="$RUNNER_TEMP/stage" \
-              nfpm package -f packaging/linux/nfpm.yaml -p "$format" -t dist/
+            nfpm package -f "$RUNNER_TEMP/nfpm.resolved.yaml" -p "$format" -t dist/
           done
           ls -lh dist/
 

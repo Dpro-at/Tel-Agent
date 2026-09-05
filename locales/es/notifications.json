@@ -64,5 +64,11 @@
   "title": "Notificaciones",
   "untranslated_note": "El texto de las notificaciones lo escribe aquello que las generó, y no se traduce.",
   "when_two_days": "hace 2 días",
-  "when_yesterday": "ayer"
+  "when_yesterday": "ayer",
+  "msg_agent_notification": "El agente te marcó algo en mitad de una conversación.",
+  "msg_channel_down": "El canal {channel} perdió la conexión. Los clientes que escriben ahí no reciben respuesta.",
+  "msg_channel_recovered": "El canal {channel} vuelve a responder.",
+  "msg_message_taken": "{name} dejó un mensaje: {reason}",
+  "msg_routed_to_person": "Una regla entregó esta conversación a una persona.",
+  "msg_transfer_requested": "El agente pidió que una persona tomara una conversación."
 }
