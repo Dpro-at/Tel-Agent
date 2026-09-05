@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import ar from "../../../../../locales/ar/key-sign-in.json";
 import de from "../../../../../locales/de/key-sign-in.json";
 import en from "../../../../../locales/en/key-sign-in.json";
+import es from "../../../../../locales/es/key-sign-in.json";
+import nl from "../../../../../locales/nl/key-sign-in.json";
 
 import { pickDictionary } from "@/lib/i18n";
 import { isLocale } from "@/lib/locales";
@@ -16,7 +18,7 @@ export default async function KeyPage({ params }: { params: Promise<{ locale: st
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
 
-  const t = pickDictionary<KeyDictionary>(locale, { en, de, ar });
+  const t = pickDictionary<KeyDictionary>(locale, { en, de, ar, es, nl });
 
   return <KeySignIn locale={locale} t={t} />;
 }

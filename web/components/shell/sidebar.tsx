@@ -7,6 +7,8 @@ import { useEffect, useState, useSyncExternalStore, type MouseEvent } from "reac
 import ar from "../../../locales/ar/shell.json";
 import de from "../../../locales/de/shell.json";
 import en from "../../../locales/en/shell.json";
+import es from "../../../locales/es/shell.json";
+import nl from "../../../locales/nl/shell.json";
 
 import { NavIcon } from "@/components/shell/icons";
 import { IncomingCall } from "@/components/shell/incoming-call";
@@ -75,7 +77,13 @@ function railOpen(): false {
  * being handed one by each of the twenty-six pages. It is a few dozen short labels.
  */
 type ShellDictionary = typeof en;
-const DICTIONARIES = { en, de: de as ShellDictionary, ar: ar as ShellDictionary };
+const DICTIONARIES = {
+  en,
+  de: de as ShellDictionary,
+  ar: ar as ShellDictionary,
+  es: es as ShellDictionary,
+  nl: nl as ShellDictionary,
+};
 
 type LabelKey = keyof ShellDictionary;
 

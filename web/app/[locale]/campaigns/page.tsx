@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import ar from "../../../../locales/ar/campaigns.json";
 import de from "../../../../locales/de/campaigns.json";
 import en from "../../../../locales/en/campaigns.json";
+import es from "../../../../locales/es/campaigns.json";
+import nl from "../../../../locales/nl/campaigns.json";
 
 import { pickDictionary } from "@/lib/i18n";
 import { isLocale } from "@/lib/locales";
@@ -16,7 +18,7 @@ export default async function CampaignsPage({ params }: { params: Promise<{ loca
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
 
-  const t = pickDictionary<CampaignsDictionary>(locale, { en, de, ar });
+  const t = pickDictionary<CampaignsDictionary>(locale, { en, de, ar, es, nl });
 
   return <Campaigns locale={locale} t={t} />;
 }

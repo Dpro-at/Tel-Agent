@@ -17,7 +17,7 @@ node scripts/check-placeholders.mjs                # every {placeholder} matches
 node scripts/check-placeholders.mjs --locale fr    # one language
 ```
 
-Only the committed locales gate anything: the script exits 1 when `de` or `ar` is
+Only the committed locales gate anything: the script exits 1 when a committed one is
 missing a key and 0 when a community language is behind. Use `--list` with `--locale`
 — on its own it prints every missing key in every language, which is tens of thousands
 of lines once the wanted languages are sitting there empty.
@@ -34,7 +34,7 @@ across untouched.
 
 | Tier | Locales | What the project promises |
 |---|---|---|
-| **Committed** | `en` · `de` · `ar` | Kept current. A new English string blocks a release until these three have it. |
+| **Committed** | `en` · `de` · `ar` · `es` · `nl` | Kept current. A new English string blocks a release until all of these have it. |
 | **Community** | everything else | Maintained by whoever turns up. Registered when complete, and allowed to fall behind without holding anything up. |
 
 The tiers exist so that adding a language costs the project nothing. A committed locale
@@ -137,6 +137,6 @@ the case to get right.
 - One file per screen per language, never one dictionary for everything: the screens are
   client components, so a single file would ship the whole product's copy to the browser
   on every route.
-- A key added to `en/` and forgotten in `de/` or `ar/` is a `tsc` error, not a blank
+- A key added to `en/` and forgotten in a committed locale is a `tsc` error, not a blank
   label at runtime — the German and Arabic dictionaries are passed where `typeof en` is
   expected. Community locales are checked by the script instead.

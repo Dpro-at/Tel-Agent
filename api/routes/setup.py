@@ -49,9 +49,9 @@ class FirstRunRequest(BaseModel):
     password: str
     workspace_name: str = Field(min_length=1, max_length=120)
     email: str | None = None
-    # Only the three the interface is translated into (§A4). A locale nothing renders
-    # would leave the first screen in a language the account holder did not choose.
-    locale: Annotated[str, Field(pattern="^(en|de|ar)$")] = "en"
+    # Only the languages the interface is translated into (§A4). A locale nothing
+    # renders would leave the first screen in a language nobody chose.
+    locale: Annotated[str, Field(pattern="^(en|de|ar|es|nl)$")] = "en"
 
 
 class FirstRunDone(BaseModel):

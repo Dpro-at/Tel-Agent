@@ -37,16 +37,16 @@ jobs:
         working-directory: web
 
   locales:
-    name: locales — de and ar are complete
+    name: locales — the committed languages are complete
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # Two tiers, per locales/README.md: this exits 1 when `de` or `ar` is missing a
-      # key, and 0 when a community language is behind. Falling behind is exactly what
-      # a community locale is allowed to do.
+      # Two tiers, per locales/README.md: this exits 1 when a committed locale
+      # (de, ar, es, nl) is missing a key, and 0 when a community language is behind.
+      # Falling behind is exactly what a community locale is allowed to do.
       - run: node scripts/check-locales.mjs
       # And this one gates every locale, community ones included. Being unfinished is
       # allowed; a {placeholder} that was dropped or misspelled in a string that already
