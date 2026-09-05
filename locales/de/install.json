@@ -8,7 +8,7 @@
   "fr_workspace": "Name des Betriebs",
   "fr_workspace_help": "Der Arbeitsbereich, zu dem alles gehört. Lässt sich später umbenennen.",
   "fr_email": "E-Mail-Adresse",
-  "fr_email_help": "Optional. Dorthin ginge ein Rücksetzcode, sobald ein Mailserver eingerichtet ist.",
+  "fr_email_help": "Damit meldest du dich an dieser Installation an. Die Adresse bleibt auf diesem Rechner.",
   "fr_submit": "Konto anlegen",
   "fr_submitting": "Wird eingerichtet …",
   "fr_checking": "Installation wird geprüft …",

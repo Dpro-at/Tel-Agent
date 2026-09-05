@@ -8,7 +8,7 @@
   "fr_workspace": "Business name",
   "fr_workspace_help": "The workspace everything belongs to. It can be renamed later.",
   "fr_email": "Email address",
-  "fr_email_help": "Optional. Where a reset code would go once a mail server is configured.",
+  "fr_email_help": "This is how you sign in to this installation. It stays on this machine.",
   "fr_submit": "Create the account",
   "fr_submitting": "Setting up…",
   "fr_checking": "Checking this installation…",
