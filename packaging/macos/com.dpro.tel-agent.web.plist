@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>Label</key><string>com.dpro.tel-agent.web</string><key>ProgramArguments</key><array><string>/Library/Tel-Agent/node/bin/node</string><string>web/server.js</string></array><key>EnvironmentVariables</key><dict><key>NODE_ENV</key><string>production</string><key>HOSTNAME</key><string>127.0.0.1</string><key>PORT</key><string>38471</string></dict><key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>WorkingDirectory</key><string>/Library/Tel-Agent/web-app</string></dict></plist>
