@@ -35,7 +35,7 @@ mkdir -p "$OPT" "$STAGE/etc/tel-agent" "$STAGE/usr/lib/systemd/system"
 # --- CPython ---------------------------------------------------------------
 curl -fsSL -o /tmp/python.tar.gz \
   "https://github.com/astral-sh/python-build-standalone/releases/download/${PYTHON_BUILD}/cpython-${PYTHON_VERSION}+${PYTHON_BUILD}-${PY_ARCH}-install_only.tar.gz"
-tar -xzf /tmp/python.tar.gz -C "$OPT"   # extracts to $OPT/python
+tar -xzf /tmp/python.tar.gz -C "$OPT"   # the tarball's top level is python/
 
 # --- Node (runs the dashboard's standalone server) -------------------------
 curl -fsSL -o /tmp/node.tar.xz \
@@ -43,18 +43,15 @@ curl -fsSL -o /tmp/node.tar.xz \
 mkdir -p "$OPT/node"
 tar -xJf /tmp/node.tar.xz -C "$OPT/node" --strip-components=1
 
-# --- The API, in a venv at its final path ----------------------------------
-# The venv is created at the absolute path it will live at, so it needs no
-# relocation tricks; both runners are native per architecture, so a plain
-# install resolves the right wheels. /opt is root's on a CI runner.
-if [ ! -w /opt ] && command -v sudo >/dev/null 2>&1; then
-    sudo install -d -m 0755 -o "$(id -un)" /opt/tel-agent
-else
-    mkdir -p /opt/tel-agent
-fi
-"$OPT/python/bin/python3" -m venv /opt/tel-agent/venv
-/opt/tel-agent/venv/bin/pip install --no-cache-dir .
-mv /opt/tel-agent/venv "$OPT/venv"
+# --- The API, straight into the bundled Python -----------------------------
+# No venv, deliberately. A venv's symlinks and shebangs embed the absolute path
+# of the interpreter that created it - built in a staging directory, they ship
+# pointing at a runner path that exists on no target machine (the first proving
+# run's exact failure). The bundled CPython is wholly ours, so its own
+# site-packages IS the isolated environment; installing there leaves no
+# symlinks and no baked-in paths to get wrong.
+"$OPT/python/bin/python3" -m ensurepip --upgrade >/dev/null 2>&1 || true
+"$OPT/python/bin/python3" -m pip install --no-cache-dir .
 
 # The migration chain and its config ride along - the service migrates before it
 # serves, same as the container entrypoint.
