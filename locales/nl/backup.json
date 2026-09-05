@@ -64,7 +64,7 @@
   "restore_submit": "Herstellen en herstarten",
   "loading": "Laden…",
   "retry": "Opnieuw proberen",
-  "error_offline_title": "De server kon niet worden bereikt",
+  "error_offline_title": "Server niet bereikbaar",
   "error_failed_title": "Deze pagina kon niet laden",
   "target_path_label": "Waar back-ups worden geschreven",
   "target_unwritable": "Dit doel is nu niet beschrijfbaar: {detail}",
