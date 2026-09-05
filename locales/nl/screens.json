@@ -1,0 +1,130 @@
+{
+  "brand": "Tel-Agent",
+  "title": "Schermen",
+  "intro": "Zesentwintig schermen. Elk app-scherm opent met een statuswisselaar bovenaan — standaard, leeg, laden, fout, offline — en de zijbalk draagt de donker/licht-schakelaar, het account- en werkruimtemenu, en de melding voor inkomende oproepen.",
+  "reference_label": "Referentiescherm",
+  "reference_title": "Oproepdetail",
+  "reference_desc": "Geopend vanuit elke rij in de gesprekkenlijst: de opname met zijn golfvorm, het transcript naast het fluisterkanaal, en wat de assistent deed — samenvatting, herkende intentie, aangeroepen tools en die ene die faalde. Zet het vocabulaire voor al het andere.",
+  "items": {
+    "home": {
+      "title": "Home",
+      "desc": "Eerst wat jouw aandacht nodig heeft, daarna recente gesprekken, en een bewust ondergeschikte belkaart."
+    },
+    "notifications": {
+      "title": "Meldingen",
+      "desc": "Bovenin wat op een menselijke beslissing wacht, met de knoppen die het oplossen; daaronder een dertigdagenoverzicht van wat al is afgehandeld."
+    },
+    "conversations": {
+      "title": "Kanalen",
+      "desc": "Alleen geschreven gesprekken — WhatsApp, Telegram, SMS en webchat — gegroepeerd per dag. Oproepen hebben hun eigen lijst; dit scherm is wat iemand heeft getypt."
+    },
+    "calls": {
+      "title": "Gesprekkenlijst",
+      "desc": "Elke oproep in een tabel, met full-text zoeken over alle transcripts."
+    },
+    "call_detail": {
+      "title": "Oproepdetail",
+      "desc": "Eén afgeronde oproep geopend vanuit de lijst: het transcript naast wat de assistent ermee deed."
+    },
+    "live": {
+      "title": "Live gesprekken",
+      "desc": "Bereikbaar via de badge onderin de zijbalk zodra er iets op de lijn is: links alle gelijktijdige oproepen, rechts het live-transcript van de geselecteerde, fluisteren, overnemen en doorgeven."
+    },
+    "calendar": {
+      "title": "Agenda",
+      "desc": "Weekraster van de bedrijfsagenda, waarin alles wat de agent heeft geboekt als zodanig is gemarkeerd."
+    },
+    "contacts": {
+      "title": "Contacten",
+      "desc": "Klanten en partners, en precies welke velden de assistent mag gebruiken."
+    },
+    "assistants": {
+      "title": "Assistenten",
+      "desc": "Elke assistent met type, nummer en laatste activiteit — plus een donker/licht-schakelaar."
+    },
+    "campaigns": {
+      "title": "Uitgaande campagnes",
+      "desc": "Een lijst bellen in plaats van beantwoorden. De lopende campagne staat bovenaan met een live-verdeling van geboekt, bereikt, geen antwoord en overgeslagen; de flow in vier stappen legt vast wie wordt gebeld, wat er wordt gezegd, en binnen welke uren."
+    },
+    "consent": {
+      "title": "Toestemmingslog",
+      "desc": "Bereikbaar vanuit Uitgaande campagnes. Elke poging met de reden waarom die was toegestaan, een ondertekende keten die achteraf niet te wijzigen is, en de niet-bellen-lijst waarop iemand belandt in dezelfde seconde dat die stop zegt."
+    },
+    "catalogue": {
+      "title": "Catalogus",
+      "desc": "Wat het bedrijf verkoopt en wat het vastlegt over de kopers — diensten met duur, prijs en of de assistent ze mag boeken; contactvelden die elk hun eigen toestemming dragen; en een tab die de zinnen toont die de assistent ervan kan zeggen."
+    },
+    "editor": {
+      "title": "Assistent bewerken",
+      "desc": "Geopend vanuit een rij in Assistenten. Capaciteitsrijen in plaats van één lang formulier: actieve rijen tonen hun huidige waarde, slapende een stippellijnrand en een plus."
+    },
+    "knowledge": {
+      "title": "Kennis",
+      "desc": "De gedeelde bronnenbibliotheek en de gestructureerde openingstijden. Bereikbaar vanuit het paneel Vragen beantwoorden van een assistent, niet vanuit de zijbalk."
+    },
+    "rules": {
+      "title": "Routeringsregels",
+      "desc": "Eén geordende lijst van boven naar beneden gelezen — de eerste regel die bij een oproep past, bepaalt wie opneemt, en een tester speelt de lijst af tegen elk nummer om te laten zien welke regel wint en welke nooit worden bereikt."
+    },
+    "numbers": {
+      "title": "Nummers en telefoons",
+      "desc": "Twee tabs: de nummers die deze installatie beantwoordt, en de bureautelefoons, handsets en apps die als toestellen op de lijn rinkelen."
+    },
+    "apps": {
+      "title": "Apps",
+      "desc": "Alles wat te installeren is: kanaal-apps voor telefoon, WhatsApp en Telegram, plus tools die de agent kan gebruiken."
+    },
+    "connectors": {
+      "title": "Connectors",
+      "desc": "MCP-toolservers die de agent tijdens een gesprek aanroept: wie elk ervan draait, welke tools ervan mogen draaien, en wat kapot is. De andere richting — Tel-Agent als server — blijft in Instellingen."
+    },
+    "usage": {
+      "title": "Gebruik",
+      "desc": "Wat de maand heeft gekost, uitgesplitst naar wat echt geld kost, tegen een budget dat waarschuwt maar de lijn nooit afkapt."
+    },
+    "settings": {
+      "title": "Instellingen",
+      "desc": "Negen tabs, standaardwaarden ingevuld, geavanceerd uit de weg. Bereikbaar via het accountmenu onderin de zijbalk."
+    },
+    "health": {
+      "title": "Systeemstatus",
+      "desc": "Wat draait en wat niet: services, schijf, modellatentie, en de mislukte checks met het commando dat elk ervan herstelt."
+    },
+    "backup": {
+      "title": "Back-up en herstel",
+      "desc": "Wat wordt geback-upt, wanneer het voor het laatst liep, en een herstel dat hardop zegt wat het overschrijft."
+    },
+    "update": {
+      "title": "Update",
+      "desc": "De versie die je draait, wat er is veranderd, en een update die kan worden teruggedraaid."
+    },
+    "install": {
+      "title": "Installatie en setup",
+      "desc": "Eén flow van uitpakken tot het eerste gesprek: taal, installatietype, machinecheck, database en poorten, dan de telefoonlijn, de branche die de catalogus vult, de begroeting, en bellen naar je eigen nummer."
+    },
+    "workspace": {
+      "title": "Nieuwe werkruimte",
+      "desc": "Een tweede bedrijf of locatie apart gehouden: geef een naam, begin leeg of kopieer de huidige setup, bepaal wie erin mag."
+    },
+    "login": {
+      "title": "Inloggen",
+      "desc": "Lokale accounts op je eigen server. Geen cloudlogin."
+    },
+    "forgot": {
+      "title": "Wachtwoord resetten",
+      "desc": "Vraag een code aan, of het commando wanneer er geen mailserver is."
+    },
+    "code": {
+      "title": "Verificatiecode",
+      "desc": "Zes cijfers, verloop en opnieuw versturen. Hetzelfde scherm dient voor tweefactor-inloggen."
+    },
+    "new_password": {
+      "title": "Nieuw wachtwoord",
+      "desc": "Sterkte gemeten in de browser, en wat wijzigen ervan uitlogt."
+    },
+    "key": {
+      "title": "Inloggen met een sleutel",
+      "desc": "Een challenge die je op je eigen machine ondertekent. Geen wachtwoord, geen sleutelupload."
+    }
+  }
+}
