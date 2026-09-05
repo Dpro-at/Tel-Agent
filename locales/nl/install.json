@@ -8,7 +8,7 @@
   "fr_workspace": "Bedrijfsnaam",
   "fr_workspace_help": "De werkruimte waar alles bij hoort. Kan later worden hernoemd.",
   "fr_email": "E-mailadres",
-  "fr_email_help": "Optioneel. Waar een resetcode naartoe zou gaan zodra een mailserver is geconfigureerd.",
+  "fr_email_help": "Hiermee log je in op deze installatie. Het adres blijft op deze machine.",
   "fr_submit": "Het account aanmaken",
   "fr_submitting": "Bezig met instellen…",
   "fr_checking": "Deze installatie controleren…",

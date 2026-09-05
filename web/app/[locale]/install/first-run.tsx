@@ -32,12 +32,10 @@ export function FirstRun({ locale, t }: { locale: Locale; t: InstallDictionary }
   const router = useRouter();
   const [needed, setNeeded] = useState<boolean | null>(null);
   const [unreachable, setUnreachable] = useState(false);
-  const [done, setDone] = useState(false);
 
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [workspace, setWorkspace] = useState("");
-  const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -60,14 +58,17 @@ export function FirstRun({ locale, t }: { locale: Locale; t: InstallDictionary }
     setProblem(null);
     try {
       await completeFirstRun({
-        username: username.trim(),
+        // The first account uses its email address to sign in. The API retains the
+        // existing `username` wire field for compatibility with older installations.
+        username: email.trim(),
         password,
         workspace_name: workspace.trim(),
-        email: email.trim() || undefined,
+        email: email.trim(),
         locale,
       });
-      // The response set the session cookie, so this account is signed in already.
-      setDone(true);
+      // The response set the session cookie, so first run ends here rather than
+      // becoming a second setup wizard. Configuration belongs in the app.
+      router.replace(`/${locale}/home`);
     } catch (error) {
       if (error instanceof OfflineError) {
         setProblem(t.fr_offline);
@@ -107,40 +108,6 @@ export function FirstRun({ locale, t }: { locale: Locale; t: InstallDictionary }
     return <p className="text-od-muted-5 mt-[8vh] text-center">{t.fr_checking}</p>;
   }
 
-  if (done) {
-    return (
-      <div className={shell}>
-        <h1 className="m-0 text-[21px] font-semibold tracking-[-0.01em] text-pretty">
-          {t.fr_done_title}
-        </h1>
-        <p className="text-od-muted-4 mt-2 text-pretty">{t.fr_done_body}</p>
-        <div className="mt-5 flex flex-col gap-[10px]">
-          {/* The two screens that exist and matter before anybody writes in. Named
-              rather than rebuilt inside a wizard: both are already wired. */}
-          <Link
-            href={`/${locale}/settings`}
-            className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 rounded-md border p-[11px_16px] font-medium hover:no-underline"
-          >
-            {t.fr_next_model}
-          </Link>
-          <Link
-            href={`/${locale}/connectors`}
-            className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 rounded-md border p-[11px_16px] font-medium hover:no-underline"
-          >
-            {t.fr_next_widget}
-          </Link>
-          <button
-            type="button"
-            onClick={() => router.push(`/${locale}/home`)}
-            className="border-od-border-2 text-od-muted hover:text-od-text-2 mt-1 cursor-pointer rounded-md border bg-transparent p-[9px_15px]"
-          >
-            {t.fr_next_skip}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   if (!needed) {
     return (
       <div className={shell}>
@@ -169,25 +136,16 @@ export function FirstRun({ locale, t }: { locale: Locale; t: InstallDictionary }
       <p className="text-od-muted-4 mt-2 text-pretty">{t.fr_blurb}</p>
 
       <div className="mt-5 flex flex-col gap-[14px]">
-        <Field id="workspace" label={t.fr_workspace} help={t.fr_workspace_help}>
-          {/* A business name is prose and follows the page's direction; the three
-              below are Latin-script data and stay left-to-right even in Arabic. */}
+        <Field id="email" label={t.fr_email} help={t.fr_email_help}>
           <input
-            id="workspace"
-            required
-            value={workspace}
-            onChange={(event) => setWorkspace(event.target.value)}
-            className={inputClass.replace(" ltr-data", "")}
-          />
-        </Field>
-        <Field id="username" label={t.fr_username} help={t.fr_username_help}>
-          <input
-            id="username"
+            id="email"
             required
             dir="ltr"
-            autoComplete="username"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
+            type="email"
+            autoComplete="email"
+            maxLength={64}
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
             className={inputClass}
           />
         </Field>
@@ -203,15 +161,14 @@ export function FirstRun({ locale, t }: { locale: Locale; t: InstallDictionary }
             className={inputClass}
           />
         </Field>
-        <Field id="email" label={t.fr_email} help={t.fr_email_help}>
+        <Field id="workspace" label={t.fr_workspace} help={t.fr_workspace_help}>
+          {/* A business name is prose and follows the page direction. */}
           <input
-            id="email"
-            dir="ltr"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            className={inputClass}
+            id="workspace"
+            required
+            value={workspace}
+            onChange={(event) => setWorkspace(event.target.value)}
+            className={inputClass.replace(" ltr-data", "")}
           />
         </Field>
       </div>
