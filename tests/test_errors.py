@@ -157,10 +157,10 @@ async def test_a_500_carries_cors_headers(failing_client) -> None:
     request id to quote, and an error screen that could only say "offline". curl does
     not enforce CORS, so nothing but this assertion catches it.
     """
-    response = await failing_client.get("/boom", headers={"Origin": "http://localhost:3000"})
+    response = await failing_client.get("/boom", headers={"Origin": "http://localhost:38471"})
 
     assert response.status_code == 500
-    assert response.headers.get("access-control-allow-origin") == "http://localhost:3000"
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:38471"
     # And the id is readable, which is the other half of being able to report it.
     assert (
         "x-request-id" in (response.headers.get("access-control-expose-headers") or "").lower()
@@ -170,8 +170,8 @@ async def test_a_500_carries_cors_headers(failing_client) -> None:
 async def test_a_refusal_carries_cors_headers(client) -> None:
     """The 401 the dashboard must read to send somebody to the sign-in screen."""
     response = await client.get(
-        "/api/notifications", headers={"Origin": "http://localhost:3000"}
+        "/api/notifications", headers={"Origin": "http://localhost:38471"}
     )
 
     assert response.status_code == 401
-    assert response.headers.get("access-control-allow-origin") == "http://localhost:3000"
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:38471"

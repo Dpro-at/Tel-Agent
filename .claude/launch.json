@@ -8,9 +8,12 @@
         "--prefix",
         "web",
         "run",
-        "dev"
+        "dev",
+        "--",
+        "--port",
+        "38471"
       ],
-      "port": 3000,
+      "port": 38471,
       "autoPort": false
     },
     {
@@ -25,9 +28,9 @@
         "--host",
         "127.0.0.1",
         "--port",
-        "8000"
+        "38472"
       ],
-      "port": 8000,
+      "port": 38472,
       "autoPort": false
     }
   ]

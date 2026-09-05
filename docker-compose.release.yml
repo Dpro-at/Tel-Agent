@@ -11,7 +11,7 @@
 # **One honest limitation of the published web image:** the dashboard bakes the API's
 # public address in at build time (NEXT_PUBLIC_API_URL), so the published image serves
 # the standard case - browser and server on the same machine, API on
-# http://localhost:8000. Reaching the dashboard under another hostname needs the web
+# http://localhost:38472. Reaching the dashboard under another hostname needs the web
 # image rebuilt for it: use docker-compose.yml with TEL_AGENT_PUBLIC_API_URL set.
 
 services:
@@ -22,7 +22,7 @@ services:
       ENCRYPTION_KEY: "${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env - generate one with openssl rand -hex 32}"
       ENVIRONMENT: ${TEL_AGENT_ENVIRONMENT:-production}
       DATABASE_URL: ${TEL_AGENT_DATABASE_URL:-sqlite+aiosqlite:////data/tel-agent.db}
-      CORS_ORIGINS: ${TEL_AGENT_WEB_ORIGIN:-http://localhost:3000}
+      CORS_ORIGINS: ${TEL_AGENT_WEB_ORIGIN:-http://localhost:38471}
       TRUSTED_HOSTS: ${TEL_AGENT_TRUSTED_HOSTS:-localhost,127.0.0.1}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -32,7 +32,7 @@ services:
     volumes:
       - tel-agent-data:/data
     ports:
-      - "${TEL_AGENT_API_LISTEN:-127.0.0.1:8000}:8000"
+      - "${TEL_AGENT_API_LISTEN:-127.0.0.1:38472}:38472"
 
   web:
     image: ghcr.io/dpro-at/tel-agent-web:${TEL_AGENT_VERSION:-latest}
@@ -41,7 +41,7 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "${TEL_AGENT_WEB_LISTEN:-127.0.0.1:3000}:3000"
+      - "${TEL_AGENT_WEB_LISTEN:-127.0.0.1:38471}:38471"
 
   db:
     image: postgres:17-alpine

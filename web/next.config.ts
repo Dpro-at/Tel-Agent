@@ -6,7 +6,7 @@ import type { NextConfig } from "next";
 // has to name it or every request the dashboard makes is blocked by its own policy.
 // This is the line that makes a CSP here worth testing in a browser rather than
 // asserting: get it wrong and the screens render perfectly and load nothing.
-const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:38472";
 
 /**
  * G1. What this page is allowed to load, and who may frame it.

@@ -21,7 +21,7 @@ def test_the_default_keeps_the_port_on_this_machine() -> None:
     interface, so none is a reason to make this the other way round."""
     settings = Settings(_env_file=None)
     assert settings.bind_host == "127.0.0.1"
-    assert settings.bind_port == 8000
+    assert settings.bind_port == 38472
 
 
 @pytest.mark.parametrize("host", ["127.0.0.1", "::1", "localhost", "LOCALHOST", "127.5.5.5"])

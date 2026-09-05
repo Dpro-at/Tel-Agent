@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     # list-typed field straight from the environment, which fails before any validator
     # runs - and `CORS_ORIGINS=https://telagent.local` is exactly what a `.env` holds.
     cors_origins: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["http://localhost:3000"]
+        default_factory=lambda: ["http://localhost:38471"]
     )
     trusted_hosts: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["localhost", "127.0.0.1"]
@@ -111,7 +111,7 @@ class Settings(BaseSettings):
     # `python -m api`, which is why that is the documented way to start it: a default
     # nothing applies is decoration.
     bind_host: str = "127.0.0.1"
-    bind_port: int = Field(default=8000, ge=1, le=65535)
+    bind_port: int = Field(default=38472, ge=1, le=65535)
 
     # Mail. Most installations have none, and that is a designed state rather than a
     # broken one: the `forgot` screen says so and points at a command on the machine.

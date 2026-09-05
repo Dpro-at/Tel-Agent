@@ -1,0 +1,9 @@
+<service>
+  <id>TelAgent</id>
+  <name>Tel-Agent</name>
+  <description>Tel-Agent API and background jobs.</description>
+  <executable>%BASE%\api-start.cmd</executable>
+  <workingdirectory>%BASE%</workingdirectory>
+  <log mode="roll" />
+  <onfailure action="restart" delay="10 sec" />
+</service>

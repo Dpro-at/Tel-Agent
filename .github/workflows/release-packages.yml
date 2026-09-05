@@ -17,6 +17,49 @@ permissions:
   contents: write
 
 jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build the dashboard
+        shell: pwsh
+        run: |
+          cd web
+          npm ci
+          npm run build
+
+      - name: Stage the installer tree
+        shell: pwsh
+        run: |
+          $env:TEL_AGENT_VERSION = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.Substring(1) } else { "0.0.0-$($env:GITHUB_SHA.Substring(0, 7))" }
+          packaging/windows/build-tree.ps1 -Stage "$env:RUNNER_TEMP\\tel-agent-stage"
+
+      - name: Build the unsigned installer
+        shell: pwsh
+        run: |
+          $env:TEL_AGENT_VERSION = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.Substring(1) } else { "0.0.0-$($env:GITHUB_SHA.Substring(0, 7))" }
+          $env:TEL_AGENT_STAGE = "$env:RUNNER_TEMP\\tel-agent-stage"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" packaging/windows/tel-agent.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tel-agent-windows-x64
+          path: dist/*.exe
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh release upload $env:GITHUB_REF_NAME dist/*.exe --clobber
+
   linux:
     strategy:
       matrix:
@@ -84,7 +127,7 @@ jobs:
             runuser -u telagent -- sh -c "cd /opt/tel-agent && ENCRYPTION_KEY=$(grep ^ENCRYPTION_KEY= /etc/tel-agent/tel-agent.env | cut -d= -f2) DATABASE_URL=sqlite+aiosqlite:////var/lib/tel-agent/tel-agent.db /bin/sh /opt/tel-agent/api-start.sh" &
             for i in $(seq 1 30); do
               sleep 2
-              if /opt/tel-agent/python/bin/python3 -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/health\", timeout=3)"; then
+              if /opt/tel-agent/python/bin/python3 -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:38472/health\", timeout=3)"; then
                 echo "API answered /health"; exit 0
               fi
             done
