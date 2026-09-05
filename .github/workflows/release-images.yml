@@ -1,0 +1,71 @@
+# Publishes the two Docker images to GitHub Container Registry, so `docker compose up`
+# can *pull* an installation instead of building one - the half of Milestone 10 that
+# turns the download page's Docker entry into a real button.
+#
+# Triggered by publishing a version tag (the release-drafter's draft becoming real is
+# exactly that moment), and manually for a proving run - a manual run publishes images
+# tagged with the branch name, never `latest`, so trying the pipeline cannot impersonate
+# a release.
+#
+# No secrets beyond the workflow's own GITHUB_TOKEN. Note for the first publish:
+# GHCR creates new packages private - making `tel-agent-api` and `tel-agent-web`
+# public is a one-time click in the package settings.
+
+name: Release images
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image: tel-agent-api
+            dockerfile: docker/api.Dockerfile
+          - image: tel-agent-web
+            dockerfile: docker/web.Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      # arm64 alongside amd64: a Raspberry-class box or an ARM VPS is a natural home
+      # for a self-hosted agent, and cross-building here is cheaper than asking every
+      # such user to build on the device.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # Lowercase is a registry requirement, and the org name carries a capital.
+          images: ghcr.io/dpro-at/${{ matrix.image }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=branch
+
+      - uses: docker/build-push-action@v6
+        with:
+          # The build context is the repository root, not the sub-package - web/
+          # imports locales/ one level up and the API image installs the package.
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max
