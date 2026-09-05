@@ -1,0 +1,74 @@
+# Tel-Agent from the published images - install without building anything.
+#
+#   cp .env.example .env        # set ENCRYPTION_KEY (openssl rand -hex 32)
+#   docker compose -f docker-compose.release.yml up -d
+#
+# Same layout as docker-compose.yml (which builds from source), same volumes, same
+# profiles - the two files are interchangeable on one machine because the volume
+# names match. Pin a version with TEL_AGENT_VERSION=0.1.0 in .env; unset means the
+# newest release.
+#
+# **One honest limitation of the published web image:** the dashboard bakes the API's
+# public address in at build time (NEXT_PUBLIC_API_URL), so the published image serves
+# the standard case - browser and server on the same machine, API on
+# http://localhost:8000. Reaching the dashboard under another hostname needs the web
+# image rebuilt for it: use docker-compose.yml with TEL_AGENT_PUBLIC_API_URL set.
+
+services:
+  api:
+    image: ghcr.io/dpro-at/tel-agent-api:${TEL_AGENT_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env - generate one with openssl rand -hex 32}"
+      ENVIRONMENT: ${TEL_AGENT_ENVIRONMENT:-production}
+      DATABASE_URL: ${TEL_AGENT_DATABASE_URL:-sqlite+aiosqlite:////data/tel-agent.db}
+      CORS_ORIGINS: ${TEL_AGENT_WEB_ORIGIN:-http://localhost:3000}
+      TRUSTED_HOSTS: ${TEL_AGENT_TRUSTED_HOSTS:-localhost,127.0.0.1}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+    volumes:
+      - tel-agent-data:/data
+    ports:
+      - "${TEL_AGENT_API_LISTEN:-127.0.0.1:8000}:8000"
+
+  web:
+    image: ghcr.io/dpro-at/tel-agent-web:${TEL_AGENT_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${TEL_AGENT_WEB_LISTEN:-127.0.0.1:3000}:3000"
+
+  db:
+    image: postgres:17-alpine
+    profiles: ["postgres"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: telagent
+      POSTGRES_PASSWORD: ${TEL_AGENT_POSTGRES_PASSWORD:-}
+      POSTGRES_DB: telagent
+    volumes:
+      - tel-agent-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telagent -d telagent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  n8n:
+    image: n8nio/n8n:latest
+    profiles: ["automation"]
+    restart: unless-stopped
+    volumes:
+      - tel-agent-n8n:/home/node/.n8n
+    ports:
+      - "${TEL_AGENT_N8N_LISTEN:-127.0.0.1:5678}:5678"
+
+volumes:
+  tel-agent-data:
+  tel-agent-postgres:
+  tel-agent-n8n:

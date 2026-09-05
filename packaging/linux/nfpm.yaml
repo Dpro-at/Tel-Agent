@@ -1,0 +1,34 @@
+# nfpm configuration - one file, two outputs (deb and rpm).
+#   VERSION=x.y.z ARCH=amd64 STAGE=/tmp/stage nfpm package -f packaging/linux/nfpm.yaml -p deb
+# The staged tree comes from packaging/linux/build-tree.sh.
+
+name: tel-agent
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+section: net
+priority: optional
+maintainer: Dpro GmbH <office@dpro.at>
+description: |
+  Self-hosted AI agent that answers your business's phone and messages.
+  Ships its own Python and Node runtimes; everything runs locally under
+  /opt/tel-agent with data in /var/lib/tel-agent.
+vendor: Dpro GmbH
+homepage: https://tel-agent.com
+license: AGPL-3.0
+
+contents:
+  - src: ${STAGE}/opt/tel-agent
+    dst: /opt/tel-agent
+  - src: ${STAGE}/usr/lib/systemd/system/tel-agent-api.service
+    dst: /usr/lib/systemd/system/tel-agent-api.service
+  - src: ${STAGE}/usr/lib/systemd/system/tel-agent-web.service
+    dst: /usr/lib/systemd/system/tel-agent-web.service
+  # The operator's config: never overwritten on upgrade.
+  - src: ${STAGE}/etc/tel-agent/tel-agent.env
+    dst: /etc/tel-agent/tel-agent.env
+    type: config|noreplace
+
+scripts:
+  postinstall: packaging/linux/postinstall.sh
+  preremove: packaging/linux/preremove.sh

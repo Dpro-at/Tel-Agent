@@ -1,0 +1,130 @@
+{
+  "brand": "Tel-Agent",
+  "title": "Pantallas",
+  "intro": "Veintiséis pantallas. Cada pantalla de la aplicación comienza con un selector de estado en la parte superior — predeterminado, vacío, cargando, error, sin conexión — y la barra lateral incluye el interruptor de modo claro/oscuro, el menú de cuenta y espacio de trabajo, y la notificación de llamadas entrantes.",
+  "reference_label": "Pantalla de referencia",
+  "reference_title": "Detalle de llamada",
+  "reference_desc": "Se abre desde cualquier fila en la lista de llamadas: la grabación con su forma de onda, la transcripción junto al canal interno, y lo que hizo el asistente — resumen, intención detectada, herramientas utilizadas y la que falló. Define el vocabulario para todo lo demás.",
+  "items": {
+    "home": {
+      "title": "Inicio",
+      "desc": "Primero lo que requiere tu atención, después las llamadas recientes, y una tarjeta de marcación deliberadamente secundaria."
+    },
+    "notifications": {
+      "title": "Notificaciones",
+      "desc": "Elementos que requieren una decisión humana en la parte superior, con los botones para resolverlos; debajo, un historial de treinta días de lo ya gestionado."
+    },
+    "conversations": {
+      "title": "Canales",
+      "desc": "Solo conversaciones escritas — WhatsApp, Telegram, SMS y chat web — agrupadas por día. Las llamadas tienen su propia lista; esta pantalla muestra lo que alguien escribió."
+    },
+    "calls": {
+      "title": "Lista de llamadas",
+      "desc": "Todas las llamadas en una tabla, con búsqueda de texto completo en todas las transcripciones."
+    },
+    "call_detail": {
+      "title": "Detalle de llamada",
+      "desc": "Una llamada finalizada abierta desde la lista: la transcripción junto a lo que hizo el asistente con ella."
+    },
+    "live": {
+      "title": "Llamadas en vivo",
+      "desc": "Accesible desde el indicador en la parte inferior de la barra lateral cuando hay actividad: todas las llamadas simultáneas a la izquierda, y a la derecha la transcripción en vivo de la seleccionada, el canal interno, tomar control y transferir."
+    },
+    "calendar": {
+      "title": "Calendario",
+      "desc": "Vista semanal de la agenda del negocio, con todo lo que el agente ha programado marcado como tal."
+    },
+    "contacts": {
+      "title": "Contactos",
+      "desc": "Clientes y socios, y exactamente qué campos puede usar el asistente."
+    },
+    "assistants": {
+      "title": "Asistentes",
+      "desc": "Cada asistente con su tipo, número y última actividad — además de un interruptor claro/oscuro."
+    },
+    "campaigns": {
+      "title": "Campañas salientes",
+      "desc": "Llamar a una lista en lugar de responderla. La campaña activa aparece arriba con un desglose en tiempo real de reservadas, atendidas, sin respuesta y omitidas; el flujo de creación en cuatro pasos define a quién llamar, qué decir y en qué horarios."
+    },
+    "consent": {
+      "title": "Registro de consentimiento",
+      "desc": "Accesible desde Campañas salientes. Cada intento con la razón por la que fue permitido, una cadena firmada que no puede editarse posteriormente, y la lista de no llamar donde cualquiera entra en cuanto dice parar."
+    },
+    "catalogue": {
+      "title": "Catálogo",
+      "desc": "Lo que vende el negocio y lo que registra sobre quienes compran — servicios con su duración, precio y si el asistente puede reservarlos; campos de contacto con sus permisos; y una pestaña con las frases que el asistente puede usar."
+    },
+    "editor": {
+      "title": "Editar asistente",
+      "desc": "Se abre desde una fila en Asistentes. Filas por capacidad en lugar de un único formulario largo: las activas muestran su valor actual, las inactivas tienen borde discontinuo y un botón de añadir."
+    },
+    "knowledge": {
+      "title": "Conocimiento",
+      "desc": "La biblioteca compartida de fuentes y el horario estructurado. Se accede desde el panel de preguntas del asistente, no desde la barra lateral."
+    },
+    "rules": {
+      "title": "Reglas de enrutamiento",
+      "desc": "Una lista ordenada que se lee de arriba hacia abajo — la primera regla que coincide decide quién responde, y un simulador permite probar cualquier número para ver qué regla se aplica y cuáles nunca se alcanzan."
+    },
+    "numbers": {
+      "title": "Números y teléfonos",
+      "desc": "Dos pestañas: los números que atiende la instalación, y los teléfonos de escritorio, dispositivos y apps que suenan como extensiones."
+    },
+    "apps": {
+      "title": "Aplicaciones",
+      "desc": "Todo lo instalable: apps de canal para teléfono, WhatsApp y Telegram, además de herramientas que el agente puede usar."
+    },
+    "connectors": {
+      "title": "Conectores",
+      "desc": "Servidores de herramientas MCP que el agente usa durante una llamada: quién los ejecuta, qué herramientas pueden usarse y qué falló. La dirección inversa — Tel-Agent como servidor — está en Configuración."
+    },
+    "usage": {
+      "title": "Uso",
+      "desc": "Coste del mes, desglosado por lo que realmente genera cargos, frente a un presupuesto que alerta pero nunca corta la línea."
+    },
+    "settings": {
+      "title": "Configuración",
+      "desc": "Nueve pestañas, valores predeterminados completos, opciones avanzadas ocultas. Se accede desde el menú de cuenta en la barra lateral."
+    },
+    "health": {
+      "title": "Estado del sistema",
+      "desc": "Qué está funcionando y qué no: servicios, disco, latencia del modelo y comprobaciones fallidas con el comando para solucionarlas."
+    },
+    "backup": {
+      "title": "Copia de seguridad y restauración",
+      "desc": "Qué se respalda, cuándo fue la última ejecución y una restauración que indica claramente qué sobrescribirá."
+    },
+    "update": {
+      "title": "Actualización",
+      "desc": "La versión actual, los cambios y una actualización que puede revertirse."
+    },
+    "install": {
+      "title": "Instalación y configuración",
+      "desc": "Un flujo único desde la instalación hasta la primera llamada: idioma, tipo de instalación, verificación del sistema, base de datos y puertos, luego la línea telefónica, el tipo de negocio, el saludo y la llamada de prueba."
+    },
+    "workspace": {
+      "title": "Nuevo espacio de trabajo",
+      "desc": "Un segundo negocio o ubicación separado: asígnale un nombre, empieza desde cero o copia la configuración actual, y decide quién tiene acceso."
+    },
+    "login": {
+      "title": "Iniciar sesión",
+      "desc": "Cuentas locales en tu propio servidor. Sin inicio de sesión en la nube."
+    },
+    "forgot": {
+      "title": "Restablecer contraseña",
+      "desc": "Solicita un código o usa el comando cuando no haya servidor de correo."
+    },
+    "code": {
+      "title": "Código de verificación",
+      "desc": "Seis dígitos, expiración y reenvío. Esta pantalla también sirve para la verificación en dos factores."
+    },
+    "new_password": {
+      "title": "Nueva contraseña",
+      "desc": "La seguridad se evalúa en el navegador, y se indica qué sesiones se cerrarán al cambiarla."
+    },
+    "key": {
+      "title": "Iniciar sesión con clave",
+      "desc": "Un desafío firmado en tu propia máquina. Sin contraseña, sin subir claves."
+    }
+  }
+}

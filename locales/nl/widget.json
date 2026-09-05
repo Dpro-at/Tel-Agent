@@ -1,0 +1,10 @@
+{
+  "title": "Chat",
+  "open": "Chat openen",
+  "close": "Chat sluiten",
+  "placeholder": "Typ een bericht",
+  "send": "Versturen",
+  "not_sent": "Dit bericht kon niet worden verzonden.",
+  "no_reply": "Nu geen antwoord.",
+  "cut_off": "Dat antwoord is afgekapt."
+}

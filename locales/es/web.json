@@ -1,0 +1,102 @@
+{
+  "app": {
+    "name": "Tel-Agent"
+  },
+  "nav": {
+    "home": "Inicio",
+    "conversations": "Conversaciones",
+    "contacts": "Contactos",
+    "rules": "Reglas",
+    "agent": "Agente",
+    "settings": "Configuración"
+  },
+  "status": {
+    "connected": "Conectado",
+    "degraded": "Degradado",
+    "offline": "Desconectado"
+  },
+  "channel": {
+    "web_chat": "Chat web",
+    "phone": "Teléfono",
+    "email": "Correo electrónico",
+    "sms": "SMS",
+    "whatsapp": "WhatsApp",
+    "telegram": "Telegram",
+    "messenger": "Messenger",
+    "instagram": "Instagram",
+    "discord": "Discord"
+  },
+  "handling": {
+    "ai": "Gestionado por IA",
+    "passed": "Transferido a un humano",
+    "blocked": "Bloqueado",
+    "attention": "Requiere atención"
+  },
+  "speaker": {
+    "visitor": "Visitante",
+    "agent": "Agente",
+    "human": "Operador"
+  },
+  "conversations": {
+    "title": "Conversaciones",
+    "search_placeholder": "Buscar todo lo que se dijo",
+    "search_hint": "Búsqueda de texto completo en todas las conversaciones",
+    "column_who": "Quién",
+    "column_channel": "Canal",
+    "column_started": "Inicio",
+    "column_duration": "Duración",
+    "column_handling": "Gestión",
+    "column_summary": "Resumen",
+    "empty_title": "Aún no hay conversaciones",
+    "empty_body": "Cuando alguien inicia un chat, aparece aquí con la transcripción completa.",
+    "count": "{count} conversaciones"
+  },
+  "detail": {
+    "back": "Volver a conversaciones",
+    "summary": "Resumen",
+    "intent": "Intención detectada",
+    "tools": "Herramientas utilizadas",
+    "whisper": "Canal interno",
+    "whisper_note": "Instrucciones para el operador. El visitante nunca las vio.",
+    "transcript": "Transcripción",
+    "human_joined": "humano se unió: {name}",
+    "agent_resumed": "el agente retomó",
+    "empty_title": "Sin transcripción",
+    "empty_body": "No se registró nada para esta conversación.",
+    "tool_ok": "ok",
+    "tool_failed": "falló",
+    "language": "Idioma",
+    "confidence": "Confianza"
+  },
+  "common": {
+    "loading": "Cargando",
+    "retry": "Intentar de nuevo"
+  },
+  "auth": {
+    "title": "Iniciar sesión",
+    "subtitle": "Las cuentas existen solo en este servidor. No hay inicio de sesión en la nube, y un restablecimiento nunca sale de tu propio servidor de correo.",
+    "username": "Nombre de usuario",
+    "password": "Contraseña",
+    "forgot": "¿Olvidaste la contraseña?",
+    "submit": "Iniciar sesión",
+    "submit_offline": "Servidor no accesible",
+    "submit_locked": "Bloqueado por ahora",
+    "wrong_password": "Esa contraseña no coincide con este nombre de usuario.",
+    "server_error": "El servidor no pudo responder, por lo que la contraseña no se verificó. Nada está bloqueado ni hay ningún problema con la cuenta — inténtalo de nuevo en un momento.",
+    "key_prompt": "¿Iniciar sesión con una clave?",
+    "key_link": "Usar un certificado SSH",
+    "blocked_label": "Inicio de sesión bloqueado",
+    "blocked_title": "Demasiados intentos fallidos en esta cuenta",
+    "blocked_body": "Cinco contraseñas incorrectas seguidas, por lo que esta cuenta está bloqueada. Si no fuiste tú, alguien está intentando acceder — un administrador puede desbloquearla y forzar un cambio de contraseña desde la pestaña de usuarios.",
+    "blocked_unlocks": "se desbloquea a las {time}",
+    "empty_title": "No existen cuentas en esta instalación",
+    "empty_body": "Esta es una instalación nueva y nadie se ha registrado todavía. La primera cuenta que crees será el administrador — podrá añadir a los demás después.",
+    "empty_action": "Crear la primera cuenta",
+    "offline_title": "Este navegador no puede conectarse a tu servidor Tel-Agent",
+    "offline_body": "Sin respuesta desde {host}. Tus llamadas no se ven afectadas si la máquina sigue en funcionamiento — es un problema de red entre tú y ella. Verifica que estás en la red de la empresa o conectado a la VPN.",
+    "offline_retry": "Reintentar conexión",
+    "self_hosted": "Autoalojado · nada sale de esta máquina",
+    "continue": "Continuar al panel",
+    "language": "Idioma"
+  }
+}
