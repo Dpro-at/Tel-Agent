@@ -14,7 +14,7 @@
 import { activeWorkspaceId } from "./workspace";
 
 /** Where `api/` is. Same-origin in production, a separate port in development. */
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:38472";
 
 export type ApiErrorBody = {
   code: string;

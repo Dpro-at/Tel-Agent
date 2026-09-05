@@ -173,9 +173,9 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Then open **http://localhost:3000**. The first visit creates the administrator —
+Then open **http://localhost:38471**. The first visit creates the administrator —
 there are no default credentials. The API and its documentation are on
-http://localhost:8000/docs, and conversations live on the `tel-agent-data`
+http://localhost:38472/docs, and conversations live on the `tel-agent-data`
 volume (SQLite by default; a `postgres` profile is in `docker-compose.yml`).
 
 From the first tagged release on, the images are also published to GitHub

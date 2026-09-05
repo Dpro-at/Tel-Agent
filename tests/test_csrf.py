@@ -122,10 +122,10 @@ async def test_the_refusal_happens_before_authentication(signed_up: AsyncClient)
 
 async def test_the_dashboard_origin_still_works(signed_up: AsyncClient) -> None:
     """The configured CORS origin — the dashboard in development — is allowed."""
-    await _sign_in(signed_up, origin="http://localhost:3000")
+    await _sign_in(signed_up, origin="http://localhost:38471")
 
     response = await signed_up.post(
-        "/api/auth/logout", headers={"Origin": "http://localhost:3000"}
+        "/api/auth/logout", headers={"Origin": "http://localhost:38471"}
     )
 
     assert response.status_code == 200
@@ -168,7 +168,7 @@ async def test_gate_refusals_carry_cors_headers(signed_up: AsyncClient) -> None:
     a browser ever saw it, and why this asserts the header rather than the status.
     """
     signed_up.cookies.clear()
-    origin = "http://localhost:3000"
+    origin = "http://localhost:38471"
 
     unauthenticated = await signed_up.get("/api/auth/me", headers={"Origin": origin})
     assert unauthenticated.status_code == 401
@@ -249,7 +249,7 @@ def test_a_websocket_handshake_from_the_dashboard_completes(ws_app) -> None:
     client = TestClient(ws_app)
 
     with client.websocket_connect(
-        "/ws-probe", headers={"Origin": "http://localhost:3000", "Host": "localhost"}
+        "/ws-probe", headers={"Origin": "http://localhost:38471", "Host": "localhost"}
     ) as websocket:
         assert websocket.receive_text() == "hello"
 

@@ -86,7 +86,7 @@ async def client(settings: Settings) -> AsyncIterator[AsyncClient]:
     """An HTTP client speaking to the application in-process.
 
     `ASGITransport` means no port is bound and no server is started, so the suite stays
-    fast and cannot collide with a development server already running on 8000.
+    fast and cannot collide with a development server already running on 38472.
     """
     app = create_app(settings)
 

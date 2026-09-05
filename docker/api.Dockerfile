@@ -47,13 +47,13 @@ USER telagent
 # Inside the container the server must listen on the bridge interface - the host
 # decides what is published, and the compose file publishes loopback only.
 ENV BIND_HOST=0.0.0.0 \
-    BIND_PORT=8000 \
+    BIND_PORT=38472 \
     DATABASE_URL=sqlite+aiosqlite:////data/tel-agent.db
 
-EXPOSE 8000
+EXPOSE 38472
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:38472/health', timeout=4)"]
 
 # Via `sh` rather than directly: a COPY from a Windows checkout has no execute
 # bit to preserve, and the script does not need one this way.

@@ -25,7 +25,7 @@ Source: "{#Stage}\app\.env"; DestDir: "{app}"; Flags: onlyifdoesntexist
 Filename: "{app}\TelAgentService.exe"; Parameters: "install"; Flags: runhidden waituntilterminated
 Filename: "{app}\TelAgentService.exe"; Parameters: "start"; Flags: runhidden waituntilterminated
 Filename: "schtasks.exe"; Parameters: "/Create /F /SC DAILY /ST 03:00 /RU SYSTEM /TN ""Tel-Agent Update"" /TR ""{app}\update.cmd"""; Flags: runhidden waituntilterminated
-Filename: "http://localhost:3000"; Flags: postinstall shellexec skipifsilent
+Filename: "http://localhost:38471"; Flags: postinstall shellexec skipifsilent
 
 [UninstallRun]
 Filename: "{app}\TelAgentService.exe"; Parameters: "stop"; Flags: runhidden waituntilterminated

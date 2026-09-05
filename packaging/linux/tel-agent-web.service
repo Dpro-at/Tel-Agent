@@ -1,6 +1,6 @@
 # The Tel-Agent dashboard - Next.js standalone served by the bundled Node.
-# The published build serves the standard case: dashboard on localhost:3000,
-# API on localhost:8000. Another hostname means rebuilding the dashboard with
+# The published build serves the standard case: dashboard on localhost:38471,
+# API on localhost:38472. Another hostname means rebuilding the dashboard with
 # its own NEXT_PUBLIC_API_URL - see the repository's Docker documentation.
 
 [Unit]
@@ -15,7 +15,7 @@ Group=telagent
 WorkingDirectory=/opt/tel-agent/web-app
 Environment=NODE_ENV=production
 Environment=HOSTNAME=127.0.0.1
-Environment=PORT=3000
+Environment=PORT=38471
 ExecStart=/opt/tel-agent/node/bin/node web/server.js
 Restart=on-failure
 RestartSec=3

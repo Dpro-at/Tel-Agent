@@ -6,7 +6,7 @@
 #
 # NEXT_PUBLIC_API_URL is baked at build time - it is a browser-side constant, and
 # the CSP's connect-src is derived from it. The default serves an installation
-# reached as http://localhost:3000 with the API published on localhost:8000. An
+# reached as http://localhost:38471 with the API published on localhost:38472. An
 # installation reached under another name rebuilds with its own value; the compose
 # file wires that through TEL_AGENT_PUBLIC_API_URL.
 
@@ -24,7 +24,7 @@ COPY web/ web/
 # stage can copy it unconditionally; Next serves an empty one happily.
 RUN mkdir -p web/public
 
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ARG NEXT_PUBLIC_API_URL=http://localhost:38472
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
     NODE_ENV=production
 RUN cd web && npm run build
@@ -46,8 +46,8 @@ USER node
 
 ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
-    PORT=3000
+    PORT=38471
 
-EXPOSE 3000
+EXPOSE 38471
 
 CMD ["node", "web/server.js"]

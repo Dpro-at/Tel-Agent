@@ -3,7 +3,7 @@
 #   cp .env.example .env        # set ENCRYPTION_KEY (openssl rand -hex 32)
 #   docker compose up -d --build
 #
-# Dashboard on http://localhost:3000, API on http://localhost:8000. Both are
+# Dashboard on http://localhost:38471, API on http://localhost:38472. Both are
 # published on loopback only (§B9): reaching an installation from elsewhere goes
 # through a private network, a VPN, or a reverse proxy terminating TLS - see the
 # Docker section in README.md, including how the TEL_AGENT_* variables below
@@ -35,7 +35,7 @@ services:
       ENCRYPTION_KEY: "${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env - generate one with openssl rand -hex 32}"
       ENVIRONMENT: ${TEL_AGENT_ENVIRONMENT:-production}
       DATABASE_URL: ${TEL_AGENT_DATABASE_URL:-sqlite+aiosqlite:////data/tel-agent.db}
-      CORS_ORIGINS: ${TEL_AGENT_WEB_ORIGIN:-http://localhost:3000}
+      CORS_ORIGINS: ${TEL_AGENT_WEB_ORIGIN:-http://localhost:38471}
       TRUSTED_HOSTS: ${TEL_AGENT_TRUSTED_HOSTS:-localhost,127.0.0.1}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -45,21 +45,21 @@ services:
     volumes:
       - tel-agent-data:/data
     ports:
-      # Loopback by default. Publish wider only on purpose, e.g. 0.0.0.0:8000.
-      - "${TEL_AGENT_API_LISTEN:-127.0.0.1:8000}:8000"
+      # Loopback by default. Publish wider only on purpose, e.g. 0.0.0.0:38472.
+      - "${TEL_AGENT_API_LISTEN:-127.0.0.1:38472}:38472"
 
   web:
     build:
       context: .
       dockerfile: docker/web.Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${TEL_AGENT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_API_URL: ${TEL_AGENT_PUBLIC_API_URL:-http://localhost:38472}
     restart: unless-stopped
     depends_on:
       api:
         condition: service_healthy
     ports:
-      - "${TEL_AGENT_WEB_LISTEN:-127.0.0.1:3000}:3000"
+      - "${TEL_AGENT_WEB_LISTEN:-127.0.0.1:38471}:38471"
 
   db:
     image: postgres:17-alpine
@@ -82,7 +82,7 @@ services:
       retries: 5
 
   # §B10's optional automation profile. n8n reaches the API over the compose
-  # network as http://api:8000, authenticating like any other machine client -
+  # network as http://api:38472, authenticating like any other machine client -
   # a webhook target, or a machine token minted on the API tab.
   n8n:
     image: n8nio/n8n:latest

@@ -31,7 +31,7 @@ fi
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload
     systemctl enable --now tel-agent-api.service tel-agent-web.service
-    echo "Tel-Agent is starting: dashboard on http://localhost:3000 (loopback only)."
+    echo "Tel-Agent is starting: dashboard on http://localhost:38471 (loopback only)."
 else
     echo "systemd is not running; start the services yourself when it is:"
     echo "  systemctl enable --now tel-agent-api tel-agent-web"

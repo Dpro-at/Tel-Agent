@@ -88,9 +88,9 @@ def test_a_wildcard_cors_origin_is_refused() -> None:
 
 def test_comma_separated_origins_are_parsed() -> None:
     """A `.env` file holds strings, not JSON lists."""
-    settings = _settings(cors_origins="http://localhost:3000, https://telagent.local")
+    settings = _settings(cors_origins="http://localhost:38471, https://telagent.local")
 
-    assert settings.cors_origins == ["http://localhost:3000", "https://telagent.local"]
+    assert settings.cors_origins == ["http://localhost:38471", "https://telagent.local"]
 
 
 def test_settings_are_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
