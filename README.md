@@ -178,6 +178,11 @@ there are no default credentials. The API and its documentation are on
 http://localhost:8000/docs, and conversations live on the `tel-agent-data`
 volume (SQLite by default; a `postgres` profile is in `docker-compose.yml`).
 
+From the first tagged release on, the images are also published to GitHub
+Container Registry, so the build step can be skipped entirely:
+`docker compose -f docker-compose.release.yml up -d` — same layout, same
+volumes, interchangeable with the from-source file on one machine.
+
 Both ports are published on **loopback only**. Reaching the installation from
 other machines is a decision made in `.env` — the `TEL_AGENT_*` block there
 lists the three values to change and why the dashboard image is rebuilt for it.
