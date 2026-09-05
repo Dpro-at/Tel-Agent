@@ -16,7 +16,7 @@ For the human contributor path (fork → claim → branch → PR), follow
 ## Non-negotiable
 
 1. **English only** in code, comments, commits, PRs, and issues. UI strings live in
-   `locales/` (`en` / `de` / `ar`).
+   `locales/` (`en` / `de` / `ar` / `es` / `nl`).
 2. **Never name a competitor** anywhere public — irreversible once pushed.
 3. **Never commit secrets** — keys go in `.env` (ignored) or encrypted DB columns later.
 4. **Stay inside the issue.** Extra ideas go in `IDEAS.md` or a new issue, not this branch.
@@ -35,7 +35,7 @@ For the human contributor path (fork → claim → branch → PR), follow
 | `agent/` | Soft real-time conversation / call path (Python). Never serves the dashboard. |
 | `api/` | FastAPI REST + WebSocket. Never touches audio. |
 | `web/` | Next.js dashboard. Talks **only** to `api/`. |
-| `locales/` | UI strings. One translated file per PR for first contributions. |
+| `locales/` | UI strings, five committed languages. One translated file per PR for first contributions. |
 | `docs/SPEC.md` | Single source of truth for product behaviour |
 | `docs/ARCHITECTURE.md` | What may import / talk to what |
 | `IDEAS.md` | Parking lot for anything outside current milestone |
@@ -83,6 +83,33 @@ that carry content — the rest are pointers, so the rules can never drift apart
 
 Using an agent that reads none of these? Point it at `AGENTS.md` by hand and open a PR
 adding its entry file as a one-line pointer.
+
+---
+
+## Working alongside other agents
+
+More than one coding agent works on this repository at the same time (Claude Code,
+OpenAI Codex, Google Antigravity, and sometimes a human contributor). They do not see
+each other. The branches and pull requests on GitHub are the only shared state, so:
+
+1. **One task, one branch, one PR, your own worktree.** Never edit `main` directly.
+   `git worktree add ../tel_agent-<task> -b <prefix>/<task>` keeps agents from
+   stepping on each other's working trees.
+2. **Say who you are.** The first line of every PR description is
+   `Agent: claude-code` / `Agent: codex` / `Agent: antigravity` / `Agent: human`.
+3. **Check for an open PR on the same files before you start.**
+   `gh pr list --repo Dpro-at/Tel-Agent --json number,title,headRefName,files`
+   If one exists, do not open a second — comment on it or ask the maintainer.
+4. **Never review your own PR.** Ask another agent, or the maintainer, for the review.
+5. **The maintainer merges.** Do not merge, do not force-push, do not delete branches
+   that are not yours.
+6. **Commits carry the maintainer's name alone** — no `Co-Authored-By` trailer of any
+   kind, whatever your harness suggests.
+7. **No key ever appears in a PR, a comment, or a chat.** If a task needs one, stop
+   and say so; the maintainer enters keys in the product's settings screens.
+
+The maintainer keeps a private board of which agent holds which task. If you were
+given a task from it, the task's *Done when* is your acceptance test — nothing more.
 
 ## Cursor-specific rules
 
