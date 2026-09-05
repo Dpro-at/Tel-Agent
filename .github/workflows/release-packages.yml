@@ -1,0 +1,97 @@
+# Builds the Linux packages - deb and rpm, amd64 and arm64 - and attaches them to
+# the release whose tag triggered the build. The download page's Linux entry
+# becomes real the day these exist on a published release.
+#
+# Same proving rule as the images workflow: a manual run builds the packages and
+# keeps them as workflow artifacts, but only a version tag attaches anything to a
+# release - trying the pipeline cannot impersonate one.
+
+name: Release packages
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # The dashboard, built with the default NEXT_PUBLIC_API_URL - the packaged
+      # edition serves the standard localhost case, same as the published image.
+      - name: Build the dashboard
+        run: |
+          cd web
+          npm ci
+          npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Stage the file tree
+        run: |
+          sh packaging/linux/build-tree.sh ${{ matrix.arch }} "$RUNNER_TEMP/stage"
+
+      - name: Install nfpm
+        run: |
+          curl -fsSL https://github.com/goreleaser/nfpm/releases/download/v2.43.1/nfpm_2.43.1_$(dpkg --print-architecture).deb -o /tmp/nfpm.deb
+          sudo dpkg -i /tmp/nfpm.deb
+
+      - name: Package
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            # A dispatch run on a branch: a version that cannot be mistaken for a release.
+            VERSION="0.0.0~$(git rev-parse --short HEAD)"
+          fi
+          mkdir -p dist
+          for format in deb rpm; do
+            VERSION="$VERSION" ARCH="${{ matrix.arch }}" STAGE="$RUNNER_TEMP/stage" \
+              nfpm package -f packaging/linux/nfpm.yaml -p "$format" -t dist/
+          done
+          ls -lh dist/
+
+      # A cold-start smoke test of the artifact itself, not its sources: install
+      # the deb in a clean container, wait, and ask /health. (amd64 tests in
+      # docker; the arm64 runner is already the target platform.)
+      - name: Install and probe the deb
+        run: |
+          docker run --rm -v "$PWD/dist:/dist" ubuntu:24.04 bash -ec '
+            apt-get update -q && apt-get install -yq /dist/*.deb
+            runuser -u telagent -- sh -c "cd /opt/tel-agent && ENCRYPTION_KEY=$(grep ^ENCRYPTION_KEY= /etc/tel-agent/tel-agent.env | cut -d= -f2) DATABASE_URL=sqlite+aiosqlite:////var/lib/tel-agent/tel-agent.db /bin/sh /opt/tel-agent/api-start.sh" &
+            for i in $(seq 1 30); do
+              sleep 2
+              if /opt/tel-agent/python/bin/python3 -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/health\", timeout=3)"; then
+                echo "API answered /health"; exit 0
+              fi
+            done
+            echo "API never answered /health" >&2; exit 1'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tel-agent-linux-${{ matrix.arch }}
+          path: dist/*
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/* --clobber

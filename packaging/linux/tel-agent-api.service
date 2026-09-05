@@ -1,0 +1,31 @@
+# The Tel-Agent API and agent loop. Configuration lives in
+# /etc/tel-agent/tel-agent.env; data in /var/lib/tel-agent.
+
+[Unit]
+Description=Tel-Agent API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=telagent
+Group=telagent
+EnvironmentFile=/etc/tel-agent/tel-agent.env
+WorkingDirectory=/opt/tel-agent
+ExecStart=/bin/sh /opt/tel-agent/api-start.sh
+Restart=on-failure
+RestartSec=3
+
+# This process parses strangers' input for a living (§B14 in the spec) - keep it
+# in as small a box as systemd offers without breaking normal operation.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/tel-agent
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
