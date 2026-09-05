@@ -53,8 +53,13 @@ tar -xJf /tmp/node.tar.xz -C "$OPT/node" --strip-components=1
 "$OPT/python/bin/python3" -m ensurepip --upgrade >/dev/null 2>&1 || true
 "$OPT/python/bin/python3" -m pip install --no-cache-dir .
 
-# The migration chain and its config ride along - the service migrates before it
-# serves, same as the container entrypoint.
+# The source tree rides along, exactly as in the container (/app): the services
+# run with /opt/tel-agent as their working directory, so `api`, `agent` and the
+# `locales/` the widget reads resolve from here - the same layout the container
+# was proven on. The migration chain and its config come for the same reason.
+cp -r api "$OPT/api"
+cp -r agent "$OPT/agent"
+cp -r locales "$OPT/locales"
 cp -r alembic "$OPT/alembic"
 cp alembic.ini "$OPT/alembic.ini"
 

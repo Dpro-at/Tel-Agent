@@ -87,8 +87,15 @@ Source = "https://github.com/Dpro-at/Tel-Agent"
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["agent", "api"]
+# find, not a hand-written list: an explicit `packages = ["agent", "api"]` names the
+# two TOP-LEVEL packages only, so every subpackage (api.security, api.routes,
+# agent.providers, ...) was silently missing from the wheel. Nothing noticed for
+# months because the container and the test suite both run from the repository
+# root, where the source tree on sys.path shadows the broken install - the Linux
+# package's cold-install smoke test was the first environment honest enough to
+# import from site-packages alone.
+[tool.setuptools.packages.find]
+include = ["agent*", "api*"]
 
 # --- Ruff --------------------------------------------------------------------
 # Formatting and linting live here rather than in a separate file, so there is one
