@@ -1,0 +1,102 @@
+{
+  "app": {
+    "name": "Tel-Agent"
+  },
+  "nav": {
+    "home": "Home",
+    "conversations": "Gesprekken",
+    "contacts": "Contacten",
+    "rules": "Regels",
+    "agent": "Agent",
+    "settings": "Instellingen"
+  },
+  "status": {
+    "connected": "Verbonden",
+    "degraded": "Beperkt",
+    "offline": "Offline"
+  },
+  "channel": {
+    "web_chat": "Webchat",
+    "phone": "Telefoon",
+    "email": "E-mail",
+    "sms": "SMS",
+    "whatsapp": "WhatsApp",
+    "telegram": "Telegram",
+    "messenger": "Messenger",
+    "instagram": "Instagram",
+    "discord": "Discord"
+  },
+  "handling": {
+    "ai": "Door AI afgehandeld",
+    "passed": "Doorgegeven aan een mens",
+    "blocked": "Geblokkeerd",
+    "attention": "Heeft aandacht nodig"
+  },
+  "speaker": {
+    "visitor": "Bezoeker",
+    "agent": "Agent",
+    "human": "Medewerker"
+  },
+  "conversations": {
+    "title": "Gesprekken",
+    "search_placeholder": "Zoek in alles wat er is gezegd",
+    "search_hint": "Full-text over elk gesprek",
+    "column_who": "Wie",
+    "column_channel": "Kanaal",
+    "column_started": "Gestart",
+    "column_duration": "Duur",
+    "column_handling": "Afhandeling",
+    "column_summary": "Samenvatting",
+    "empty_title": "Nog geen gesprekken",
+    "empty_body": "Wanneer iemand een chat start, verschijnt die hier met het volledige transcript.",
+    "count": "{count} gesprekken"
+  },
+  "detail": {
+    "back": "Terug naar gesprekken",
+    "summary": "Samenvatting",
+    "intent": "Herkende intentie",
+    "tools": "Aangeroepen tools",
+    "whisper": "Fluisterkanaal",
+    "whisper_note": "Instructies voor de medewerker. De bezoeker heeft deze nooit gezien.",
+    "transcript": "Transcript",
+    "human_joined": "mens toegetreden: {name}",
+    "agent_resumed": "agent hervat",
+    "empty_title": "Geen transcript",
+    "empty_body": "Voor dit gesprek is niets vastgelegd.",
+    "tool_ok": "ok",
+    "tool_failed": "mislukt",
+    "language": "Taal",
+    "confidence": "Betrouwbaarheid"
+  },
+  "common": {
+    "loading": "Laden",
+    "retry": "Opnieuw proberen"
+  },
+  "auth": {
+    "title": "Inloggen",
+    "subtitle": "Accounts bestaan alleen op deze server. Er is geen cloudlogin, en een reset verlaat nooit je eigen mailserver.",
+    "username": "Gebruikersnaam",
+    "password": "Wachtwoord",
+    "forgot": "Vergeten?",
+    "submit": "Inloggen",
+    "submit_offline": "Server niet bereikbaar",
+    "submit_locked": "Voorlopig vergrendeld",
+    "wrong_password": "Dat wachtwoord hoort niet bij deze gebruikersnaam.",
+    "server_error": "De server kon daar niet op antwoorden, dus het wachtwoord is niet gecontroleerd. Niets is vergrendeld en er is niets mis met het account — probeer het zo nog eens.",
+    "key_prompt": "Liever inloggen met een sleutel?",
+    "key_link": "SSH-certificaat gebruiken",
+    "blocked_label": "Inloggen geblokkeerd",
+    "blocked_title": "Te veel mislukte pogingen op dit account",
+    "blocked_body": "Vijf verkeerde wachtwoorden achter elkaar, dus dit account is vergrendeld. Was jij dat niet, dan raadt iemand — een beheerder kan het ontgrendelen en een wachtwoordwijziging afdwingen via het tabblad gebruikers.",
+    "blocked_unlocks": "ontgrendelt om {time}",
+    "empty_title": "Op deze installatie bestaan geen accounts",
+    "empty_body": "Dit is een verse installatie en er heeft zich nog niemand aangemeld. Het eerste account dat je aanmaakt, wordt de beheerder — die kan daarna iedereen anders toevoegen.",
+    "empty_action": "Het eerste account aanmaken",
+    "offline_title": "Deze browser kan je Tel-Agent-server niet bereiken",
+    "offline_body": "Geen antwoord van {host}. Je gesprekken blijven onaangetast als de machine nog draait — dit is een netwerkprobleem tussen jou en hem. Controleer of je op het bedrijfsnetwerk zit of met de VPN verbonden bent.",
+    "offline_retry": "Verbinding opnieuw proberen",
+    "self_hosted": "Zelf gehost · niets verlaat deze machine",
+    "continue": "Doorgaan naar dashboard",
+    "language": "Taal"
+  }
+}
