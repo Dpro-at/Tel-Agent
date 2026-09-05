@@ -127,7 +127,7 @@ jobs:
             runuser -u telagent -- sh -c "cd /opt/tel-agent && ENCRYPTION_KEY=$(grep ^ENCRYPTION_KEY= /etc/tel-agent/tel-agent.env | cut -d= -f2) DATABASE_URL=sqlite+aiosqlite:////var/lib/tel-agent/tel-agent.db /bin/sh /opt/tel-agent/api-start.sh" &
             for i in $(seq 1 30); do
               sleep 2
-              if /opt/tel-agent/python/bin/python3 -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/health\", timeout=3)"; then
+              if /opt/tel-agent/python/bin/python3 -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:38472/health\", timeout=3)"; then
                 echo "API answered /health"; exit 0
               fi
             done

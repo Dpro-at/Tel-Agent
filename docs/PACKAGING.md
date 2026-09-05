@@ -11,7 +11,7 @@ and opens the dashboard in the browser at `http://localhost:38471`. It is not a 
 | Debian / Ubuntu | `.deb` package | Available from a release |
 | Fedora / RHEL | `.rpm` package | Available from a release |
 | Docker | Published container images | Available from a release |
-| macOS | — | Not yet |
+| macOS | Signed-later `.pkg` installer | In progress |
 | Shared hosting control panels | — | Unsupported; the application needs long-running services and WebSockets |
 
 ## Windows upgrades
@@ -29,3 +29,11 @@ The update task checks GitHub Releases once daily. It accepts only a newer publi
 version-tagged installer, verifies the release asset SHA-256 when GitHub provides it,
 and runs the installer silently. It never installs directly from `main`: a branch
 commit is not a product release and has not passed the release gate.
+
+## macOS
+
+macOS follows the same local-service model as Windows and Linux: a `.pkg` installs
+the bundled runtimes, a LaunchDaemon starts the API and dashboard, and the installer
+opens the dashboard in the browser. The first package is unsigned and not notarized;
+signing and notarization are a later release-hardening step, not a prerequisite for
+the installer architecture.
