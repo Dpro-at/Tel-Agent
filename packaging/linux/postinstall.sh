@@ -19,7 +19,7 @@ chmod 600 /etc/tel-agent/tel-agent.env
 # Generate ENCRYPTION_KEY on first install only - an empty value in the template
 # marks "never configured", and an upgrade must never touch an existing key.
 if grep -q '^ENCRYPTION_KEY=$' /etc/tel-agent/tel-agent.env; then
-    KEY="$(/opt/tel-agent/venv/bin/python -c 'from api.security.crypto import generate_key; print(generate_key())')"
+    KEY="$(/opt/tel-agent/python/bin/python3 -c 'from api.security.crypto import generate_key; print(generate_key())')"
     sed -i "s/^ENCRYPTION_KEY=$/ENCRYPTION_KEY=${KEY}/" /etc/tel-agent/tel-agent.env
     echo "***********************************************************************"
     echo "Tel-Agent generated an ENCRYPTION_KEY in /etc/tel-agent/tel-agent.env."
