@@ -68,7 +68,11 @@ mkdir -p "$OPT/web-app"
 cp -r web/.next/standalone/. "$OPT/web-app/"
 mkdir -p "$OPT/web-app/web/.next/static"
 cp -r web/.next/static/. "$OPT/web-app/web/.next/static/"
-cp -r web/public "$OPT/web-app/web/public"
+# web/public does not exist in this repository today (assets ride the CDN); Next
+# serves fine without it, so it is copied only if it ever appears.
+if [ -d web/public ]; then
+    cp -r web/public "$OPT/web-app/web/public"
+fi
 
 # --- Config template, services, launcher -----------------------------------
 cp packaging/linux/tel-agent.env "$STAGE/etc/tel-agent/tel-agent.env"

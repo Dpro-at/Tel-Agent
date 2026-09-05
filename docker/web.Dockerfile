@@ -19,6 +19,10 @@ RUN cd web && npm ci
 
 COPY locales/ locales/
 COPY web/ web/
+# web/public does not exist in the repository today (assets ride the CDN), and a
+# COPY of a missing directory fails the build. Guaranteed here so the runtime
+# stage can copy it unconditionally; Next serves an empty one happily.
+RUN mkdir -p web/public
 
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
