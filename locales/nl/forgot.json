@@ -1,0 +1,21 @@
+{
+  "title": "Wachtwoord resetten",
+  "body": "Voer je gebruikersnaam in. Als er een account met die naam bestaat, gaat er een zescijferige code naar het e-mailadres ervan.",
+  "username": "Gebruikersnaam",
+  "send": "Code versturen",
+  "send_offline": "Server niet bereikbaar",
+  "privacy_note": "Dit scherm zegt hetzelfde of het account bestaat of niet. Als we het je vertelden, vertelden we het ook aan iedereen die vraagt.",
+  "back": "Terug naar inloggen",
+  "self_hosted": "Zelf gehost · er verlaat niets deze machine",
+  "limit_label": "Te veel verzoeken",
+  "limit_title": "Dit account heeft vijf keer om een code gevraagd",
+  "limit_body": "Er worden vijftien minuten lang geen codes meer gestuurd. Codes die al verstuurd zijn, blijven geldig tot ze verlopen.",
+  "limit_retry_at": "je kunt opnieuw vragen vanaf {time}",
+  "no_mail_title": "Deze installatie kan geen e-mail sturen",
+  "no_mail_body": "Er is geen mailserver geconfigureerd, dus er is nergens om een code naartoe te sturen. Een beheerder reset het wachtwoord op de machine zelf:",
+  "no_mail_hint": "Het commando toont een nieuw wachtwoord één keer. Het wordt niet opgeslagen en kan niet opnieuw worden getoond.",
+  "no_mail_settings": "Mailserver instellen in Instellingen",
+  "offline_title": "Deze browser kan je Tel-Agent-server niet bereiken",
+  "offline_body": "Geen antwoord van {host}. Je gesprekken blijven ongemoeid als de machine nog draait — dit is een netwerkprobleem tussen jou en die machine. Controleer of je op het bedrijfsnetwerk zit of met de VPN verbonden bent.",
+  "offline_retry": "Verbinding opnieuw proberen"
+}
