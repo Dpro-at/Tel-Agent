@@ -36,5 +36,7 @@
   "no_results_body": "Ninguna conversación coincide con esta búsqueda y este filtro. La búsqueda mira lo que se dijo, palabra por palabra — prueba una frase más corta o quita el filtro.",
   "error_offline_title": "No se pudo conectar con el servidor",
   "error_failed_title": "No se pudieron cargar las conversaciones",
-  "retry": "Intentar de nuevo"
+  "retry": "Intentar de nuevo",
+  "thread_gone_title": "Esta conversación no está aquí",
+  "thread_gone_body": "Se borró, o pertenece a otro espacio de trabajo. El hilo del que vienes puede estar apuntando a algo que ya no existe."
 }
