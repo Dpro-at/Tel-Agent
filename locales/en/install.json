@@ -49,5 +49,10 @@
   "cloud_failed": "Saving failed. Nothing was stored, so you can try again.",
   "cloud_back": "Back",
   "cloud_continue": "Open the dashboard",
-  "cloud_saved_note": "The settings are saved even though the test did not pass. You can continue and fix them later in Settings."
+  "cloud_saved_note": "The settings are saved even though the test did not pass. You can continue and fix them later in Settings.",
+  "cloud_models_loading": "Asking the endpoint which models this key can use…",
+  "cloud_models_ready": "Models this key can use, as the endpoint lists them.",
+  "cloud_models_unavailable": "This endpoint does not list its models — type the name.",
+  "cloud_models_refused": "The endpoint refused the key, so there is no list yet. Check the key.",
+  "cloud_models_refresh": "Ask again"
 }

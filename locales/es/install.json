@@ -49,5 +49,10 @@
   "cloud_failed": "No se pudo guardar. No se almacenó nada, así que puedes intentarlo de nuevo.",
   "cloud_back": "Atrás",
   "cloud_continue": "Abrir el panel",
-  "cloud_saved_note": "Los ajustes se guardaron aunque la prueba no pasó. Puedes continuar y corregirlos después en Ajustes."
+  "cloud_saved_note": "Los ajustes se guardaron aunque la prueba no pasó. Puedes continuar y corregirlos después en Ajustes.",
+  "cloud_models_loading": "Preguntando al punto de acceso qué modelos puede usar esta clave…",
+  "cloud_models_ready": "Modelos que esta clave puede usar, tal como los lista el punto de acceso.",
+  "cloud_models_unavailable": "Este punto de acceso no lista sus modelos — escribe el nombre.",
+  "cloud_models_refused": "El punto de acceso rechazó la clave, así que aún no hay lista. Revisa la clave.",
+  "cloud_models_refresh": "Preguntar de nuevo"
 }

@@ -49,5 +49,10 @@
   "cloud_failed": "Speichern fehlgeschlagen. Es wurde nichts gespeichert, ein neuer Versuch ist möglich.",
   "cloud_back": "Zurück",
   "cloud_continue": "Dashboard öffnen",
-  "cloud_saved_note": "Die Einstellungen sind gespeichert, obwohl der Test nicht bestanden wurde. Du kannst fortfahren und sie später in den Einstellungen korrigieren."
+  "cloud_saved_note": "Die Einstellungen sind gespeichert, obwohl der Test nicht bestanden wurde. Du kannst fortfahren und sie später in den Einstellungen korrigieren.",
+  "cloud_models_loading": "Der Endpunkt wird gefragt, welche Modelle dieser Schlüssel nutzen darf …",
+  "cloud_models_ready": "Modelle, die dieser Schlüssel nutzen darf, so wie der Endpunkt sie auflistet.",
+  "cloud_models_unavailable": "Dieser Endpunkt listet seine Modelle nicht auf — Namen eintippen.",
+  "cloud_models_refused": "Der Endpunkt hat den Schlüssel abgelehnt, daher gibt es noch keine Liste. Schlüssel prüfen.",
+  "cloud_models_refresh": "Erneut fragen"
 }

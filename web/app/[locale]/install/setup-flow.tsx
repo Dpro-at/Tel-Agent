@@ -1,13 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { FirstRun } from "./first-run";
 import type { InstallDictionary } from "./page";
 
 import { BrandMark } from "@/components/brands/brand-mark";
-import { ApiError, OfflineError, saveSettings, testModel } from "@/lib/api";
+import { ApiError, OfflineError, listModels, saveSettings, testModel } from "@/lib/api";
 import type { Locale } from "@/lib/locales";
 
 /**
@@ -209,6 +209,12 @@ const PRESETS: Preset[] = [
 
 type Outcome = { text: string; machine?: string; ok: boolean };
 
+/** What the endpoint said when asked which models the typed key may use. */
+type Catalogue = {
+  status: "idle" | "loading" | "ready" | "unavailable" | "refused";
+  models: string[];
+};
+
 function CloudSetup({
   t,
   onBack,
@@ -225,9 +231,48 @@ function CloudSetup({
   const [busy, setBusy] = useState<"idle" | "saving" | "testing">("idle");
   const [saved, setSaved] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [catalogue, setCatalogue] = useState<Catalogue>({ status: "idle", models: [] });
+  const asked = useRef(0);
 
   const chosen = PRESETS.find((p) => p.id === preset) ?? null;
   const ready = baseUrl.trim() !== "" && model.trim() !== "" && key.trim() !== "";
+
+  async function askCatalogue() {
+    const address = baseUrl.trim();
+    const secret = key.trim();
+    if (!address || secret.length < 8) return;
+    const ticket = ++asked.current;
+    setCatalogue({ status: "loading", models: [] });
+    try {
+      const { models } = await listModels(address, secret);
+      if (ticket !== asked.current) return; // a later question superseded this one
+      setCatalogue({ status: models.length ? "ready" : "unavailable", models });
+      // Keep a name the operator already chose if the endpoint knows it; otherwise
+      // the preset's first suggestion if that is known; otherwise the first listed.
+      if (models.length && !models.includes(model.trim())) {
+        const suggested = chosen?.models.find((name) => models.includes(name));
+        setModel(suggested ?? models[0]);
+      }
+    } catch (error) {
+      if (ticket !== asked.current) return;
+      const refused = error instanceof ApiError && error.code === "llm_refused";
+      setCatalogue({ status: refused ? "refused" : "unavailable", models: [] });
+    }
+  }
+
+  // The endpoint is asked once the key looks complete, and again whenever the key or
+  // the address changes - after a pause, so a key being pasted in is not asked about
+  // character by character.
+  const askable = baseUrl.trim() !== "" && key.trim().length >= 8;
+  useEffect(() => {
+    if (!askable) return;
+    const timer = window.setTimeout(() => void askCatalogue(), 700);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately keyed on the two inputs only
+  }, [askable, baseUrl, key]);
+  // Below the key length the endpoint is never asked, so whatever was learned for an
+  // earlier key is not shown either.
+  const status: Catalogue["status"] = askable ? catalogue.status : "idle";
 
   function choose(next: Preset) {
     setPreset(next.id);
@@ -338,22 +383,59 @@ function CloudSetup({
 
           <label className="text-od-text-2 block text-[14px]">
             {t.cloud_model}
-            <input
-              dir="ltr"
-              required
-              list={chosen.models.length ? "install-model-options" : undefined}
-              value={model}
-              onChange={(event) => setModel(event.target.value)}
-              className={`${inputClass} ltr-data`}
-            />
-            {chosen.models.length ? (
+            {status === "ready" ? (
+              <select
+                dir="ltr"
+                required
+                value={model}
+                onChange={(event) => setModel(event.target.value)}
+                className={`${inputClass} ltr-data`}
+              >
+                {catalogue.models.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                dir="ltr"
+                required
+                list={chosen.models.length ? "install-model-options" : undefined}
+                value={model}
+                onChange={(event) => setModel(event.target.value)}
+                className={`${inputClass} ltr-data`}
+              />
+            )}
+            {chosen.models.length && status !== "ready" ? (
               <datalist id="install-model-options">
                 {chosen.models.map((name) => (
                   <option key={name} value={name} />
                 ))}
               </datalist>
             ) : null}
-            <span className="text-od-muted-5 mt-1 block text-[12.5px]">{t.cloud_model_help}</span>
+            <span className="text-od-muted-5 mt-1 block text-[12.5px]">
+              {status === "loading"
+                ? t.cloud_models_loading
+                : status === "ready"
+                  ? t.cloud_models_ready
+                  : status === "refused"
+                    ? t.cloud_models_refused
+                    : status === "unavailable"
+                      ? t.cloud_models_unavailable
+                      : t.cloud_model_help}
+              {status === "ready" ||
+              status === "refused" ||
+              status === "unavailable" ? (
+                <button
+                  type="button"
+                  onClick={() => void askCatalogue()}
+                  className="text-od-muted-4 hover:text-od-text-2 ms-2 cursor-pointer border-0 bg-transparent p-0 text-[12.5px] underline"
+                >
+                  {t.cloud_models_refresh}
+                </button>
+              ) : null}
+            </span>
           </label>
 
           <label className="text-od-text-2 block text-[14px]">

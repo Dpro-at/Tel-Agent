@@ -302,6 +302,69 @@ async def test_model(
     return ModelTested(reached=True, model=settings.model, base_url=settings.base_url)
 
 
+class ModelsRequest(BaseModel):
+    # The address and key as typed on the screen, before anything is saved: the list
+    # is what tells the operator which model names to save in the first place.
+    base_url: str = Field(min_length=1, max_length=500)
+    api_key: str = Field(min_length=1, max_length=500)
+
+
+class ModelsListed(BaseModel):
+    models: list[str]
+
+
+@router.post(
+    "/llm/models",
+    response_model=ModelsListed,
+    summary="Ask an endpoint which models a key may use, without saving anything",
+)
+async def list_models(
+    payload: ModelsRequest, context: Annotated[WorkspaceContext, require_admin]
+) -> object:
+    """The setup screen's model picker.
+
+    A fixed list of model names goes stale within a release, and it says nothing about
+    what *this* key is allowed to use. The endpoint knows both, so it is asked. The key
+    travels through and is forgotten - it is stored only when the operator presses Save,
+    through the same PATCH as every other setting.
+
+    The three answers that are not a list are designed, not tracebacks: refused (the
+    key), unreachable (the address or the network), and "this endpoint does not list
+    its models", after which the screen falls back to a typed name.
+    """
+    import httpx
+
+    from api import llm
+
+    try:
+        models = await llm.list_models(payload.base_url, payload.api_key)
+    except llm.ModelListUnavailable:
+        return envelope_response(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="llm_models_unavailable",
+            message="This endpoint does not list its models. Type the model name.",
+        )
+    except httpx.HTTPStatusError as refused:
+        return envelope_response(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="llm_refused",
+            message=f"The endpoint answered {refused.response.status_code}. "
+            "A 401 is the key; a 403 is a key without access to this address.",
+        )
+    except (httpx.HTTPError, httpx.InvalidURL) as unreachable:
+        logger.warning(
+            "the model endpoint could not be reached for its model list",
+            extra={"error": type(unreachable).__name__},
+        )
+        return envelope_response(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="llm_unreachable",
+            message="Nothing answered at that address. Check the endpoint, and that "
+            "this machine can reach it.",
+        )
+    return ModelsListed(models=models)
+
+
 class CalendarTested(BaseModel):
     reached: bool
     # The collection address that answered - configuration, not a secret; the

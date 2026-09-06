@@ -49,5 +49,10 @@
   "cloud_failed": "Opslaan mislukt. Er is niets opgeslagen, dus je kunt het opnieuw proberen.",
   "cloud_back": "Terug",
   "cloud_continue": "Het dashboard openen",
-  "cloud_saved_note": "De instellingen zijn opgeslagen hoewel de test niet slaagde. Je kunt doorgaan en ze later in Instellingen corrigeren."
+  "cloud_saved_note": "De instellingen zijn opgeslagen hoewel de test niet slaagde. Je kunt doorgaan en ze later in Instellingen corrigeren.",
+  "cloud_models_loading": "Het eindpunt wordt gevraagd welke modellen deze sleutel mag gebruiken…",
+  "cloud_models_ready": "Modellen die deze sleutel mag gebruiken, zoals het eindpunt ze opsomt.",
+  "cloud_models_unavailable": "Dit eindpunt somt zijn modellen niet op — typ de naam.",
+  "cloud_models_refused": "Het eindpunt weigerde de sleutel, dus er is nog geen lijst. Controleer de sleutel.",
+  "cloud_models_refresh": "Opnieuw vragen"
 }

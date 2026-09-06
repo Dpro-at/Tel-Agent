@@ -410,3 +410,65 @@ async def test_the_test_button_answers_an_unreadable_key_too(
     assert answer.status_code == 409
     assert answer.json()["error"]["code"] == "llm_key_unreadable"
     assert answer.json()["error"]["message"] == llm.UNREADABLE_KEY
+
+
+# --- The model picker asks the endpoint --------------------------------------
+
+
+async def test_a_viewer_may_not_list_models(clients) -> None:
+    answer = await clients["viewer"].post(
+        "/api/settings/llm/models", json={"base_url": "https://x.test/v1", "api_key": "k"}
+    )
+    assert answer.status_code == 403
+
+
+async def test_the_model_list_comes_from_the_endpoint_and_saves_nothing(
+    clients, migrated: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The list is the endpoint's answer for this key, and asking is not saving."""
+    seen: dict[str, str] = {}
+
+    async def fake_list(base_url: str, api_key: str) -> list[str]:
+        seen.update(base_url=base_url, api_key=api_key)
+        return ["a-model", "b-model"]
+
+    monkeypatch.setattr(llm, "list_models", fake_list)
+    answer = await clients["admin"].post(
+        "/api/settings/llm/models",
+        json={"base_url": "https://x.test/v1", "api_key": REAL_KEY},
+    )
+    assert answer.status_code == 200
+    assert answer.json() == {"models": ["a-model", "b-model"]}
+    assert seen == {"base_url": "https://x.test/v1", "api_key": REAL_KEY}
+    assert await store.get(migrated, "llm.api_key") is None
+
+
+async def test_an_endpoint_without_a_model_list_says_so(
+    clients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def no_list(base_url: str, api_key: str) -> list[str]:
+        raise llm.ModelListUnavailable("404")
+
+    monkeypatch.setattr(llm, "list_models", no_list)
+    answer = await clients["admin"].post(
+        "/api/settings/llm/models", json={"base_url": "https://x.test", "api_key": "k"}
+    )
+    assert answer.status_code == 502
+    assert answer.json()["error"]["code"] == "llm_models_unavailable"
+
+
+async def test_a_refused_key_is_named_as_such_by_the_model_list(
+    clients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def refused(base_url: str, api_key: str) -> list[str]:
+        request = httpx.Request("GET", base_url)
+        raise httpx.HTTPStatusError(
+            "401", request=request, response=httpx.Response(401, request=request)
+        )
+
+    monkeypatch.setattr(llm, "list_models", refused)
+    answer = await clients["admin"].post(
+        "/api/settings/llm/models", json={"base_url": "https://x.test", "api_key": "k"}
+    )
+    assert answer.status_code == 502
+    assert answer.json()["error"]["code"] == "llm_refused"

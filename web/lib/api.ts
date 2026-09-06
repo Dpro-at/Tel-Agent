@@ -476,6 +476,12 @@ export function testModel(): Promise<{ reached: boolean; model: string; base_url
   return api("/api/settings/llm/test", { method: "POST" });
 }
 
+/** Which models a key may use at an endpoint, asked of the endpoint itself. Nothing is
+ *  saved by asking: the address and key travel through and are forgotten. */
+export function listModels(base_url: string, api_key: string): Promise<{ models: string[] }> {
+  return api("/api/settings/llm/models", { method: "POST", json: { base_url, api_key } });
+}
+
 /** One free-busy day from the configured CalDAV calendar, to prove the saved
  *  credentials reach it - the cheapest real question the provider can ask. */
 export function testCalendar(): Promise<{ reached: boolean; source: string }> {

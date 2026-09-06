@@ -122,3 +122,46 @@ async def describe(db: DbSession) -> tuple[str, str | None]:
     # The model and where it lives. Never the key - this endpoint is admin-only, and
     # that is not a reason to hand one back.
     return "ok", f"{settings.model} at {settings.base_url}"
+
+
+class ModelListUnavailable(Exception):
+    """The endpoint answered, but not with a list of models.
+
+    Some OpenAI-format endpoints do not serve ``/models`` at all, and a few answer
+    with a shape that is not the OpenAI one. Neither is the operator's fault and neither
+    means the key is wrong - the screen falls back to a typed model name.
+    """
+
+
+async def list_models(base_url: str, api_key: str) -> list[str]:
+    """Ask an OpenAI-format endpoint which models this key may use.
+
+    ``GET {base_url}/models`` with the key as a bearer token; the two extra headers are
+    what the Anthropic compatibility layer wants and every other endpoint ignores.
+    Errors are httpx's own - the route turns them into designed answers - except the
+    two shapes of "answered, but not with models", which become
+    :class:`ModelListUnavailable`.
+
+    The key is used and forgotten: nothing here stores or logs it.
+    """
+    import httpx
+
+    address = f"{base_url.strip().rstrip('/')}/models"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+    }
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(address, headers=headers)
+    if response.status_code in (404, 405, 501):
+        raise ModelListUnavailable(f"{response.status_code} from /models")
+    response.raise_for_status()
+    try:
+        rows = response.json()["data"]
+        ids = [str(row["id"]) for row in rows]
+    except (ValueError, KeyError, TypeError) as odd:
+        raise ModelListUnavailable("not an OpenAI-shaped model list") from odd
+    # The Gemini compatibility layer prefixes every id with "models/"; the chat route
+    # wants the bare name.
+    return sorted({model_id.removeprefix("models/") for model_id in ids if model_id})
