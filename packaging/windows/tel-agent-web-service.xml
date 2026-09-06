@@ -1,0 +1,14 @@
+<!-- WinSW definition of the dashboard service. Installed as TelAgentWebService.xml
+     next to TelAgentWebService.exe: WinSW reads the file that shares its executable's
+     base name, so the copy in build-tree.ps1 renames it on purpose. -->
+<service>
+  <id>TelAgentWeb</id>
+  <name>Tel-Agent dashboard</name>
+  <description>Tel-Agent dashboard on http://localhost:38471 (loopback only).</description>
+  <executable>%BASE%\web-start.cmd</executable>
+  <workingdirectory>%BASE%\web-app</workingdirectory>
+  <!-- The dashboard only talks to the API, so it starts after it and stops before it. -->
+  <depend>TelAgent</depend>
+  <log mode="roll" />
+  <onfailure action="restart" delay="10 sec" />
+</service>
