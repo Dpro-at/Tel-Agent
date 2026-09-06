@@ -76,6 +76,31 @@ jobs:
           $env:TEL_AGENT_VERSION = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.Substring(1) } else { "0.0.0-$($env:GITHUB_SHA.Substring(0, 7))" }
           packaging/windows/build-tree.ps1 -Stage "$env:RUNNER_TEMP\\tel-agent-stage"
 
+      # A smoke test of the staged tree itself, before Inno wraps it: start the two
+      # service commands the way WinSW will, and require both the API (/health on 38472)
+      # and the dashboard (GET / on 38471) to answer. The v0.1.1 installer shipped
+      # without a dashboard service and nothing here noticed - this step is why.
+      - name: Start both services from the staged tree and probe them
+        shell: pwsh
+        run: |
+          $app = "$env:RUNNER_TEMP\tel-agent-stage\app"
+          New-Item -ItemType Directory -Force -Path "C:\ProgramData\Tel-Agent\data" | Out-Null
+          $api = Start-Process -FilePath "$app\api-start.cmd" -WorkingDirectory $app -PassThru -WindowStyle Hidden
+          $web = Start-Process -FilePath "$app\web-start.cmd" -WorkingDirectory $app -PassThru -WindowStyle Hidden
+          function Wait-Url([string]$url, [string]$what) {
+            for ($i = 0; $i -lt 60; $i++) {
+              try { Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 3 | Out-Null; Write-Host "$what answered $url"; return } catch { Start-Sleep -Seconds 2 }
+            }
+            throw "$what never answered $url"
+          }
+          try {
+            Wait-Url "http://127.0.0.1:38472/health" "API"
+            Wait-Url "http://127.0.0.1:38471/" "Dashboard"
+          } finally {
+            foreach ($p in @($api, $web)) { if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } }
+            Get-Process -Name node, python -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$app*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+          }
+
       - name: Build the unsigned installer
         shell: pwsh
         run: |

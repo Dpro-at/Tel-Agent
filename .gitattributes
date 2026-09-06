@@ -1,3 +1,7 @@
 # Shell scripts run inside Linux containers; a CRLF checkout on Windows would
 # turn their shebang into "/bin/sh\r" and fail the image at start.
 *.sh text eol=lf
+
+# Windows batch files are read by cmd.exe, which wants CRLF; an LF-only .cmd can
+# swallow the last line and mis-parse labels.
+*.cmd text eol=crlf

@@ -1,7 +1,10 @@
+<!-- WinSW definition of the API service. Installed as TelAgentService.xml next to
+     TelAgentService.exe: WinSW reads the file that shares its executable's base name,
+     so the copy in build-tree.ps1 renames it on purpose. -->
 <service>
   <id>TelAgent</id>
   <name>Tel-Agent</name>
-  <description>Tel-Agent API and background jobs.</description>
+  <description>Tel-Agent API and background jobs on http://localhost:38472 (loopback only).</description>
   <executable>%BASE%\api-start.cmd</executable>
   <workingdirectory>%BASE%</workingdirectory>
   <log mode="roll" />
