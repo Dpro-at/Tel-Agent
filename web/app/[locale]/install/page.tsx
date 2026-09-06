@@ -14,11 +14,23 @@ import { SetupFlow } from "./setup-flow";
 /** English is the reference shape; the other four are checked against it. */
 export type InstallDictionary = typeof en;
 
-export default async function InstallPage({ params }: { params: Promise<{ locale: string }> }) {
+export default async function InstallPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<{ step?: string }>;
+}) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
 
   const t = pickDictionary<InstallDictionary>(locale, { en, de, ar, es, nl });
 
-  return <SetupFlow locale={locale} t={t} />;
+  // `?step=ai` / `?step=cloud` opens a later step directly - for looking at the screens
+  // without creating an account first. Harmless: every write behind them needs the
+  // admin session, which only the account step can create.
+  const { step } = await searchParams;
+  const initial = step === "ai" || step === "cloud" ? step : "account";
+
+  return <SetupFlow locale={locale} t={t} initialStep={initial} />;
 }

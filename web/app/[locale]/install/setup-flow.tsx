@@ -24,11 +24,19 @@ import type { Locale } from "@/lib/locales";
  * machine itself needs a provider that does not exist yet (`IDEAS.md`). Showing the card
  * anyway tells the operator what is coming, without pretending it works.
  */
-type Step = "account" | "ai" | "cloud";
+export type Step = "account" | "ai" | "cloud";
 
-export function SetupFlow({ locale, t }: { locale: Locale; t: InstallDictionary }) {
+export function SetupFlow({
+  locale,
+  t,
+  initialStep = "account",
+}: {
+  locale: Locale;
+  t: InstallDictionary;
+  initialStep?: Step;
+}) {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("account");
+  const [step, setStep] = useState<Step>(initialStep);
 
   function finish() {
     router.replace(`/${locale}/home`);
