@@ -75,8 +75,9 @@ begin
     StopIfPresent(ExpandConstant('{app}\TelAgentService.exe'));
   end;
   if CurStep = ssPostInstall then begin
-    { Conversations and the SQLite database live under ProgramData, outside {app},
-      so an uninstall or an upgrade never touches them. }
+    // Conversations and the SQLite database live under ProgramData, outside the
+    // application directory, so an uninstall or an upgrade never touches them.
+    // (A brace comment cannot hold a {constant}: the first close brace ends it.)
     ForceDirectories(ExpandConstant('{commonappdata}\Tel-Agent\data'));
   end;
 end;
