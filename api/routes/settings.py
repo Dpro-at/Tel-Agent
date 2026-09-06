@@ -383,6 +383,9 @@ class LocalRuntimes(BaseModel):
     runtimes: list[LocalRuntimeOut]
     # What this machine has to run a model with; None where it could not be read.
     memory_gb: float | None
+    # A runtime program is installed here but nothing answered on its port - the
+    # screen offers to start it instead of saying nothing is here.
+    installed_but_stopped: bool = False
 
 
 @router.get(
@@ -416,7 +419,49 @@ async def local_runtimes(context: Annotated[WorkspaceContext, require_admin]) ->
             for runtime in found
         ],
         memory_gb=llm.total_memory_gb(),
+        installed_but_stopped=not any(r.id == "ollama" for r in found)
+        and llm.installed_runtime() is not None,
     )
+
+
+class RuntimeStarted(BaseModel):
+    started: bool
+    answered: bool
+
+
+@router.post(
+    "/llm/local/start",
+    response_model=RuntimeStarted,
+    summary="Start the installed local runtime, if it is not already answering",
+)
+async def start_local_runtime(context: Annotated[WorkspaceContext, require_admin]) -> object:
+    """The one thing a non-technical operator would otherwise do by hand.
+
+    Finds the installed program, launches it detached, and waits a few seconds for it
+    to answer. `started` says the launch happened; `answered` says the port replied in
+    time - a slow machine may need one more "look again".
+    """
+    from api import llm
+
+    binary = llm.installed_runtime()
+    if binary is None:
+        return envelope_response(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="runtime_not_installed",
+            message="No local runtime program was found on this machine.",
+        )
+    try:
+        llm.start_runtime(binary)
+    except OSError as failed:
+        logger.warning(
+            "the local runtime could not be launched", extra={"error": type(failed).__name__}
+        )
+        return envelope_response(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="runtime_start_failed",
+            message="The runtime program is there but could not be started.",
+        )
+    return RuntimeStarted(started=True, answered=await llm.wait_for_runtime())
 
 
 class PullRequest(BaseModel):

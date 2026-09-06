@@ -77,5 +77,11 @@
   "local_saving": "Connecting…",
   "local_no_model": "Pick a model, or download one first.",
   "local_failed": "The runtime did not answer. Is it still running?",
-  "ai_local_action": "Use a local model"
+  "ai_local_action": "Use a local model",
+  "local_stopped_title": "A local runtime is installed but not running",
+  "local_stopped_body": "Tel-Agent can start it for you.",
+  "local_starting": "Starting it…",
+  "local_start": "Start it",
+  "local_start_failed": "It did not answer in time. Open the runtime yourself, then look again.",
+  "local_loading_hint": "The first time a model is loaded can take a minute. This is the runtime reading it into memory."
 }

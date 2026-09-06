@@ -77,5 +77,11 @@
   "local_saving": "Conectando…",
   "local_no_model": "Elige un modelo, o descarga uno primero.",
   "local_failed": "El entorno no respondió. ¿Sigue en marcha?",
-  "ai_local_action": "Usar un modelo local"
+  "ai_local_action": "Usar un modelo local",
+  "local_stopped_title": "Hay un entorno local instalado, pero no está en marcha",
+  "local_stopped_body": "Tel-Agent puede iniciarlo por ti.",
+  "local_starting": "Iniciando…",
+  "local_start": "Iniciarlo",
+  "local_start_failed": "No respondió a tiempo. Abre el entorno tú mismo y vuelve a buscar.",
+  "local_loading_hint": "La primera carga de un modelo puede tardar un minuto: el entorno lo lee en memoria."
 }

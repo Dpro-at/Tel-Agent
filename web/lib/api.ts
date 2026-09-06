@@ -493,8 +493,18 @@ export type LocalRuntime = {
 };
 
 /** Which local model runtimes answer on the machine the API runs on, and what they hold. */
-export function localRuntimes(): Promise<{ runtimes: LocalRuntime[]; memory_gb: number | null }> {
+export function localRuntimes(): Promise<{
+  runtimes: LocalRuntime[];
+  memory_gb: number | null;
+  /** A runtime program is installed but nothing answered on its port. */
+  installed_but_stopped: boolean;
+}> {
   return api("/api/settings/llm/local/runtimes");
+}
+
+/** Launch the installed local runtime and wait a few seconds for it to answer. */
+export function startLocalRuntime(): Promise<{ started: boolean; answered: boolean }> {
+  return api("/api/settings/llm/local/start", { method: "POST" });
 }
 
 export type PullEvent = {

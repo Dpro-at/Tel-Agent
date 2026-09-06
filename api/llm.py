@@ -355,3 +355,111 @@ async def pull_local_model(native_url: str, model: str) -> AsyncIterator[bytes]:
             extra={"error": type(unreachable).__name__},
         )
         yield json.dumps({"status": "error", "error": "unreachable"}).encode() + b"\n"
+
+
+# --- A runtime that is installed but not running -----------------------------------
+#
+# The commonest state on a home machine, as it turned out: the runtime was installed
+# weeks ago and nobody started it today. Finding the program is cheap; starting it is
+# what a non-technical operator would otherwise have to do by hand.
+
+
+def _candidate_binaries() -> list[str]:
+    """Where the runtime's program lives, per platform - the documented install
+    locations, plus the PATH. On Windows the service runs as another account, so every
+    user's per-user install directory is looked at, not only the service's."""
+    import glob
+    import shutil
+
+    found: list[str] = []
+    on_path = shutil.which("ollama")
+    if on_path:
+        found.append(on_path)
+    if sys.platform == "win32":
+        found.extend(glob.glob(r"C:\Users\*\AppData\Local\Programs\Ollama\ollama.exe"))
+        found.extend(glob.glob(r"C:\Program Files\Ollama\ollama.exe"))
+    elif sys.platform == "darwin":
+        found.extend(
+            path
+            for path in (
+                "/usr/local/bin/ollama",
+                "/opt/homebrew/bin/ollama",
+                "/Applications/Ollama.app/Contents/Resources/ollama",
+            )
+            if os.path.exists(path)
+        )
+    else:
+        found.extend(
+            path
+            for path in ("/usr/local/bin/ollama", "/usr/bin/ollama")
+            if os.path.exists(path)
+        )
+    unique: list[str] = []
+    for path in found:
+        if path not in unique:
+            unique.append(path)
+    return unique
+
+
+def installed_runtime() -> str | None:
+    """The path of an installed runtime program, or None. Used by the discovery route
+    to say "installed but not running" rather than "nothing here"."""
+    binaries = _candidate_binaries()
+    return binaries[0] if binaries else None
+
+
+def _models_dir_for(binary: str) -> str | None:
+    """A per-user install keeps its models under that user's home. When the service
+    starts the runtime as a different account, the runtime would open an empty store -
+    so the owner's directory is handed over explicitly."""
+    import re
+
+    match = re.match(r"^([A-Za-z]:\\Users\\[^\\]+)\\", binary)
+    if match:
+        candidate = os.path.join(match.group(1), ".ollama", "models")
+        return candidate if os.path.isdir(candidate) else None
+    return None
+
+
+def start_runtime(binary: str) -> None:
+    """Launch `ollama serve` detached from this process, output discarded.
+
+    Detached on purpose: the runtime must outlive this request, and a restart of the
+    API must not take it down. Errors from the launch itself propagate; whether it
+    then *answers* is the discovery route's question, asked again by the screen.
+    """
+    import subprocess
+
+    env = dict(os.environ)
+    models = _models_dir_for(binary)
+    if models and "OLLAMA_MODELS" not in env:
+        env["OLLAMA_MODELS"] = models
+    kwargs: dict[str, object] = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "env": env,
+    }
+    if sys.platform == "win32":
+        # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+        kwargs["creationflags"] = 0x00000008 | 0x00000200
+    else:
+        kwargs["start_new_session"] = True
+    subprocess.Popen([binary, "serve"], **kwargs)  # type: ignore[call-overload]  # noqa: S603
+
+
+async def wait_for_runtime(seconds: float = 12.0) -> bool:
+    """True once the runtime answers on its port, or False after `seconds`."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + seconds
+    async with httpx.AsyncClient(timeout=PROBE_TIMEOUT) as client:
+        while loop.time() < deadline:
+            for host in local_hosts():
+                try:
+                    answer = await client.get(f"http://{host}:11434/api/tags")
+                    if answer.status_code < 500:
+                        return True
+                except httpx.HTTPError:
+                    pass
+            await asyncio.sleep(0.75)
+    return False

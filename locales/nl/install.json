@@ -77,5 +77,11 @@
   "local_saving": "Bezig met koppelen…",
   "local_no_model": "Kies een model, of download er eerst een.",
   "local_failed": "De runtime gaf geen antwoord. Draait die nog?",
-  "ai_local_action": "Een lokaal model gebruiken"
+  "ai_local_action": "Een lokaal model gebruiken",
+  "local_stopped_title": "Er is een lokale runtime geïnstalleerd, maar die draait niet",
+  "local_stopped_body": "Tel-Agent kan die voor je starten.",
+  "local_starting": "Bezig met starten…",
+  "local_start": "Starten",
+  "local_start_failed": "Die antwoordde niet op tijd. Open de runtime zelf en zoek opnieuw.",
+  "local_loading_hint": "De eerste keer dat een model wordt geladen kan een minuut duren: de runtime leest het in het geheugen."
 }

@@ -554,3 +554,46 @@ def test_only_loopback_addresses_count_as_local() -> None:
     assert llm.is_local_origin("http://host.docker.internal:11434")
     assert not llm.is_local_origin("http://10.0.0.5:11434")
     assert not llm.is_local_origin("http://example.com")
+
+
+async def test_an_installed_but_stopped_runtime_is_reported_as_such(
+    clients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def nothing() -> list[llm.LocalRuntime]:
+        return []
+
+    monkeypatch.setattr(llm, "discover_local_runtimes", nothing)
+    monkeypatch.setattr(llm, "installed_runtime", lambda: "/usr/local/bin/ollama")
+    answer = await clients["admin"].get("/api/settings/llm/local/runtimes")
+    assert answer.status_code == 200
+    assert answer.json()["installed_but_stopped"] is True
+
+
+async def test_starting_the_runtime_launches_it_and_waits_for_an_answer(
+    clients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    launched: list[str] = []
+    monkeypatch.setattr(llm, "installed_runtime", lambda: "/usr/local/bin/ollama")
+    monkeypatch.setattr(llm, "start_runtime", lambda binary: launched.append(binary))
+
+    async def answers(seconds: float = 12.0) -> bool:
+        return True
+
+    monkeypatch.setattr(llm, "wait_for_runtime", answers)
+    answer = await clients["admin"].post("/api/settings/llm/local/start")
+    assert answer.status_code == 200
+    assert answer.json() == {"started": True, "answered": True}
+    assert launched == ["/usr/local/bin/ollama"]
+
+
+async def test_starting_without_an_installed_runtime_says_so(
+    clients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(llm, "installed_runtime", lambda: None)
+    answer = await clients["admin"].post("/api/settings/llm/local/start")
+    assert answer.status_code == 404
+    assert answer.json()["error"]["code"] == "runtime_not_installed"
+
+
+async def test_a_viewer_may_not_start_the_runtime(clients) -> None:
+    assert (await clients["viewer"].post("/api/settings/llm/local/start")).status_code == 403

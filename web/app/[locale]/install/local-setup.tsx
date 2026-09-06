@@ -10,6 +10,7 @@ import {
   localRuntimes,
   pullLocalModel,
   saveSettings,
+  startLocalRuntime,
   testModel,
   type LocalRuntime,
 } from "@/lib/api";
@@ -45,6 +46,7 @@ type Scan =
   | { status: "scanning" }
   | { status: "found"; runtimes: LocalRuntime[]; memoryGb: number | null }
   | { status: "none"; memoryGb: number | null }
+  | { status: "stopped"; memoryGb: number | null; starting: boolean; failed: boolean }
   | { status: "failed" };
 
 type Download = { name: string; percent: number | null; done: boolean; failed: boolean };
@@ -52,6 +54,21 @@ type Download = { name: string; percent: number | null; done: boolean; failed: b
 function gigabytes(bytes: number | null): string {
   if (bytes === null) return "";
   return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+}
+
+/**
+ * Installed models, best first. A model routed to the runtime's cloud has no bytes
+ * here and is not "on this computer"; below that, the one nearest a 4-5 GB sweet spot
+ * that still fits comfortably in memory (half of it) leads, and the rest follow by size.
+ */
+function rankModels(models: LocalRuntime["models"], memoryGb: number | null) {
+  const gb = (bytes: number | null) => (bytes ?? 0) / 1024 ** 3;
+  const ceiling = memoryGb === null ? 9 : Math.min(9, memoryGb / 2);
+  const score = (size: number) => (size <= 0 || size > ceiling ? Infinity : Math.abs(size - 4.5));
+  return [...models].sort((a, b) => {
+    const diff = score(gb(a.size_bytes)) - score(gb(b.size_bytes));
+    return diff !== 0 ? diff : gb(a.size_bytes) - gb(b.size_bytes);
+  });
 }
 
 export function LocalSetup({
@@ -73,15 +90,26 @@ export function LocalSetup({
     setScan({ status: "scanning" });
     if (!keepChoice) setChoice(null);
     try {
-      const { runtimes, memory_gb } = await localRuntimes();
+      const { runtimes, memory_gb, installed_but_stopped } = await localRuntimes();
       if (runtimes.length === 0) {
+        if (installed_but_stopped) {
+          // Installed weeks ago, not started today - the commonest state on a home
+          // machine. Start it without being asked; the button stays for a retry.
+          setScan({ status: "stopped", memoryGb: memory_gb, starting: true, failed: false });
+          void start(memory_gb);
+          return;
+        }
         setScan({ status: "none", memoryGb: memory_gb });
         return;
       }
-      setScan({ status: "found", runtimes, memoryGb: memory_gb });
-      // The first runtime's first model is the default, so "Use this model" is one
-      // click away for the common case of one runtime with one model.
-      const first = runtimes.find((runtime) => runtime.models.length > 0);
+      const ranked = runtimes.map((runtime) => ({
+        ...runtime,
+        models: rankModels(runtime.models, memory_gb),
+      }));
+      setScan({ status: "found", runtimes: ranked, memoryGb: memory_gb });
+      // The best-ranked model of the first runtime is the default, so "Use this
+      // model" is one click away for the common case.
+      const first = ranked.find((runtime) => runtime.models.length > 0);
       if (!keepChoice && first) setChoice({ runtime: first, model: first.models[0].id });
     } catch {
       setScan({ status: "failed" });
@@ -93,7 +121,22 @@ export function LocalSetup({
   useEffect(() => {
     const timer = window.setTimeout(() => void look(), 0);
     return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- on arrival only
   }, []);
+
+  async function start(memoryGb: number | null) {
+    setScan({ status: "stopped", memoryGb, starting: true, failed: false });
+    try {
+      const { answered } = await startLocalRuntime();
+      if (answered) {
+        await look();
+        return;
+      }
+    } catch {
+      // fall through: the button below says so
+    }
+    setScan({ status: "stopped", memoryGb, starting: false, failed: true });
+  }
 
   async function fetchModel(runtime: LocalRuntime, name: string) {
     setDownload({ name, percent: null, done: false, failed: false });
@@ -170,6 +213,31 @@ export function LocalSetup({
         </p>
       ) : null}
 
+      {scan.status === "stopped" ? (
+        <div className={`${card} mt-6 p-6`}>
+          <div className="flex items-center gap-3">
+            <span className="bg-od-amber inline-block h-3 w-3 rounded-full" aria-hidden="true" />
+            <strong className="text-od-text text-[17px]">{t.local_stopped_title}</strong>
+          </div>
+          <p className="text-od-muted-4 mt-3 max-w-[600px] text-pretty">
+            {scan.starting ? t.local_starting : scan.failed ? t.local_start_failed : t.local_stopped_body}
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              type="button"
+              disabled={scan.starting}
+              onClick={() => void start(scan.memoryGb)}
+              className={secondary}
+            >
+              {scan.starting ? t.local_starting : t.local_start}
+            </button>
+            <button type="button" disabled={scan.starting} onClick={() => void look()} className={secondary}>
+              {t.local_rescan}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {scan.status === "none" ? (
         <div className={`${card} mt-6 p-6`}>
           <div className="flex items-center gap-3">
@@ -242,7 +310,7 @@ export function LocalSetup({
                           <span className="text-od-text mono ltr-data text-[14px] font-semibold">
                             {model.id}
                           </span>
-                          {index === 0 ? (
+                          {index === 0 && (model.size_bytes ?? 0) > 0 ? (
                             <span className="border-od-violet text-od-violet rounded-md border px-2 py-[1px] text-[11px]">
                               {t.local_recommended}
                             </span>
@@ -325,6 +393,9 @@ export function LocalSetup({
         <p className="mt-4 text-[13px] text-pretty" style={{ color: "var(--od-red-text-6)" }}>
           {problem}
         </p>
+      ) : null}
+      {busy ? (
+        <p className="text-od-muted-5 mt-4 text-[13px] text-pretty">{t.local_loading_hint}</p>
       ) : null}
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">

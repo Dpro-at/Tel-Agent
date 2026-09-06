@@ -77,5 +77,11 @@
   "local_saving": "Wird verbunden …",
   "local_no_model": "Ein Modell wählen oder zuerst eines herunterladen.",
   "local_failed": "Die Laufzeit hat nicht geantwortet. Läuft sie noch?",
-  "ai_local_action": "Lokales Modell verwenden"
+  "ai_local_action": "Lokales Modell verwenden",
+  "local_stopped_title": "Eine lokale Laufzeit ist installiert, läuft aber nicht",
+  "local_stopped_body": "Tel-Agent kann sie für dich starten.",
+  "local_starting": "Wird gestartet …",
+  "local_start": "Starten",
+  "local_start_failed": "Sie hat nicht rechtzeitig geantwortet. Laufzeit selbst öffnen, dann erneut suchen.",
+  "local_loading_hint": "Das erste Laden eines Modells kann eine Minute dauern. Die Laufzeit liest es in den Arbeitsspeicher."
 }
