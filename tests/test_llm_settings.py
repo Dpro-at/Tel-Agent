@@ -472,3 +472,85 @@ async def test_a_refused_key_is_named_as_such_by_the_model_list(
     )
     assert answer.status_code == 502
     assert answer.json()["error"]["code"] == "llm_refused"
+
+
+# --- Models on this machine --------------------------------------------------
+
+
+async def test_a_viewer_may_not_look_for_local_runtimes(clients) -> None:
+    assert (await clients["viewer"].get("/api/settings/llm/local/runtimes")).status_code == 403
+
+
+async def test_local_runtimes_are_reported_with_their_models(
+    clients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def found() -> list[llm.LocalRuntime]:
+        return [
+            llm.LocalRuntime(
+                id="ollama",
+                name="Ollama",
+                base_url="http://127.0.0.1:11434/v1",
+                native_url="http://127.0.0.1:11434",
+                models=(llm.LocalModel("qwen3:8b", 5_200_000_000),),
+                can_pull=True,
+            )
+        ]
+
+    monkeypatch.setattr(llm, "discover_local_runtimes", found)
+    monkeypatch.setattr(llm, "total_memory_gb", lambda: 16.0)
+    answer = await clients["admin"].get("/api/settings/llm/local/runtimes")
+    assert answer.status_code == 200
+    body = answer.json()
+    assert body["memory_gb"] == 16.0
+    assert body["runtimes"][0]["base_url"] == "http://127.0.0.1:11434/v1"
+    assert body["runtimes"][0]["models"] == [{"id": "qwen3:8b", "size_bytes": 5_200_000_000}]
+    assert body["runtimes"][0]["can_pull"] is True
+
+
+async def test_a_machine_with_nothing_installed_answers_an_empty_list(
+    clients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def nothing() -> list[llm.LocalRuntime]:
+        return []
+
+    monkeypatch.setattr(llm, "discover_local_runtimes", nothing)
+    answer = await clients["admin"].get("/api/settings/llm/local/runtimes")
+    assert answer.status_code == 200
+    assert answer.json()["runtimes"] == []
+
+
+async def test_a_download_may_only_target_this_machine(clients) -> None:
+    answer = await clients["admin"].post(
+        "/api/settings/llm/local/pull",
+        json={"native_url": "http://example.com:11434", "model": "x"},
+    )
+    assert answer.status_code == 400
+    assert answer.json()["error"]["code"] == "not_local"
+
+
+async def test_a_download_relays_the_runtime_progress_lines(
+    clients, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_pull(native_url: str, model: str) -> AsyncIterator[bytes]:
+        assert (native_url, model) == ("http://127.0.0.1:11434", "qwen3:8b")
+        yield b'{"status":"pulling","total":10,"completed":5}\n'
+        yield b'{"status":"success"}\n'
+
+    monkeypatch.setattr(llm, "pull_local_model", fake_pull)
+    answer = await clients["admin"].post(
+        "/api/settings/llm/local/pull",
+        json={"native_url": "http://127.0.0.1:11434", "model": "qwen3:8b"},
+    )
+    assert answer.status_code == 200
+    assert answer.text.splitlines() == [
+        '{"status":"pulling","total":10,"completed":5}',
+        '{"status":"success"}',
+    ]
+
+
+def test_only_loopback_addresses_count_as_local() -> None:
+    assert llm.is_local_origin("http://127.0.0.1:11434")
+    assert llm.is_local_origin("http://localhost:1234")
+    assert llm.is_local_origin("http://host.docker.internal:11434")
+    assert not llm.is_local_origin("http://10.0.0.5:11434")
+    assert not llm.is_local_origin("http://example.com")

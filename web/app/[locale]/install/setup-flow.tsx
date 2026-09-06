@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { FirstRun } from "./first-run";
+import { LocalSetup } from "./local-setup";
 import type { InstallDictionary } from "./page";
 
 import { BrandMark } from "@/components/brands/brand-mark";
@@ -19,12 +20,11 @@ import type { Locale } from "@/lib/locales";
  * Docker, in every language the dashboard speaks.
  *
  * Three steps: the account (which already existed as `FirstRun`), how the agent thinks,
- * and connecting the model. The local-model branch is drawn but not wired: the API has
- * one provider kind today, an OpenAI-compatible endpoint, and a model running on the
- * machine itself needs a provider that does not exist yet (`IDEAS.md`). Showing the card
- * anyway tells the operator what is coming, without pretending it works.
+ * and connecting the model - a cloud endpoint with a key, or a runtime on this machine
+ * found by asking (`LocalSetup`). Both end in the same PATCH: the API has one provider
+ * kind, an OpenAI-format endpoint, and a local runtime is one of those on a loopback port.
  */
-export type Step = "account" | "ai" | "cloud";
+export type Step = "account" | "ai" | "cloud" | "local";
 
 export function SetupFlow({
   locale,
@@ -48,7 +48,14 @@ export function SetupFlow({
       {step === "account" ? (
         <FirstRun locale={locale} t={t} onCreated={() => setStep("ai")} />
       ) : step === "ai" ? (
-        <ChooseAi t={t} onCloud={() => setStep("cloud")} onSkip={finish} />
+        <ChooseAi
+          t={t}
+          onCloud={() => setStep("cloud")}
+          onLocal={() => setStep("local")}
+          onSkip={finish}
+        />
+      ) : step === "local" ? (
+        <LocalSetup t={t} onBack={() => setStep("ai")} onDone={finish} />
       ) : (
         <CloudSetup t={t} onBack={() => setStep("ai")} onDone={finish} />
       )}
@@ -58,6 +65,7 @@ export function SetupFlow({
 
 // --- Progress ------------------------------------------------------------------
 
+// The third step is one of two screens; the header counts it once.
 const ORDER: Step[] = ["account", "ai", "cloud"];
 
 function Steps({ current, t }: { current: Step; t: InstallDictionary }) {
@@ -65,8 +73,9 @@ function Steps({ current, t }: { current: Step; t: InstallDictionary }) {
     account: t.step_account,
     ai: t.step_ai,
     cloud: t.step_connect,
+    local: t.step_connect,
   };
-  const at = ORDER.indexOf(current);
+  const at = ORDER.indexOf(current === "local" ? "cloud" : current);
   return (
     <ol className="m-0 flex list-none flex-wrap items-center gap-x-5 gap-y-2 p-0 text-[13px]">
       {ORDER.map((step, index) => {
@@ -105,10 +114,12 @@ function Steps({ current, t }: { current: Step; t: InstallDictionary }) {
 function ChooseAi({
   t,
   onCloud,
+  onLocal,
   onSkip,
 }: {
   t: InstallDictionary;
   onCloud: () => void;
+  onLocal: () => void;
   onSkip: () => void;
 }) {
   return (
@@ -138,24 +149,24 @@ function ChooseAi({
           </span>
         </button>
 
-        <div
-          aria-disabled="true"
-          className="border-od-line bg-od-panel-deep-3 flex flex-col items-start gap-3 rounded-xl border p-6 opacity-70"
+        <button
+          type="button"
+          onClick={onLocal}
+          aria-label={t.ai_local_title}
+          className="border-od-line bg-od-panel-deep-3 hover:border-od-violet focus-visible:border-od-violet flex cursor-pointer flex-col items-start gap-3 rounded-xl border p-6 text-start outline-none"
         >
           <span
-            className="bg-od-raise-10 text-od-muted-4 inline-flex h-12 w-12 items-center justify-center rounded-lg text-[22px]"
+            className="bg-od-raise-10 text-od-violet inline-flex h-12 w-12 items-center justify-center rounded-lg text-[22px]"
             aria-hidden="true"
           >
             ▣
           </span>
-          <span className="text-od-text flex flex-wrap items-center gap-2 text-[18px] font-semibold">
-            {t.ai_local_title}
-            <span className="border-od-border-6 text-od-muted-5 rounded-md border px-2 py-[2px] text-[11px] font-medium uppercase tracking-[.08em]">
-              {t.ai_local_later}
-            </span>
-          </span>
+          <span className="text-od-text text-[18px] font-semibold">{t.ai_local_title}</span>
           <span className="text-od-muted-4 text-[14px] text-pretty">{t.ai_local_body}</span>
-        </div>
+          <span className="border-od-stroke bg-od-raise-10 text-od-text-2 mt-auto inline-block rounded-md border px-4 py-2 text-[14px] font-medium">
+            {t.ai_local_action}
+          </span>
+        </button>
       </div>
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">

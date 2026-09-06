@@ -482,6 +482,67 @@ export function listModels(base_url: string, api_key: string): Promise<{ models:
   return api("/api/settings/llm/models", { method: "POST", json: { base_url, api_key } });
 }
 
+export type LocalModel = { id: string; size_bytes: number | null };
+export type LocalRuntime = {
+  id: string;
+  name: string;
+  base_url: string;
+  native_url: string;
+  models: LocalModel[];
+  can_pull: boolean;
+};
+
+/** Which local model runtimes answer on the machine the API runs on, and what they hold. */
+export function localRuntimes(): Promise<{ runtimes: LocalRuntime[]; memory_gb: number | null }> {
+  return api("/api/settings/llm/local/runtimes");
+}
+
+export type PullEvent = {
+  status: string;
+  total?: number;
+  completed?: number;
+  error?: string;
+};
+
+/** Ask a local runtime to download a model, reporting each progress line the runtime
+ *  emits. Resolves when the runtime says it is done; rejects if it reports an error. */
+export async function pullLocalModel(
+  native_url: string,
+  model: string,
+  onProgress: (event: PullEvent) => void,
+): Promise<void> {
+  const response = await fetch(`${API_URL}/api/settings/llm/local/pull`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ native_url, model }),
+  });
+  if (!response.ok || !response.body) {
+    const body = await response.json().catch(() => null);
+    const error = (body as { error?: ApiErrorBody } | null)?.error;
+    throw new ApiError(
+      response.status,
+      error ?? { code: "unknown", message: "Something went wrong.", details: null, request_id: null },
+    );
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const event = JSON.parse(line) as PullEvent;
+      if (event.status === "error") throw new Error(event.error ?? "download failed");
+      onProgress(event);
+    }
+  }
+}
+
 /** One free-busy day from the configured CalDAV calendar, to prove the saved
  *  credentials reach it - the cheapest real question the provider can ask. */
 export function testCalendar(): Promise<{ reached: boolean; source: string }> {

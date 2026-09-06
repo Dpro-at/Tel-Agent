@@ -20,8 +20,16 @@ orders of magnitude slower.
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
+import os
+import sys
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
+
+import httpx
 
 from agent.config import ConfigurationError, LlmSettings, environment_values, settings_from
 from agent.providers.llm import LLMProvider, provider_for
@@ -165,3 +173,185 @@ async def list_models(base_url: str, api_key: str) -> list[str]:
     # The Gemini compatibility layer prefixes every id with "models/"; the chat route
     # wants the bare name.
     return sorted({model_id.removeprefix("models/") for model_id in ids if model_id})
+
+
+# --- Models on this machine ----------------------------------------------------
+#
+# A runtime that serves models locally speaks the same OpenAI wire format as the
+# cloud, so nothing in `agent/` changes: the difference is that it lives on a loopback
+# port, needs no key ("local" is stored - the endpoint ignores it), and can be found
+# by asking. The list below is what is asked, in the order a home machine is likely
+# to have them. Only the first can also download a model on request.
+
+KNOWN_LOCAL_RUNTIMES: tuple[tuple[str, str, int, str | None], ...] = (
+    # id, name, port, native listing path (None: the OpenAI /models route)
+    ("ollama", "Ollama", 11434, "/api/tags"),
+    ("lmstudio", "LM Studio", 1234, None),
+    ("jan", "Jan", 1337, None),
+    ("gpt4all", "GPT4All", 4891, None),
+    ("koboldcpp", "KoboldCpp", 5001, None),
+    ("llamacpp", "llama.cpp server", 8080, None),
+    ("vllm", "vLLM", 8000, None),
+)
+
+PROBE_TIMEOUT = 1.5
+
+
+@dataclass(frozen=True)
+class LocalModel:
+    id: str
+    size_bytes: int | None
+
+
+@dataclass(frozen=True)
+class LocalRuntime:
+    id: str
+    name: str
+    base_url: str
+    native_url: str
+    models: tuple[LocalModel, ...]
+    can_pull: bool
+
+
+def local_hosts() -> list[str]:
+    """Where "this machine" is from the API's point of view.
+
+    Inside a container the loopback address is the container's own, and the runtime
+    the operator installed sits on the host - which Docker exposes under one name.
+    """
+    hosts = ["127.0.0.1"]
+    if os.path.exists("/.dockerenv"):
+        hosts.append("host.docker.internal")
+    return hosts
+
+
+async def _probe(
+    client: httpx.AsyncClient,
+    host: str,
+    runtime_id: str,
+    name: str,
+    port: int,
+    native: str | None,
+) -> LocalRuntime | None:
+    origin = f"http://{host}:{port}"
+    try:
+        if native:
+            answer = await client.get(f"{origin}{native}")
+            answer.raise_for_status()
+            rows = answer.json().get("models", [])
+            models = tuple(
+                LocalModel(
+                    id=str(row.get("name") or row.get("model")), size_bytes=row.get("size")
+                )
+                for row in rows
+                if row.get("name") or row.get("model")
+            )
+        else:
+            answer = await client.get(f"{origin}/v1/models")
+            answer.raise_for_status()
+            models = tuple(
+                LocalModel(id=str(row["id"]), size_bytes=None)
+                for row in answer.json().get("data", [])
+                if row.get("id")
+            )
+    except (httpx.HTTPError, ValueError, AttributeError, TypeError):
+        return None
+    return LocalRuntime(
+        id=runtime_id,
+        name=name,
+        base_url=f"{origin}/v1",
+        native_url=origin,
+        models=models,
+        can_pull=runtime_id == "ollama",
+    )
+
+
+async def discover_local_runtimes() -> list[LocalRuntime]:
+    """Every known runtime that answers on this machine, with the models it holds.
+
+    All probes run at once and each gives up after `PROBE_TIMEOUT`, so a machine with
+    nothing installed answers in under two seconds rather than in seven times that.
+    """
+    async with httpx.AsyncClient(timeout=PROBE_TIMEOUT) as client:
+        found = await asyncio.gather(
+            *(
+                _probe(client, host, runtime_id, name, port, native)
+                for host in local_hosts()
+                for runtime_id, name, port, native in KNOWN_LOCAL_RUNTIMES
+            )
+        )
+    return [runtime for runtime in found if runtime is not None]
+
+
+def total_memory_gb() -> float | None:
+    """How much memory this machine has - the one number that decides which local
+    model is sensible. `None` where it cannot be read; the screen then recommends
+    nothing rather than guessing."""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+
+            class _Status(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            status = _Status()
+            status.dwLength = ctypes.sizeof(_Status)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status))  # type: ignore[attr-defined]
+            return round(status.ullTotalPhys / 1024**3, 1)
+        pages = os.sysconf("SC_PHYS_PAGES")
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        return round(pages * page_size / 1024**3, 1)
+    except (AttributeError, ValueError, OSError):
+        return None
+
+
+def is_local_origin(url: str) -> bool:
+    """Only this machine's runtimes may be asked to download: the route is a proxy,
+    and a proxy that reaches anywhere is a hole."""
+    from urllib.parse import urlsplit
+
+    host = urlsplit(url).hostname or ""
+    return host in {"127.0.0.1", "localhost", "::1", "host.docker.internal"}
+
+
+async def pull_local_model(native_url: str, model: str) -> AsyncIterator[bytes]:
+    """Ask the runtime to download a model, relaying its progress line by line.
+
+    The runtime streams newline-delimited JSON (`status`, `total`, `completed`); each
+    line is passed on unchanged, so the screen can draw a bar from the same numbers
+    the runtime's own tools show. A failure to reach the runtime becomes one last
+    line of the same shape rather than a broken stream.
+    """
+    address = f"{native_url.rstrip('/')}/api/pull"
+    try:
+        async with (
+            httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=None)) as client,
+            client.stream("POST", address, json={"model": model, "stream": True}) as response,
+        ):
+            if response.status_code >= 400:
+                yield (
+                    json.dumps(
+                        {"status": "error", "error": f"runtime answered {response.status_code}"}
+                    ).encode()
+                    + b"\n"
+                )
+                return
+            async for line in response.aiter_lines():
+                if line.strip():
+                    yield line.encode() + b"\n"
+    except httpx.HTTPError as unreachable:
+        logger.warning(
+            "the local runtime stopped answering during a download",
+            extra={"error": type(unreachable).__name__},
+        )
+        yield json.dumps({"status": "error", "error": "unreachable"}).encode() + b"\n"

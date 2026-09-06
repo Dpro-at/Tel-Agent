@@ -26,11 +26,11 @@ export default async function InstallPage({
 
   const t = pickDictionary<InstallDictionary>(locale, { en, de, ar, es, nl });
 
-  // `?step=ai` / `?step=cloud` opens a later step directly - for looking at the screens
+  // `?step=ai` / `?step=cloud` / `?step=local` opens a later step directly - for looking at the screens
   // without creating an account first. Harmless: every write behind them needs the
   // admin session, which only the account step can create.
   const { step } = await searchParams;
-  const initial = step === "ai" || step === "cloud" ? step : "account";
+  const initial = step === "ai" || step === "cloud" || step === "local" ? step : "account";
 
   return <SetupFlow locale={locale} t={t} initialStep={initial} />;
 }

@@ -365,6 +365,94 @@ async def list_models(
     return ModelsListed(models=models)
 
 
+class LocalModelOut(BaseModel):
+    id: str
+    size_bytes: int | None
+
+
+class LocalRuntimeOut(BaseModel):
+    id: str
+    name: str
+    base_url: str
+    native_url: str
+    models: list[LocalModelOut]
+    can_pull: bool
+
+
+class LocalRuntimes(BaseModel):
+    runtimes: list[LocalRuntimeOut]
+    # What this machine has to run a model with; None where it could not be read.
+    memory_gb: float | None
+
+
+@router.get(
+    "/llm/local/runtimes",
+    response_model=LocalRuntimes,
+    summary="Which local model runtimes answer on this machine, and what they hold",
+)
+async def local_runtimes(context: Annotated[WorkspaceContext, require_admin]) -> object:
+    """The setup screen's "look on this computer" button.
+
+    Asked of the machine the API runs on - which, for a self-hosted installation, is
+    the machine the operator is sitting at. Nothing is saved: choosing one of these
+    goes through the same PATCH as a cloud endpoint, with the key set to the word
+    "local", which the runtimes ignore.
+    """
+    from api import llm
+
+    found = await llm.discover_local_runtimes()
+    return LocalRuntimes(
+        runtimes=[
+            LocalRuntimeOut(
+                id=runtime.id,
+                name=runtime.name,
+                base_url=runtime.base_url,
+                native_url=runtime.native_url,
+                models=[
+                    LocalModelOut(id=m.id, size_bytes=m.size_bytes) for m in runtime.models
+                ],
+                can_pull=runtime.can_pull,
+            )
+            for runtime in found
+        ],
+        memory_gb=llm.total_memory_gb(),
+    )
+
+
+class PullRequest(BaseModel):
+    native_url: str = Field(min_length=1, max_length=200)
+    model: str = Field(min_length=1, max_length=200)
+
+
+@router.post(
+    "/llm/local/pull",
+    summary="Ask a local runtime to download a model, relaying its progress",
+)
+async def pull_local_model(
+    payload: PullRequest, context: Annotated[WorkspaceContext, require_admin]
+) -> object:
+    """A download on the operator's behalf, with the runtime's own progress numbers.
+
+    Loopback only: this is a proxy, and a proxy that reaches any address is a hole.
+    The answer is newline-delimited JSON, one line per progress event, ending with
+    `status: "success"` (the runtime's word) or `status: "error"`.
+    """
+    from fastapi.responses import StreamingResponse
+
+    from api import llm
+
+    if not llm.is_local_origin(payload.native_url):
+        return envelope_response(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="not_local",
+            message="Only a runtime on this machine can be asked to download.",
+        )
+    return StreamingResponse(
+        llm.pull_local_model(payload.native_url, payload.model),
+        media_type="application/x-ndjson",
+    )
+
+
 class CalendarTested(BaseModel):
     reached: bool
     # The collection address that answered - configuration, not a secret; the

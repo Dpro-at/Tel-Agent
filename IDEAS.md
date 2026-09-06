@@ -85,13 +85,13 @@ These are already described in `docs/SPEC.md` and scheduled, just not now.
 
 *(Add new entries below. Date them.)*
 
-**2026-09-06 — Local models in the setup flow.**
-The setup at `/install` offers two ways for the agent to think: a cloud model behind an
-OpenAI-compatible endpoint (built), and a model running on the machine itself (drawn,
-marked "coming later"). The local branch needs what does not exist yet: a provider in
-`agent/` that speaks to a local runtime, discovery of runtimes and models already on the
-machine, and a download step with progress. Deferred by the maintainer on 2026-09-06:
-cloud first, local later. When it lands, the card on the setup screen is already there.
+**2026-09-06 — Local models in the setup flow.** Built the same day after all: the
+API looks for the runtimes a home machine is likely to have, lists what each holds,
+and can ask one to download a model with its own progress numbers. No second provider
+was needed - a local runtime is an OpenAI-format endpoint on a loopback port, saved
+like any other with the word "local" for a key. What is still parked: choosing a model
+by the machine's memory automatically (the number is shown, the choice is the
+operator's), and runtimes that cannot download on request.
 
 **2026-08-17 — Selling numbers to customers (Tel-Agent Cloud only).**
 Dpro GmbH holds numbers at Twilio and assigns them to customers, who then forward
