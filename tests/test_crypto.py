@@ -18,6 +18,7 @@ import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agent.config import AGENT_INSTALLATION_ENVIRONMENT_VARIABLES
 from api.config import Settings, get_settings
 from api.models import Channel, Workspace
 from api.models.encrypted import reset_key_cache
@@ -320,15 +321,22 @@ def test_env_example_documents_every_setting_and_nothing_else() -> None:
             re.MULTILINE,
         )
     }
-    modeled = {name.upper() for name in Settings.model_fields}
+    modeled = (
+        {name.upper() for name in Settings.model_fields}
+        | AGENT_INSTALLATION_ENVIRONMENT_VARIABLES
+    )
 
-    # Milestone 0 exception (§B9.2): provider and telephony variables live in
-    # `.env.example` ahead of the code that reads them. They are tolerated as extras
-    # until their epics land, but a *modeled* setting must always be documented.
     undocumented = modeled - documented
     assert not undocumented, (
         f"settings missing from .env.example: {sorted(undocumented)} - document them "
         "with a safe placeholder"
+    )
+
+    undocumented_in_model = documented - modeled
+    assert not undocumented_in_model, (
+        f".env.example documents variables with no settings field: "
+        f"{sorted(undocumented_in_model)} - add them to api.config.Settings or "
+        "agent.config.AGENT_INSTALLATION_ENVIRONMENT_VARIABLES, or remove the line"
     )
 
 

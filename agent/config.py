@@ -261,3 +261,45 @@ def tts_settings() -> TtsSettings | None:
         output_format=_clean("ELEVENLABS_OUTPUT_FORMAT") or DEFAULT_TTS_OUTPUT_FORMAT,
         base_url=_clean("ELEVENLABS_BASE_URL").rstrip("/") or DEFAULT_TTS_BASE_URL,
     )
+
+
+# Every installation variable the agent path owns. `api.config.Settings` holds the API
+# service's variables; together they must match `.env.example` exactly — see the E7
+# tests in `tests/test_crypto.py`.
+AGENT_INSTALLATION_ENVIRONMENT_VARIABLES: frozenset[str] = frozenset(
+    {
+        # Model — read above via `_clean`.
+        "LLM_PROVIDER",
+        "LLM_MODEL",
+        "LLM_API_KEY",
+        "LLM_BASE_URL",
+        # Speech pipeline — Milestone 11.
+        "DEEPGRAM_API_KEY",
+        "DEEPGRAM_MODEL",
+        "DEEPGRAM_BASE_URL",
+        "STT_LANGUAGE",
+        "ELEVENLABS_API_KEY",
+        "ELEVENLABS_VOICE_ID",
+        "ELEVENLABS_MODEL_ID",
+        "ELEVENLABS_OUTPUT_FORMAT",
+        "ELEVENLABS_BASE_URL",
+        # Telephony and agent behaviour — Milestone 11; documented ahead of readers.
+        "TELEPHONY_MODE",
+        "LIVEKIT_URL",
+        "LIVEKIT_API_KEY",
+        "LIVEKIT_API_SECRET",
+        "LIVEKIT_SIP_TRUNK_ID",
+        "INBOUND_NUMBER",
+        "SIP_HOST",
+        "SIP_PORT",
+        "SIP_EXTENSION",
+        "SIP_USERNAME",
+        "SIP_PASSWORD",
+        "RTP_PORT_MIN",
+        "RTP_PORT_MAX",
+        "SIP_CODEC",
+        "AGENT_NAME",
+        "AGENT_LANGUAGE",
+        "RECORDING_ANNOUNCEMENT",
+    }
+)
