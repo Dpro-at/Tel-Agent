@@ -425,14 +425,21 @@ export function setupState(): Promise<{ needed: boolean }> {
 
 /** Create the first account and its workspace. The response also sets the session
  *  cookie, so the caller is signed in when this resolves. */
-export function completeFirstRun(values: {
+export async function completeFirstRun(values: {
   username: string;
   password: string;
   workspace_name: string;
   email?: string;
   locale: string;
 }): Promise<{ username: string; workspace: string; workspace_id: number }> {
-  return api("/api/setup", { method: "POST", json: values });
+  const created = await api<{ username: string; workspace: string; workspace_id: number }>(
+    "/api/setup",
+    { method: "POST", json: values },
+  );
+  // The server set the session cookie; the dashboard-origin hint has to follow, or
+  // the middleware bounces the very next dashboard page to sign-in (D14).
+  setSignedInHint(true);
+  return created;
 }
 
 // --- Settings ----------------------------------------------------------------
@@ -467,6 +474,83 @@ export function saveSettings(
  *  is closed after the first event, so this costs a request rather than an answer. */
 export function testModel(): Promise<{ reached: boolean; model: string; base_url: string }> {
   return api("/api/settings/llm/test", { method: "POST" });
+}
+
+/** Which models a key may use at an endpoint, asked of the endpoint itself. Nothing is
+ *  saved by asking: the address and key travel through and are forgotten. */
+export function listModels(base_url: string, api_key: string): Promise<{ models: string[] }> {
+  return api("/api/settings/llm/models", { method: "POST", json: { base_url, api_key } });
+}
+
+export type LocalModel = { id: string; size_bytes: number | null };
+export type LocalRuntime = {
+  id: string;
+  name: string;
+  base_url: string;
+  native_url: string;
+  models: LocalModel[];
+  can_pull: boolean;
+};
+
+/** Which local model runtimes answer on the machine the API runs on, and what they hold. */
+export function localRuntimes(): Promise<{
+  runtimes: LocalRuntime[];
+  memory_gb: number | null;
+  /** A runtime program is installed but nothing answered on its port. */
+  installed_but_stopped: boolean;
+}> {
+  return api("/api/settings/llm/local/runtimes");
+}
+
+/** Launch the installed local runtime and wait a few seconds for it to answer. */
+export function startLocalRuntime(): Promise<{ started: boolean; answered: boolean }> {
+  return api("/api/settings/llm/local/start", { method: "POST" });
+}
+
+export type PullEvent = {
+  status: string;
+  total?: number;
+  completed?: number;
+  error?: string;
+};
+
+/** Ask a local runtime to download a model, reporting each progress line the runtime
+ *  emits. Resolves when the runtime says it is done; rejects if it reports an error. */
+export async function pullLocalModel(
+  native_url: string,
+  model: string,
+  onProgress: (event: PullEvent) => void,
+): Promise<void> {
+  const response = await fetch(`${API_URL}/api/settings/llm/local/pull`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ native_url, model }),
+  });
+  if (!response.ok || !response.body) {
+    const body = await response.json().catch(() => null);
+    const error = (body as { error?: ApiErrorBody } | null)?.error;
+    throw new ApiError(
+      response.status,
+      error ?? { code: "unknown", message: "Something went wrong.", details: null, request_id: null },
+    );
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const event = JSON.parse(line) as PullEvent;
+      if (event.status === "error") throw new Error(event.error ?? "download failed");
+      onProgress(event);
+    }
+  }
 }
 
 /** One free-busy day from the configured CalDAV calendar, to prove the saved

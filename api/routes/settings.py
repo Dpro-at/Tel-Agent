@@ -302,6 +302,202 @@ async def test_model(
     return ModelTested(reached=True, model=settings.model, base_url=settings.base_url)
 
 
+class ModelsRequest(BaseModel):
+    # The address and key as typed on the screen, before anything is saved: the list
+    # is what tells the operator which model names to save in the first place.
+    base_url: str = Field(min_length=1, max_length=500)
+    api_key: str = Field(min_length=1, max_length=500)
+
+
+class ModelsListed(BaseModel):
+    models: list[str]
+
+
+@router.post(
+    "/llm/models",
+    response_model=ModelsListed,
+    summary="Ask an endpoint which models a key may use, without saving anything",
+)
+async def list_models(
+    payload: ModelsRequest, context: Annotated[WorkspaceContext, require_admin]
+) -> object:
+    """The setup screen's model picker.
+
+    A fixed list of model names goes stale within a release, and it says nothing about
+    what *this* key is allowed to use. The endpoint knows both, so it is asked. The key
+    travels through and is forgotten - it is stored only when the operator presses Save,
+    through the same PATCH as every other setting.
+
+    The three answers that are not a list are designed, not tracebacks: refused (the
+    key), unreachable (the address or the network), and "this endpoint does not list
+    its models", after which the screen falls back to a typed name.
+    """
+    import httpx
+
+    from api import llm
+
+    try:
+        models = await llm.list_models(payload.base_url, payload.api_key)
+    except llm.ModelListUnavailable:
+        return envelope_response(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="llm_models_unavailable",
+            message="This endpoint does not list its models. Type the model name.",
+        )
+    except httpx.HTTPStatusError as refused:
+        return envelope_response(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="llm_refused",
+            message=f"The endpoint answered {refused.response.status_code}. "
+            "A 401 is the key; a 403 is a key without access to this address.",
+        )
+    except (httpx.HTTPError, httpx.InvalidURL) as unreachable:
+        logger.warning(
+            "the model endpoint could not be reached for its model list",
+            extra={"error": type(unreachable).__name__},
+        )
+        return envelope_response(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="llm_unreachable",
+            message="Nothing answered at that address. Check the endpoint, and that "
+            "this machine can reach it.",
+        )
+    return ModelsListed(models=models)
+
+
+class LocalModelOut(BaseModel):
+    id: str
+    size_bytes: int | None
+
+
+class LocalRuntimeOut(BaseModel):
+    id: str
+    name: str
+    base_url: str
+    native_url: str
+    models: list[LocalModelOut]
+    can_pull: bool
+
+
+class LocalRuntimes(BaseModel):
+    runtimes: list[LocalRuntimeOut]
+    # What this machine has to run a model with; None where it could not be read.
+    memory_gb: float | None
+    # A runtime program is installed here but nothing answered on its port - the
+    # screen offers to start it instead of saying nothing is here.
+    installed_but_stopped: bool = False
+
+
+@router.get(
+    "/llm/local/runtimes",
+    response_model=LocalRuntimes,
+    summary="Which local model runtimes answer on this machine, and what they hold",
+)
+async def local_runtimes(context: Annotated[WorkspaceContext, require_admin]) -> object:
+    """The setup screen's "look on this computer" button.
+
+    Asked of the machine the API runs on - which, for a self-hosted installation, is
+    the machine the operator is sitting at. Nothing is saved: choosing one of these
+    goes through the same PATCH as a cloud endpoint, with the key set to the word
+    "local", which the runtimes ignore.
+    """
+    from api import llm
+
+    found = await llm.discover_local_runtimes()
+    return LocalRuntimes(
+        runtimes=[
+            LocalRuntimeOut(
+                id=runtime.id,
+                name=runtime.name,
+                base_url=runtime.base_url,
+                native_url=runtime.native_url,
+                models=[
+                    LocalModelOut(id=m.id, size_bytes=m.size_bytes) for m in runtime.models
+                ],
+                can_pull=runtime.can_pull,
+            )
+            for runtime in found
+        ],
+        memory_gb=llm.total_memory_gb(),
+        installed_but_stopped=not any(r.id == "ollama" for r in found)
+        and llm.installed_runtime() is not None,
+    )
+
+
+class RuntimeStarted(BaseModel):
+    started: bool
+    answered: bool
+
+
+@router.post(
+    "/llm/local/start",
+    response_model=RuntimeStarted,
+    summary="Start the installed local runtime, if it is not already answering",
+)
+async def start_local_runtime(context: Annotated[WorkspaceContext, require_admin]) -> object:
+    """The one thing a non-technical operator would otherwise do by hand.
+
+    Finds the installed program, launches it detached, and waits a few seconds for it
+    to answer. `started` says the launch happened; `answered` says the port replied in
+    time - a slow machine may need one more "look again".
+    """
+    from api import llm
+
+    binary = llm.installed_runtime()
+    if binary is None:
+        return envelope_response(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="runtime_not_installed",
+            message="No local runtime program was found on this machine.",
+        )
+    try:
+        llm.start_runtime(binary)
+    except OSError as failed:
+        logger.warning(
+            "the local runtime could not be launched", extra={"error": type(failed).__name__}
+        )
+        return envelope_response(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="runtime_start_failed",
+            message="The runtime program is there but could not be started.",
+        )
+    return RuntimeStarted(started=True, answered=await llm.wait_for_runtime())
+
+
+class PullRequest(BaseModel):
+    native_url: str = Field(min_length=1, max_length=200)
+    model: str = Field(min_length=1, max_length=200)
+
+
+@router.post(
+    "/llm/local/pull",
+    summary="Ask a local runtime to download a model, relaying its progress",
+)
+async def pull_local_model(
+    payload: PullRequest, context: Annotated[WorkspaceContext, require_admin]
+) -> object:
+    """A download on the operator's behalf, with the runtime's own progress numbers.
+
+    Loopback only: this is a proxy, and a proxy that reaches any address is a hole.
+    The answer is newline-delimited JSON, one line per progress event, ending with
+    `status: "success"` (the runtime's word) or `status: "error"`.
+    """
+    from fastapi.responses import StreamingResponse
+
+    from api import llm
+
+    if not llm.is_local_origin(payload.native_url):
+        return envelope_response(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="not_local",
+            message="Only a runtime on this machine can be asked to download.",
+        )
+    return StreamingResponse(
+        llm.pull_local_model(payload.native_url, payload.model),
+        media_type="application/x-ndjson",
+    )
+
+
 class CalendarTested(BaseModel):
     reached: bool
     # The collection address that answered - configuration, not a secret; the

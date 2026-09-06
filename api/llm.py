@@ -20,8 +20,16 @@ orders of magnitude slower.
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
+import os
+import sys
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
+
+import httpx
 
 from agent.config import ConfigurationError, LlmSettings, environment_values, settings_from
 from agent.providers.llm import LLMProvider, provider_for
@@ -122,3 +130,336 @@ async def describe(db: DbSession) -> tuple[str, str | None]:
     # The model and where it lives. Never the key - this endpoint is admin-only, and
     # that is not a reason to hand one back.
     return "ok", f"{settings.model} at {settings.base_url}"
+
+
+class ModelListUnavailable(Exception):
+    """The endpoint answered, but not with a list of models.
+
+    Some OpenAI-format endpoints do not serve ``/models`` at all, and a few answer
+    with a shape that is not the OpenAI one. Neither is the operator's fault and neither
+    means the key is wrong - the screen falls back to a typed model name.
+    """
+
+
+async def list_models(base_url: str, api_key: str) -> list[str]:
+    """Ask an OpenAI-format endpoint which models this key may use.
+
+    ``GET {base_url}/models`` with the key as a bearer token; the two extra headers are
+    what the Anthropic compatibility layer wants and every other endpoint ignores.
+    Errors are httpx's own - the route turns them into designed answers - except the
+    two shapes of "answered, but not with models", which become
+    :class:`ModelListUnavailable`.
+
+    The key is used and forgotten: nothing here stores or logs it.
+    """
+    import httpx
+
+    address = f"{base_url.strip().rstrip('/')}/models"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+    }
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(address, headers=headers)
+    if response.status_code in (404, 405, 501):
+        raise ModelListUnavailable(f"{response.status_code} from /models")
+    response.raise_for_status()
+    try:
+        rows = response.json()["data"]
+        ids = [str(row["id"]) for row in rows]
+    except (ValueError, KeyError, TypeError) as odd:
+        raise ModelListUnavailable("not an OpenAI-shaped model list") from odd
+    # The Gemini compatibility layer prefixes every id with "models/"; the chat route
+    # wants the bare name.
+    return sorted({model_id.removeprefix("models/") for model_id in ids if model_id})
+
+
+# --- Models on this machine ----------------------------------------------------
+#
+# A runtime that serves models locally speaks the same OpenAI wire format as the
+# cloud, so nothing in `agent/` changes: the difference is that it lives on a loopback
+# port, needs no key ("local" is stored - the endpoint ignores it), and can be found
+# by asking. The list below is what is asked, in the order a home machine is likely
+# to have them. Only the first can also download a model on request.
+
+KNOWN_LOCAL_RUNTIMES: tuple[tuple[str, str, int, str | None], ...] = (
+    # id, name, port, native listing path (None: the OpenAI /models route)
+    ("ollama", "Ollama", 11434, "/api/tags"),
+    ("lmstudio", "LM Studio", 1234, None),
+    ("jan", "Jan", 1337, None),
+    ("gpt4all", "GPT4All", 4891, None),
+    ("koboldcpp", "KoboldCpp", 5001, None),
+    ("llamacpp", "llama.cpp server", 8080, None),
+    ("vllm", "vLLM", 8000, None),
+)
+
+PROBE_TIMEOUT = 1.5
+
+
+@dataclass(frozen=True)
+class LocalModel:
+    id: str
+    size_bytes: int | None
+
+
+@dataclass(frozen=True)
+class LocalRuntime:
+    id: str
+    name: str
+    base_url: str
+    native_url: str
+    models: tuple[LocalModel, ...]
+    can_pull: bool
+
+
+def local_hosts() -> list[str]:
+    """Where "this machine" is from the API's point of view.
+
+    Inside a container the loopback address is the container's own, and the runtime
+    the operator installed sits on the host - which Docker exposes under one name.
+    """
+    hosts = ["127.0.0.1"]
+    if os.path.exists("/.dockerenv"):
+        hosts.append("host.docker.internal")
+    return hosts
+
+
+async def _probe(
+    client: httpx.AsyncClient,
+    host: str,
+    runtime_id: str,
+    name: str,
+    port: int,
+    native: str | None,
+) -> LocalRuntime | None:
+    origin = f"http://{host}:{port}"
+    try:
+        if native:
+            answer = await client.get(f"{origin}{native}")
+            answer.raise_for_status()
+            rows = answer.json().get("models", [])
+            models = tuple(
+                LocalModel(
+                    id=str(row.get("name") or row.get("model")), size_bytes=row.get("size")
+                )
+                for row in rows
+                if row.get("name") or row.get("model")
+            )
+        else:
+            answer = await client.get(f"{origin}/v1/models")
+            answer.raise_for_status()
+            models = tuple(
+                LocalModel(id=str(row["id"]), size_bytes=None)
+                for row in answer.json().get("data", [])
+                if row.get("id")
+            )
+    except (httpx.HTTPError, ValueError, AttributeError, TypeError):
+        return None
+    return LocalRuntime(
+        id=runtime_id,
+        name=name,
+        base_url=f"{origin}/v1",
+        native_url=origin,
+        models=models,
+        can_pull=runtime_id == "ollama",
+    )
+
+
+async def discover_local_runtimes() -> list[LocalRuntime]:
+    """Every known runtime that answers on this machine, with the models it holds.
+
+    All probes run at once and each gives up after `PROBE_TIMEOUT`, so a machine with
+    nothing installed answers in under two seconds rather than in seven times that.
+    """
+    async with httpx.AsyncClient(timeout=PROBE_TIMEOUT) as client:
+        found = await asyncio.gather(
+            *(
+                _probe(client, host, runtime_id, name, port, native)
+                for host in local_hosts()
+                for runtime_id, name, port, native in KNOWN_LOCAL_RUNTIMES
+            )
+        )
+    return [runtime for runtime in found if runtime is not None]
+
+
+def total_memory_gb() -> float | None:
+    """How much memory this machine has - the one number that decides which local
+    model is sensible. `None` where it cannot be read; the screen then recommends
+    nothing rather than guessing."""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+
+            class _Status(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            status = _Status()
+            status.dwLength = ctypes.sizeof(_Status)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status))  # type: ignore[attr-defined]
+            return round(status.ullTotalPhys / 1024**3, 1)
+        pages = os.sysconf("SC_PHYS_PAGES")
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        return round(pages * page_size / 1024**3, 1)
+    except (AttributeError, ValueError, OSError):
+        return None
+
+
+def is_local_origin(url: str) -> bool:
+    """Only this machine's runtimes may be asked to download: the route is a proxy,
+    and a proxy that reaches anywhere is a hole."""
+    from urllib.parse import urlsplit
+
+    host = urlsplit(url).hostname or ""
+    return host in {"127.0.0.1", "localhost", "::1", "host.docker.internal"}
+
+
+async def pull_local_model(native_url: str, model: str) -> AsyncIterator[bytes]:
+    """Ask the runtime to download a model, relaying its progress line by line.
+
+    The runtime streams newline-delimited JSON (`status`, `total`, `completed`); each
+    line is passed on unchanged, so the screen can draw a bar from the same numbers
+    the runtime's own tools show. A failure to reach the runtime becomes one last
+    line of the same shape rather than a broken stream.
+    """
+    address = f"{native_url.rstrip('/')}/api/pull"
+    try:
+        async with (
+            httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=None)) as client,
+            client.stream("POST", address, json={"model": model, "stream": True}) as response,
+        ):
+            if response.status_code >= 400:
+                yield (
+                    json.dumps(
+                        {"status": "error", "error": f"runtime answered {response.status_code}"}
+                    ).encode()
+                    + b"\n"
+                )
+                return
+            async for line in response.aiter_lines():
+                if line.strip():
+                    yield line.encode() + b"\n"
+    except httpx.HTTPError as unreachable:
+        logger.warning(
+            "the local runtime stopped answering during a download",
+            extra={"error": type(unreachable).__name__},
+        )
+        yield json.dumps({"status": "error", "error": "unreachable"}).encode() + b"\n"
+
+
+# --- A runtime that is installed but not running -----------------------------------
+#
+# The commonest state on a home machine, as it turned out: the runtime was installed
+# weeks ago and nobody started it today. Finding the program is cheap; starting it is
+# what a non-technical operator would otherwise have to do by hand.
+
+
+def _candidate_binaries() -> list[str]:
+    """Where the runtime's program lives, per platform - the documented install
+    locations, plus the PATH. On Windows the service runs as another account, so every
+    user's per-user install directory is looked at, not only the service's."""
+    import glob
+    import shutil
+
+    found: list[str] = []
+    on_path = shutil.which("ollama")
+    if on_path:
+        found.append(on_path)
+    if sys.platform == "win32":
+        found.extend(glob.glob(r"C:\Users\*\AppData\Local\Programs\Ollama\ollama.exe"))
+        found.extend(glob.glob(r"C:\Program Files\Ollama\ollama.exe"))
+    elif sys.platform == "darwin":
+        found.extend(
+            path
+            for path in (
+                "/usr/local/bin/ollama",
+                "/opt/homebrew/bin/ollama",
+                "/Applications/Ollama.app/Contents/Resources/ollama",
+            )
+            if os.path.exists(path)
+        )
+    else:
+        found.extend(
+            path
+            for path in ("/usr/local/bin/ollama", "/usr/bin/ollama")
+            if os.path.exists(path)
+        )
+    unique: list[str] = []
+    for path in found:
+        if path not in unique:
+            unique.append(path)
+    return unique
+
+
+def installed_runtime() -> str | None:
+    """The path of an installed runtime program, or None. Used by the discovery route
+    to say "installed but not running" rather than "nothing here"."""
+    binaries = _candidate_binaries()
+    return binaries[0] if binaries else None
+
+
+def _models_dir_for(binary: str) -> str | None:
+    """A per-user install keeps its models under that user's home. When the service
+    starts the runtime as a different account, the runtime would open an empty store -
+    so the owner's directory is handed over explicitly."""
+    import re
+
+    match = re.match(r"^([A-Za-z]:\\Users\\[^\\]+)\\", binary)
+    if match:
+        candidate = os.path.join(match.group(1), ".ollama", "models")
+        return candidate if os.path.isdir(candidate) else None
+    return None
+
+
+def start_runtime(binary: str) -> None:
+    """Launch `ollama serve` detached from this process, output discarded.
+
+    Detached on purpose: the runtime must outlive this request, and a restart of the
+    API must not take it down. Errors from the launch itself propagate; whether it
+    then *answers* is the discovery route's question, asked again by the screen.
+    """
+    import subprocess
+
+    env = dict(os.environ)
+    models = _models_dir_for(binary)
+    if models and "OLLAMA_MODELS" not in env:
+        env["OLLAMA_MODELS"] = models
+    kwargs: dict[str, object] = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "env": env,
+    }
+    if sys.platform == "win32":
+        # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+        kwargs["creationflags"] = 0x00000008 | 0x00000200
+    else:
+        kwargs["start_new_session"] = True
+    subprocess.Popen([binary, "serve"], **kwargs)  # type: ignore[call-overload]  # noqa: S603
+
+
+async def wait_for_runtime(seconds: float = 12.0) -> bool:
+    """True once the runtime answers on its port, or False after `seconds`."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + seconds
+    async with httpx.AsyncClient(timeout=PROBE_TIMEOUT) as client:
+        while loop.time() < deadline:
+            for host in local_hosts():
+                try:
+                    answer = await client.get(f"http://{host}:11434/api/tags")
+                    if answer.status_code < 500:
+                        return True
+                except httpx.HTTPError:
+                    pass
+            await asyncio.sleep(0.75)
+    return False
