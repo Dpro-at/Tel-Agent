@@ -1,6 +1,6 @@
 # Vendored brand marks
 
-Fifteen logos, copied into this repository on 2026-08-24 from
+Fifteen logos, copied into this repository on 2026-08-24, and eight AI-provider marks on 2026-09-06 (same source, same conversion) from
 [theSVG](https://thesvg.org) (`https://thesvg.org/api/registry.json`).
 
 `marks.tsx` is generated from the files in `source/`. Regenerating it means fetching the
@@ -25,6 +25,14 @@ noted below — swap the hard-coded fill for `currentColor`.
 | `deutsche-telekom` | Deutsche Telekom | mono | CC0-1.0 | mono |
 | `slack` | Slack | default | MIT | art, unmodified |
 | `groq` | Groq | default | MIT | bleed, unmodified |
+| `google-gemini` | Gemini | mono | CC0-1.0 | mono |
+| `kimi` | Kimi | default | MIT | bleed, unmodified |
+| `deepseek` | DeepSeek | default | MIT | mono, `#4D6BFE` → `currentColor` |
+| `grok-xai` | Grok (xAI) | mono | MIT | mono |
+| `qwen` | Qwen | default | MIT | mono, `#ffff` → `currentColor` |
+| `openrouter` | OpenRouter | mono | CC0-1.0 | mono |
+| `togetherdotai` | Together AI | mono | MIT | mono |
+| `perplexity` | Perplexity | mono | CC0-1.0 | mono |
 
 ## Why the files are here and not on a CDN
 

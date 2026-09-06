@@ -180,37 +180,31 @@ function ChooseAi({
  * compatible endpoint, including one on the operator's own network.
  */
 type Preset = {
-  id: "openai" | "mistral" | "gemini" | "custom";
+  id: string;
   name: string;
   baseUrl: string;
   models: string[];
-  /** Two-letter fallback for endpoints without a mark in `components/brands`. */
-  glyph: string;
 };
 
+/**
+ * The endpoint of each preset is the one its owner documents for OpenAI-format
+ * requests; the model names are the current public ones (2026-09), and the field stays
+ * free text because they change faster than releases do.
+ */
 const PRESETS: Preset[] = [
-  {
-    id: "openai",
-    name: "OpenAI",
-    baseUrl: "https://api.openai.com/v1",
-    models: ["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini"],
-    glyph: "OA",
-  },
-  {
-    id: "mistral",
-    name: "Mistral",
-    baseUrl: "https://api.mistral.ai/v1",
-    models: ["mistral-small-latest", "mistral-medium-latest", "mistral-large-latest"],
-    glyph: "MI",
-  },
-  {
-    id: "gemini",
-    name: "Gemini",
-    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
-    models: ["gemini-2.5-flash", "gemini-2.5-pro"],
-    glyph: "GE",
-  },
-  { id: "custom", name: "", baseUrl: "", models: [], glyph: "…" },
+  { id: "openai", name: "OpenAI", baseUrl: "https://api.openai.com/v1", models: ["gpt-5.6", "gpt-5.5", "chat-latest"] },
+  { id: "anthropic", name: "Anthropic", baseUrl: "https://api.anthropic.com/v1", models: ["claude-sonnet-5", "claude-opus-5", "claude-fable-5-1"] },
+  { id: "gemini", name: "Gemini", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", models: ["gemini-3.5-flash", "gemini-3.1-pro-preview", "gemini-2.5-flash"] },
+  { id: "kimi", name: "Kimi", baseUrl: "https://api.moonshot.ai/v1", models: ["kimi-k3", "kimi-k2.7-code"] },
+  { id: "deepseek", name: "DeepSeek", baseUrl: "https://api.deepseek.com", models: ["deepseek-v4-flash", "deepseek-v4-pro"] },
+  { id: "mistral", name: "Mistral", baseUrl: "https://api.mistral.ai/v1", models: ["mistral-small-latest", "mistral-medium-3-5", "mistral-large-latest"] },
+  { id: "groq", name: "Groq", baseUrl: "https://api.groq.com/openai/v1", models: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"] },
+  { id: "grok", name: "Grok", baseUrl: "https://api.x.ai/v1", models: ["grok-4.6", "grok-4.5", "grok-4.3"] },
+  { id: "qwen", name: "Qwen", baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", models: ["qwen3.8-flash", "qwen3.8-max", "qwen3.7-plus"] },
+  { id: "openrouter", name: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", models: ["openrouter/auto", "google/gemini-3.5-flash", "deepseek/deepseek-v4-pro"] },
+  { id: "together", name: "Together AI", baseUrl: "https://api.together.xyz/v1", models: ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "deepseek-ai/DeepSeek-V4-Pro", "moonshotai/Kimi-K2.6"] },
+  { id: "perplexity", name: "Perplexity", baseUrl: "https://api.perplexity.ai", models: ["sonar-pro", "sonar"] },
+  { id: "custom", name: "", baseUrl: "", models: [] },
 ];
 
 type Outcome = { text: string; machine?: string; ok: boolean };
@@ -302,7 +296,7 @@ function CloudSetup({
       </h1>
       <p className="text-od-muted-4 mt-2 max-w-[600px] text-pretty">{t.cloud_blurb}</p>
 
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4" role="radiogroup">
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4" role="radiogroup">
         {PRESETS.map((p) => {
           const active = preset === p.id;
           return (
@@ -434,17 +428,17 @@ function CloudSetup({
 }
 
 function PresetMark({ preset }: { preset: Preset }) {
-  // `BrandMark` knows the marks the repository carries; the rest get a lettered tile so
-  // the row stays even. `BrandMark` returns null for an id it does not have.
-  if (preset.id === "openai" || preset.id === "mistral") {
+  // Every preset's mark is vendored in `components/brands`; only the free-form entry
+  // has none, and gets a neutral tile so the row stays even.
+  if (preset.id !== "custom") {
     return <BrandMark id={preset.id} size={34} />;
   }
   return (
     <span
-      className="border-od-border-6 bg-od-raise-10 text-od-muted-4 inline-flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[10px] border text-[12px] font-semibold"
+      className="border-od-border-6 bg-od-raise-10 text-od-muted-4 inline-flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[10px] border text-[16px] font-semibold"
       aria-hidden="true"
     >
-      {preset.glyph}
+      …
     </span>
   );
 }
