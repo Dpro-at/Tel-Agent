@@ -9,9 +9,9 @@ import nl from "../../../../locales/nl/install.json";
 import { pickDictionary } from "@/lib/i18n";
 import { isLocale } from "@/lib/locales";
 
-import { FirstRun } from "./first-run";
+import { SetupFlow } from "./setup-flow";
 
-/** English is the reference shape; the other two are checked against it. */
+/** English is the reference shape; the other four are checked against it. */
 export type InstallDictionary = typeof en;
 
 export default async function InstallPage({ params }: { params: Promise<{ locale: string }> }) {
@@ -20,5 +20,5 @@ export default async function InstallPage({ params }: { params: Promise<{ locale
 
   const t = pickDictionary<InstallDictionary>(locale, { en, de, ar, es, nl });
 
-  return <FirstRun locale={locale} t={t} />;
+  return <SetupFlow locale={locale} t={t} />;
 }

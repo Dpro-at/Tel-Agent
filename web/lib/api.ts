@@ -425,14 +425,21 @@ export function setupState(): Promise<{ needed: boolean }> {
 
 /** Create the first account and its workspace. The response also sets the session
  *  cookie, so the caller is signed in when this resolves. */
-export function completeFirstRun(values: {
+export async function completeFirstRun(values: {
   username: string;
   password: string;
   workspace_name: string;
   email?: string;
   locale: string;
 }): Promise<{ username: string; workspace: string; workspace_id: number }> {
-  return api("/api/setup", { method: "POST", json: values });
+  const created = await api<{ username: string; workspace: string; workspace_id: number }>(
+    "/api/setup",
+    { method: "POST", json: values },
+  );
+  // The server set the session cookie; the dashboard-origin hint has to follow, or
+  // the middleware bounces the very next dashboard page to sign-in (D14).
+  setSignedInHint(true);
+  return created;
 }
 
 // --- Settings ----------------------------------------------------------------

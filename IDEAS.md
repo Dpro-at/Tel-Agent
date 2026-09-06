@@ -85,6 +85,14 @@ These are already described in `docs/SPEC.md` and scheduled, just not now.
 
 *(Add new entries below. Date them.)*
 
+**2026-09-06 — Local models in the setup flow.**
+The setup at `/install` offers two ways for the agent to think: a cloud model behind an
+OpenAI-compatible endpoint (built), and a model running on the machine itself (drawn,
+marked "coming later"). The local branch needs what does not exist yet: a provider in
+`agent/` that speaks to a local runtime, discovery of runtimes and models already on the
+machine, and a download step with progress. Deferred by the maintainer on 2026-09-06:
+cloud first, local later. When it lands, the card on the setup screen is already there.
+
 **2026-08-17 — Selling numbers to customers (Tel-Agent Cloud only).**
 Dpro GmbH holds numbers at Twilio and assigns them to customers, who then forward
 their existing line to the assigned number on no-answer after a set number of seconds.

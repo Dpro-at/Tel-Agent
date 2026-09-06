@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import type { InstallDictionary } from "./page";
@@ -17,19 +16,24 @@ import type { Locale } from "@/lib/locales";
  * fresh installation had no way in at all: the seed script is development-only and the
  * alternative was a database client. This is that missing screen.
  *
- * **It is not the drawn install wizard, and does not pretend to be.** That flow chooses
- * a database, ports, speech providers and a phone line — steps whose backends either do
- * not exist yet or cannot exist in a browser, since the application is already running
- * on a database and a port before this page can load. What is real today is an account,
- * a workspace and the web chat channel, so that is what this asks for. The rest returns
- * with the milestones that make it true.
+ * It is the first step of `SetupFlow`: the account, then how the agent thinks, then the
+ * model. Ports and the database are decided before this page can load (the application
+ * is already running on both), so nothing here pretends to choose them.
  *
  * The three states are the ones an operator can actually be in: this installation needs
  * setting up, it is already set up, or the server is not answering yet — which on a
  * first run is the likeliest of the three.
  */
-export function FirstRun({ locale, t }: { locale: Locale; t: InstallDictionary }) {
-  const router = useRouter();
+export function FirstRun({
+  locale,
+  t,
+  onCreated,
+}: {
+  locale: Locale;
+  t: InstallDictionary;
+  /** Called once the account exists and the session cookie is set; the flow moves on. */
+  onCreated: () => void;
+}) {
   const [needed, setNeeded] = useState<boolean | null>(null);
   const [unreachable, setUnreachable] = useState(false);
 
@@ -66,9 +70,9 @@ export function FirstRun({ locale, t }: { locale: Locale; t: InstallDictionary }
         email: email.trim(),
         locale,
       });
-      // The response set the session cookie, so first run ends here rather than
-      // becoming a second setup wizard. Configuration belongs in the app.
-      router.replace(`/${locale}/home`);
+      // The response set the session cookie, so the next steps of the setup flow can
+      // already call the admin-only settings routes.
+      onCreated();
     } catch (error) {
       if (error instanceof OfflineError) {
         setProblem(t.fr_offline);
