@@ -30,12 +30,21 @@ import {
  * progress numbers drawn as a bar.
  */
 
-/** Models worth offering to somebody who has nothing yet: small, current, and
- *  reasonable on a machine with 8-16 GB. Sizes are the download, rounded. */
-const SUGGESTED = [
-  { name: "qwen3:8b", gb: 5.2 },
-  { name: "gemma3:4b", gb: 3.3 },
+/**
+ * Models a home machine can run, current as of 2026-09, with the download size the
+ * runtime reports for each. Merged with whatever the runtime already holds, so the
+ * screen shows one list: what is here can be chosen, what is not can be fetched.
+ */
+const CATALOGUE: { name: string; gb: number }[] = [
   { name: "llama3.2:3b", gb: 2.0 },
+  { name: "qwen3:4b", gb: 2.6 },
+  { name: "gemma3:4b", gb: 3.3 },
+  { name: "phi4-mini", gb: 2.5 },
+  { name: "mistral:7b", gb: 4.1 },
+  { name: "llama3.1:8b", gb: 4.9 },
+  { name: "qwen3:8b", gb: 5.2 },
+  { name: "deepseek-r1:8b", gb: 5.2 },
+  { name: "gemma3:12b", gb: 8.1 },
 ];
 
 /** Where a free runtime comes from. Loopback runtimes are a tool the operator installs,
@@ -69,6 +78,31 @@ function rankModels(models: LocalRuntime["models"], memoryGb: number | null) {
     const diff = score(gb(a.size_bytes)) - score(gb(b.size_bytes));
     return diff !== 0 ? diff : gb(a.size_bytes) - gb(b.size_bytes);
   });
+}
+
+type Row = { name: string; size: string; installed: boolean; recommended: boolean };
+
+/**
+ * One list: what the runtime holds (ranked, best first, the leader recommended) and
+ * then the catalogue entries it does not hold yet, smallest first. A catalogue name
+ * matches an installed one with or without the runtime's ":latest" suffix.
+ */
+function mergeRows(runtime: LocalRuntime, memoryGb: number | null): Row[] {
+  const held = rankModels(runtime.models, memoryGb);
+  const has = (name: string) =>
+    held.some((m) => m.id === name || m.id === `${name}:latest` || `${m.id}:latest` === name);
+  const rows: Row[] = held.map((m, index) => ({
+    name: m.id,
+    size: gigabytes(m.size_bytes),
+    installed: true,
+    recommended: index === 0 && (m.size_bytes ?? 0) > 0,
+  }));
+  for (const entry of [...CATALOGUE].sort((a, b) => a.gb - b.gb)) {
+    if (!has(entry.name)) {
+      rows.push({ name: entry.name, size: `${entry.gb.toFixed(1)} GB`, installed: false, recommended: false });
+    }
+  }
+  return rows;
 }
 
 export function LocalSetup({
@@ -268,81 +302,82 @@ export function LocalSetup({
 
       {scan.status === "found" ? (
         <>
-          {scan.runtimes.map((runtime) => (
-            <div key={runtime.native_url} className={`${card} mt-6 overflow-hidden`}>
-              <div className="border-od-line flex flex-wrap items-center gap-3 border-b px-5 py-4">
-                <span className="bg-od-green inline-block h-3 w-3 rounded-full" aria-hidden="true" />
-                <strong className="text-od-text text-[16px]">
-                  {runtime.name} {t.local_running}
-                </strong>
-                <span className="text-od-muted-5 text-[13px]">
-                  {runtime.models.length} {t.local_models_word}
-                </span>
-                <span className="text-od-faint-2 mono ltr-data ms-auto text-[12px]">
-                  {runtime.base_url}
-                </span>
-              </div>
+          {scan.runtimes.map((runtime) => {
+            const rows = mergeRows(runtime, scan.memoryGb);
+            return (
+              <div key={runtime.native_url} className={`${card} mt-6 overflow-hidden`}>
+                <div className="border-od-line flex flex-wrap items-center gap-3 border-b px-5 py-4">
+                  <span className="bg-od-green inline-block h-3 w-3 rounded-full" aria-hidden="true" />
+                  <strong className="text-od-text text-[16px]">
+                    {runtime.name} {t.local_running}
+                  </strong>
+                  <span className="text-od-muted-5 text-[13px]">
+                    {runtime.models.length} {t.local_models_word}
+                  </span>
+                  <span className="text-od-faint-2 mono ltr-data ms-auto text-[12px]">
+                    {runtime.base_url}
+                  </span>
+                </div>
 
-              {runtime.models.length > 0 ? (
-                <div role="radiogroup" aria-label={t.local_installed}>
-                  <div className="text-od-muted-5 grid grid-cols-[1fr_auto] gap-3 px-5 py-2 text-[12px] uppercase tracking-[.08em]">
-                    <span>{t.local_installed}</span>
-                    <span>{t.local_size}</span>
-                  </div>
-                  {runtime.models.map((model, index) => {
+                <div className="text-od-muted-5 grid grid-cols-[1fr_auto_auto] gap-4 px-5 py-2 text-[12px] uppercase tracking-[.08em]">
+                  <span>{t.local_all_models}</span>
+                  <span>{t.local_size}</span>
+                  <span className="min-w-[120px] text-end">{t.local_status}</span>
+                </div>
+
+                <div role="radiogroup" aria-label={t.local_all_models}>
+                  {rows.map((row) => {
                     const selected =
+                      row.installed &&
                       choice?.runtime.native_url === runtime.native_url &&
-                      choice.model === model.id;
+                      choice.model === row.name;
+                    const active = download?.name === row.name;
+                    const busyRow = active && !download.done && !download.failed;
                     return (
-                      <button
-                        key={model.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected}
-                        onClick={() => setChoice({ runtime, model: model.id })}
+                      <div
+                        key={row.name}
+                        role={row.installed ? "radio" : undefined}
+                        aria-checked={row.installed ? selected : undefined}
+                        tabIndex={row.installed ? 0 : undefined}
+                        onClick={row.installed ? () => setChoice({ runtime, model: row.name }) : undefined}
+                        onKeyDown={
+                          row.installed
+                            ? (event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  setChoice({ runtime, model: row.name });
+                                }
+                              }
+                            : undefined
+                        }
                         className={[
-                          "border-od-line grid w-full cursor-pointer grid-cols-[1fr_auto] items-center gap-3 border-t px-5 py-3 text-start",
-                          selected ? "bg-od-raise-10" : "bg-transparent hover:bg-od-raise",
+                          "border-od-line grid grid-cols-[1fr_auto_auto] items-center gap-4 border-t px-5 py-3 text-start",
+                          row.installed ? "cursor-pointer" : "",
+                          selected ? "bg-od-raise-10" : row.installed ? "hover:bg-od-raise" : "",
                         ].join(" ")}
                         style={selected ? { boxShadow: "inset 3px 0 var(--od-violet)" } : undefined}
                       >
                         <span className="flex flex-wrap items-center gap-2">
-                          <span className="text-od-text mono ltr-data text-[14px] font-semibold">
-                            {model.id}
+                          <span
+                            className={[
+                              "mono ltr-data text-[14px] font-semibold",
+                              row.installed ? "text-od-text" : "text-od-muted-4",
+                            ].join(" ")}
+                          >
+                            {row.name}
                           </span>
-                          {index === 0 && (model.size_bytes ?? 0) > 0 ? (
+                          {row.recommended ? (
                             <span className="border-od-violet text-od-violet rounded-md border px-2 py-[1px] text-[11px]">
                               {t.local_recommended}
                             </span>
                           ) : null}
                         </span>
-                        <span className="text-od-muted-5 text-[13px]">{gigabytes(model.size_bytes)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-
-              {runtime.can_pull ? (
-                <div className="border-od-line border-t px-5 py-4">
-                  <strong className="text-od-text text-[15px]">{t.local_downloadable_title}</strong>
-                  <p className="text-od-muted-4 mt-1 text-[13px] text-pretty">{t.local_downloadable_body}</p>
-                  <div className="mt-3 flex flex-col gap-2">
-                    {SUGGESTED.filter(
-                      (s) => !runtime.models.some((m) => m.id === s.name || m.id === `${s.name}:latest`),
-                    ).map((suggested) => {
-                      const active = download?.name === suggested.name;
-                      return (
-                        <div
-                          key={suggested.name}
-                          className="grid grid-cols-[1fr_auto] items-center gap-3"
-                        >
-                          <span className="text-od-text-2 mono ltr-data text-[14px]">
-                            {suggested.name}
-                            <span className="text-od-muted-5 ms-2 text-[12px]">{suggested.gb} GB</span>
-                          </span>
-                          {active && !download.done && !download.failed ? (
-                            <span className="text-od-muted-4 flex min-w-[160px] flex-col gap-1 text-[12px]">
+                        <span className="text-od-muted-5 text-[13px]">{row.size}</span>
+                        <span className="flex min-w-[120px] flex-col items-end gap-1">
+                          {row.installed ? (
+                            <span className="text-od-green text-[13px] font-semibold">✓ {t.local_downloaded}</span>
+                          ) : busyRow ? (
+                            <span className="text-od-muted-4 flex w-[120px] flex-col gap-1 text-[12px]">
                               {t.local_downloading}
                               {download.percent !== null ? ` ${download.percent}%` : ""}
                               <span className="bg-od-border-3 block h-[6px] overflow-hidden rounded-full">
@@ -352,16 +387,15 @@ export function LocalSetup({
                                 />
                               </span>
                             </span>
-                          ) : active && download.done ? (
-                            <span className="text-od-green text-[13px] font-semibold">
-                              {t.local_downloaded}
-                            </span>
                           ) : (
-                            <span className="flex flex-col items-end gap-1">
+                            <>
                               <button
                                 type="button"
-                                disabled={download !== null && !download.done && !download.failed}
-                                onClick={() => void fetchModel(runtime, suggested.name)}
+                                disabled={!runtime.can_pull || (download !== null && !download.done && !download.failed)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void fetchModel(runtime, row.name);
+                                }}
                                 className={secondary}
                               >
                                 {t.local_download}
@@ -371,16 +405,16 @@ export function LocalSetup({
                                   {t.local_download_failed}
                                 </span>
                               ) : null}
-                            </span>
+                            </>
                           )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
-              ) : null}
-            </div>
-          ))}
+              </div>
+            );
+          })}
           {scan.memoryGb !== null ? (
             <p className="text-od-muted-5 mt-3 text-[13px]">
               {t.local_memory.replace("{gb}", String(scan.memoryGb))}

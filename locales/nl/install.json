@@ -59,18 +59,15 @@
   "local_scanning": "Op deze computer zoeken…",
   "local_running": "draait",
   "local_models_word": "modellen",
-  "local_installed": "Geïnstalleerde modellen",
   "local_size": "Grootte",
   "local_recommended": "Aanbevolen",
   "local_none_title": "Geen lokale runtime gevonden",
   "local_none_body": "Een lokaal model heeft een runtime nodig — een gratis programma dat modellen op deze computer draait. Installeer er een, start die, en zoek opnieuw.",
   "local_get_runtime": "Een gratis runtime halen",
   "local_rescan": "Opnieuw zoeken",
-  "local_downloadable_title": "Beschikbaar om te downloaden",
-  "local_downloadable_body": "Deze modellen staan nog niet op deze computer. De runtime downloadt ze; de grootte is de download.",
   "local_download": "Downloaden",
   "local_downloading": "Bezig met downloaden…",
-  "local_downloaded": "Klaar voor gebruik",
+  "local_downloaded": "Gedownload",
   "local_download_failed": "De download is gestopt. Draait de runtime nog?",
   "local_memory": "Deze computer heeft {gb} GB geheugen.",
   "local_continue": "Dit model gebruiken",
@@ -83,5 +80,7 @@
   "local_starting": "Bezig met starten…",
   "local_start": "Starten",
   "local_start_failed": "Die antwoordde niet op tijd. Open de runtime zelf en zoek opnieuw.",
-  "local_loading_hint": "De eerste keer dat een model wordt geladen kan een minuut duren: de runtime leest het in het geheugen."
+  "local_loading_hint": "De eerste keer dat een model wordt geladen kan een minuut duren: de runtime leest het in het geheugen.",
+  "local_all_models": "Modellen",
+  "local_status": "Status"
 }

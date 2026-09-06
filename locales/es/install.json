@@ -59,18 +59,15 @@
   "local_scanning": "Buscando en este equipo…",
   "local_running": "está en marcha",
   "local_models_word": "modelos",
-  "local_installed": "Modelos instalados",
   "local_size": "Tamaño",
   "local_recommended": "Recomendado",
   "local_none_title": "No se encontró ningún entorno local",
   "local_none_body": "Un modelo local necesita un entorno de ejecución: un programa gratuito que ejecuta modelos en este equipo. Instálalo, inícialo y vuelve a buscar.",
   "local_get_runtime": "Obtener un entorno gratuito",
   "local_rescan": "Buscar de nuevo",
-  "local_downloadable_title": "Disponibles para descargar",
-  "local_downloadable_body": "Estos modelos aún no están en este equipo. El entorno los descarga; el tamaño es el de la descarga.",
   "local_download": "Descargar",
   "local_downloading": "Descargando…",
-  "local_downloaded": "Listo para usar",
+  "local_downloaded": "Descargado",
   "local_download_failed": "La descarga se detuvo. ¿Sigue en marcha el entorno?",
   "local_memory": "Este equipo tiene {gb} GB de memoria.",
   "local_continue": "Usar este modelo",
@@ -83,5 +80,7 @@
   "local_starting": "Iniciando…",
   "local_start": "Iniciarlo",
   "local_start_failed": "No respondió a tiempo. Abre el entorno tú mismo y vuelve a buscar.",
-  "local_loading_hint": "La primera carga de un modelo puede tardar un minuto: el entorno lo lee en memoria."
+  "local_loading_hint": "La primera carga de un modelo puede tardar un minuto: el entorno lo lee en memoria.",
+  "local_all_models": "Modelos",
+  "local_status": "Estado"
 }

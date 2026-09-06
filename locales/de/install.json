@@ -59,18 +59,15 @@
   "local_scanning": "Auf diesem Computer wird gesucht …",
   "local_running": "läuft",
   "local_models_word": "Modelle",
-  "local_installed": "Installierte Modelle",
   "local_size": "Größe",
   "local_recommended": "Empfohlen",
   "local_none_title": "Keine lokale Laufzeit gefunden",
   "local_none_body": "Ein lokales Modell braucht eine Laufzeit — ein kostenloses Programm, das Modelle auf diesem Computer ausführt. Installieren, starten, dann erneut suchen.",
   "local_get_runtime": "Kostenlose Laufzeit holen",
   "local_rescan": "Erneut suchen",
-  "local_downloadable_title": "Zum Herunterladen verfügbar",
-  "local_downloadable_body": "Diese Modelle sind noch nicht auf diesem Computer. Die Laufzeit lädt sie herunter; die Größe ist der Download.",
   "local_download": "Herunterladen",
   "local_downloading": "Wird heruntergeladen …",
-  "local_downloaded": "Einsatzbereit",
+  "local_downloaded": "Heruntergeladen",
   "local_download_failed": "Der Download ist abgebrochen. Läuft die Laufzeit noch?",
   "local_memory": "Dieser Computer hat {gb} GB Arbeitsspeicher.",
   "local_continue": "Dieses Modell verwenden",
@@ -83,5 +80,7 @@
   "local_starting": "Wird gestartet …",
   "local_start": "Starten",
   "local_start_failed": "Sie hat nicht rechtzeitig geantwortet. Laufzeit selbst öffnen, dann erneut suchen.",
-  "local_loading_hint": "Das erste Laden eines Modells kann eine Minute dauern. Die Laufzeit liest es in den Arbeitsspeicher."
+  "local_loading_hint": "Das erste Laden eines Modells kann eine Minute dauern. Die Laufzeit liest es in den Arbeitsspeicher.",
+  "local_all_models": "Modelle",
+  "local_status": "Status"
 }

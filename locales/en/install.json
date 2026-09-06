@@ -59,18 +59,15 @@
   "local_scanning": "Looking on this computer…",
   "local_running": "is running",
   "local_models_word": "models",
-  "local_installed": "Installed models",
   "local_size": "Size",
   "local_recommended": "Recommended",
   "local_none_title": "No local runtime found",
   "local_none_body": "A local model needs a runtime — a free program that runs models on this computer. Install one, start it, then look again.",
   "local_get_runtime": "Get a free runtime",
   "local_rescan": "Look again",
-  "local_downloadable_title": "Available to download",
-  "local_downloadable_body": "These models are not on this computer yet. The runtime downloads them; the size is the download.",
   "local_download": "Download",
   "local_downloading": "Downloading…",
-  "local_downloaded": "Ready to use",
+  "local_downloaded": "Downloaded",
   "local_download_failed": "The download stopped. Is the runtime still running?",
   "local_memory": "This computer has {gb} GB of memory.",
   "local_continue": "Use this model",
@@ -83,5 +80,7 @@
   "local_starting": "Starting it…",
   "local_start": "Start it",
   "local_start_failed": "It did not answer in time. Open the runtime yourself, then look again.",
-  "local_loading_hint": "The first time a model is loaded can take a minute. This is the runtime reading it into memory."
+  "local_loading_hint": "The first time a model is loaded can take a minute. This is the runtime reading it into memory.",
+  "local_all_models": "Models",
+  "local_status": "Status"
 }
