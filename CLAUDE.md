@@ -136,7 +136,7 @@ That file is the mechanism that gets this project finished.
 | Call routing rules | Analog hardware support |
 | Transcript archive + search | |
 | Tool execution | |
-| **Messaging channels** — web chat, SMS, email, WhatsApp, Telegram, Messenger, Instagram, Discord, Slack | |
+| **Messaging channels** — web chat, SMS, email, WhatsApp, Telegram, Messenger, Instagram, Discord, Slack, Microsoft Teams, Signal, Viber, Google Chat, Mattermost, Matrix, IRC, LINE, WeChat Official Account, WeCom, QQ Bot, DingTalk, Feishu/Lark, iMessage | |
 
 Anything outside the left column is reached through webhooks and the generic
 HTTP tool. n8n and Home Assistant do that job better than we would.
@@ -149,9 +149,14 @@ this line, "add one more connector" has no end, which is the failure Rule 5 exis
 prevent.
 
 **A channel is an extension — D-032.** The core defines what a channel *is*; each
-actual channel is an extension, official or community. Tel-Agent commits to the ten
-named above: supported, tested, shipped as official applications. Anything beyond them
-is a community extension carrying no commitment from this project.
+actual channel is an extension, official or community. Tel-Agent commits to the
+twenty-five named above (D-044): supported, tested, shipped as official applications.
+Anything beyond them is a community extension carrying no commitment from this project.
+
+**A channel declares itself — D-044.** From the second wave onwards a channel is one
+transport module, one `Setup` descriptor and one test file. The settings card, the
+write route, the test button and the public door are generic and are not written per
+channel; `.claude/skills/channel-extension/SKILL.md` is the contract.
 
 This does not loosen Rule 5, it relocates the protection. The line between a channel
 and an integration above is what still has to hold — an extension contract does not
@@ -194,7 +199,7 @@ Settled. Do not reopen without a concrete reason.
 | Languages | en / de / ar from day one, RTL supported |
 | Analog lines | Out of scope — users bridge with an ATA; we only ever speak SIP |
 | Workflow automation | Out of scope — webhooks + generic HTTP tool; n8n does the rest |
-| Messaging channels | In scope. **Web chat is the first channel built (D-017).** Tel-Agent commits to ten including the phone: web chat, SMS, email, WhatsApp, Telegram, Messenger, Instagram, Discord, Slack — supported, tested, shipped as official applications. **A channel is an extension, so the list is no longer closed (D-032):** anything beyond the ten is a community extension carrying no commitment from this project. The customer connects their own app credentials; Tel-Agent never holds a shared platform app |
+| Messaging channels | In scope. **Web chat is the first channel built (D-017).** Tel-Agent commits to twenty-five including the phone (D-044): web chat, SMS, email, WhatsApp, Telegram, Messenger, Instagram, Discord, Slack, Microsoft Teams, Signal, Viber, Google Chat, Mattermost, Matrix, IRC, LINE, WeChat Official Account, WeCom, QQ Bot, DingTalk, Feishu/Lark, iMessage — supported, tested, shipped as official applications. **A channel is an extension, so the list is no longer closed (D-032):** anything beyond them is a community extension carrying no commitment from this project. The customer connects their own app credentials; Tel-Agent never holds a shared platform app |
 
 ---
 

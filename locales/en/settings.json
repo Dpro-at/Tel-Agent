@@ -430,5 +430,20 @@
   "calendar_test_reached": "The calendar answered.",
   "calendar_test_not_configured": "No calendar is connected yet. Fill in the CalDAV address and the app password above, then save.",
   "calendar_test_refused": "The calendar refused the sign-in.",
-  "calendar_test_unreachable": "The calendar could not be read."
+  "calendar_test_unreachable": "The calendar could not be read.",
+  "ch_clear": "Remove the credentials",
+  "ch_enabled": "Answer on this channel",
+  "ch_error_missing": "Fill in every required field before switching this channel on.",
+  "ch_error_no_key": "This installation has no encryption key, so a credential cannot be stored.",
+  "ch_error_refused": "The platform did not accept these credentials. Check them in your own developer account.",
+  "ch_guide": "Setup guide",
+  "ch_identity": "Answering as",
+  "ch_keep": "A value is saved. Leave this empty to keep it; type a new one to replace it.",
+  "ch_optional": "Optional",
+  "ch_save": "Save",
+  "ch_saving": "Saving…",
+  "ch_test": "Test connection",
+  "ch_unverified": "Built against the published API, not yet verified with a live account.",
+  "ch_webhook_help": "Paste this address into the platform's webhook settings. It belongs to this channel alone — treat it as a secret.",
+  "ch_webhook_url": "Callback address"
 }

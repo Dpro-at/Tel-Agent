@@ -430,5 +430,20 @@
   "calendar_test_reached": "Der Kalender hat geantwortet.",
   "calendar_test_not_configured": "Noch kein Kalender verbunden. Oben die CalDAV-Adresse und das App-Passwort eintragen, dann speichern.",
   "calendar_test_refused": "Der Kalender hat die Anmeldung abgelehnt.",
-  "calendar_test_unreachable": "Der Kalender konnte nicht gelesen werden."
+  "calendar_test_unreachable": "Der Kalender konnte nicht gelesen werden.",
+  "ch_clear": "Zugangsdaten entfernen",
+  "ch_enabled": "Auf diesem Kanal antworten",
+  "ch_error_missing": "Bitte alle Pflichtfelder ausfüllen, bevor dieser Kanal eingeschaltet wird.",
+  "ch_error_no_key": "Diese Installation hat keinen Verschlüsselungsschlüssel, daher können Zugangsdaten nicht gespeichert werden.",
+  "ch_error_refused": "Die Plattform hat diese Zugangsdaten nicht akzeptiert. Bitte im eigenen Entwicklerkonto prüfen.",
+  "ch_guide": "Einrichtungsanleitung",
+  "ch_identity": "Antwortet als",
+  "ch_keep": "Ein Wert ist gespeichert. Leer lassen, um ihn zu behalten; einen neuen eingeben, um ihn zu ersetzen.",
+  "ch_optional": "Optional",
+  "ch_save": "Speichern",
+  "ch_saving": "Wird gespeichert…",
+  "ch_test": "Verbindung testen",
+  "ch_unverified": "Nach der veröffentlichten Schnittstelle gebaut, noch nicht mit einem echten Konto geprüft.",
+  "ch_webhook_help": "Diese Adresse in die Webhook-Einstellungen der Plattform eintragen. Sie gehört allein zu diesem Kanal — wie ein Geheimnis behandeln.",
+  "ch_webhook_url": "Rückrufadresse"
 }

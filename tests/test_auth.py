@@ -212,7 +212,11 @@ async def test_every_route_is_protected_unless_it_is_on_the_public_list(
     # Messenger and Instagram. Meta pushes or nothing arrives, so these doors exist;
     # each is guarded by a long random address and a signature over the raw body,
     # and refuses every reason identically.
-    assert len(PUBLIC_PATHS) <= 19
+    # Raised to 20 for the door every declarative channel receives on (D-044):
+    # `/public/{kind}/{path}`, one entry for all of them rather than one per channel.
+    # Guarded the way the doors above are - a long random address, and a signature
+    # check inside the channel's own `receive` before anything parses the body.
+    assert len(PUBLIC_PATHS) <= 20
 
 
 async def test_an_expired_session_is_refused_and_deleted(
@@ -385,6 +389,11 @@ async def test_every_route_under_a_public_prefix_is_pinned(client) -> None:
         # The same mechanism for Messenger and Instagram - one door for the pair,
         # with the same guards and the same identical refusal.
         "/public/meta/{path}",
+        # The door every channel of D-044's wave receives on, keyed by kind. One
+        # route for fifteen channels, so this list does not grow with the channel
+        # count; the guards are each channel's own, checked in `receive` over the raw
+        # body, and every failure gets the same refusal.
+        "/public/{kind}/{path}",
         # The widget's own document, §B14. Public for the same reason the message
         # endpoint is - a stranger's browser fetches it, on a page this installation
         # does not control. It opens no session either; what limits it is the

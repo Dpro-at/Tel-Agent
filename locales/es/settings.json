@@ -430,5 +430,20 @@
   "calendar_test_reached": "El calendario respondió.",
   "calendar_test_not_configured": "Aún no hay calendario conectado. Rellena la dirección CalDAV y la contraseña de aplicación arriba, y guarda.",
   "calendar_test_refused": "El calendario rechazó el inicio de sesión.",
-  "calendar_test_unreachable": "No se pudo leer el calendario."
+  "calendar_test_unreachable": "No se pudo leer el calendario.",
+  "ch_clear": "Eliminar las credenciales",
+  "ch_enabled": "Responder en este canal",
+  "ch_error_missing": "Completa todos los campos obligatorios antes de activar este canal.",
+  "ch_error_no_key": "Esta instalación no tiene clave de cifrado, así que no se puede guardar una credencial.",
+  "ch_error_refused": "La plataforma no aceptó estas credenciales. Compruébalas en tu propia cuenta de desarrollador.",
+  "ch_guide": "Guía de configuración",
+  "ch_identity": "Responde como",
+  "ch_keep": "Hay un valor guardado. Déjalo vacío para conservarlo; escribe uno nuevo para reemplazarlo.",
+  "ch_optional": "Opcional",
+  "ch_save": "Guardar",
+  "ch_saving": "Guardando…",
+  "ch_test": "Probar la conexión",
+  "ch_unverified": "Construido sobre la API publicada, todavía sin verificar con una cuenta real.",
+  "ch_webhook_help": "Pega esta dirección en los ajustes de webhook de la plataforma. Pertenece solo a este canal: trátala como un secreto.",
+  "ch_webhook_url": "Dirección de retorno"
 }

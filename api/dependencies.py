@@ -66,6 +66,11 @@ PUBLIC_PATHS: frozenset[str] = frozenset(
         # pair, because on Meta's side it is one mechanism with one signature scheme.
         # Same guards as the WhatsApp door, same identical refusal for every reason.
         "/public/meta/{path}",
+        # The door every declarative channel receives on (D-044). Public for the
+        # reason all of these are: the platform is the caller and holds no session.
+        # Guarded by the long random address and by the signature check inside the
+        # channel's own `receive`, which sees the raw body before anything parses it.
+        "/public/{kind}/{path}",
     }
 )
 
@@ -73,9 +78,12 @@ PUBLIC_PATHS: frozenset[str] = frozenset(
 # never equals its pattern. The prefix is the runtime half of the two entries above.
 PUBLIC_PREFIXES: tuple[str, ...] = (
     "/api/invites/",
-    "/public/chat/",
-    "/public/meta/",
-    "/public/whatsapp/",
+    # The whole `/public/` tree, rather than one entry per door. From D-044 the door
+    # address carries the channel's kind (`/public/{kind}/{path}`), so there is no
+    # fixed prefix per channel to name - and every route under `/public/` is public by
+    # construction anyway. What keeps that from becoming a blanket exemption is
+    # `tests/test_auth.py`, which pins the exact set of routes under this prefix.
+    "/public/",
     "/widget/",
 )
 
