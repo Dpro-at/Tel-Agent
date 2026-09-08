@@ -2,7 +2,7 @@
 
 The icons in the README's opening row, one file each.
 
-> **Eleven icons, not eleven channels.** `call` and `landline` are two
+> **Twelve icons, not twelve channels.** `call` and `landline` are two
 > drawings of the *one* phone channel — the row is about recognition, not arithmetic.
 > Slack is a separate question: see the note at the bottom.
 
@@ -19,6 +19,7 @@ The icons in the README's opening row, one file each.
 | `instagram.svg` | Instagram | Simple Icons style | Brand gradient |
 | `discord.svg` | Discord | Simple Icons style | `#5865F2` |
 | `slack.png` | Slack | 96x96, resized from a 1280px source | Brand four-colour |
+| `teams.svg` | Microsoft Teams | theSVG, MIT | Brand purple |
 
 ## One hue each
 
@@ -69,6 +70,7 @@ like, so the conflict is gone.
 
 ## Trademarks
 
-WhatsApp, Telegram, Messenger, Instagram, Discord and Slack are trademarks of their
+WhatsApp, Telegram, Messenger, Instagram, Discord, Slack and Microsoft Teams are
+trademarks of their
 respective owners. They appear here to name the channel a user would reach us on -
 nominative use - and imply no endorsement of, or affiliation with, Tel-Agent.

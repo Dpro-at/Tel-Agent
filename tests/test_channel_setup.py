@@ -203,7 +203,7 @@ def test_the_registry_lists_the_channel_whichever_was_imported_first(first: str)
         f"import {first}\nfrom api.channels import generic\nprint(sorted(generic.channels()))\n"
     )
     assert done.returncode == 0, done.stderr
-    assert done.stdout.strip() == "['sms']"
+    assert done.stdout.strip() == "['sms', 'teams']"
 
 
 def test_a_reply_needs_every_field_the_descriptor_calls_required() -> None:
