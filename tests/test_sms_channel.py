@@ -30,6 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.reply import GREETING
+from api.channels import generic
 from api.channels import sms as transport
 from api.config import Settings
 from api.main import create_app
@@ -136,7 +137,7 @@ async def _post(public: AsyncClient, params: dict[str, str], **headers: str) -> 
 
 async def _drain() -> None:
     """Let the replies the door scheduled finish, so nothing is asserted mid-flight."""
-    pending = list(transport._REPLIES)
+    pending = list(generic._REPLIES)
     if pending:
         await asyncio.gather(*pending)
 
@@ -392,15 +393,14 @@ async def test_a_refused_send_leaves_no_agent_line_in_the_record(stage) -> None:
 
 
 async def test_an_answer_over_the_limit_reaches_the_customer_in_several_texts(stage) -> None:
+    """The cut is `generic.deliver`'s, so an agent's answer and a person's divide alike."""
     _, _, ids, fake, db, _ = stage
     channel = await _channel_row(db, ids["channel"])
     long_answer = " ".join(f"word{index}" for index in range(400))
 
     async with transport.make_client() as client:
-        from api.channels import generic
-
-        await transport.send_text(
-            client, generic.credentials_of(channel), CUSTOMER, long_answer
+        await generic.deliver(
+            transport, client, generic.credentials_of(channel), CUSTOMER, long_answer
         )
 
     assert len(fake.sent) > 1
@@ -476,3 +476,99 @@ async def test_a_refused_credential_names_the_kind_and_confirms_nothing_else(sta
     answer = await clients["mohamed"].post("/api/channels/sms/test")
     assert answer.status_code == 502
     assert answer.json()["error"]["code"] == "sms_refused"
+
+
+# --- One public address, for the card and for the door --------------------------
+
+
+def _configure_base(app, base: str | None) -> None:
+    """Point this installation at a public address, the way `PUBLIC_BASE_URL` does."""
+    app.state.settings = app.state.settings.model_copy(update={"public_base_url": base})
+
+
+async def test_the_card_prints_the_configured_public_address(stage) -> None:
+    """What the operator pastes into the platform is what the door will check."""
+    clients, _, _, _, _, app = stage
+    _configure_base(app, "https://desk.example.test")
+
+    body = (await clients["mohamed"].get("/api/channels/sms")).json()
+    assert body["webhook_url"] == f"https://desk.example.test{DOOR}"
+
+
+async def test_a_delivery_signed_over_the_configured_address_is_accepted(stage) -> None:
+    """The card and the door agree by construction, with no proxy header in sight."""
+    _, public, _, _, _, app = stage
+    _configure_base(app, "https://desk.example.test/")
+    params = _delivery()
+
+    answer = await public.post(
+        DOOR,
+        content=urlencode(params),
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-Twilio-Signature": _signature(f"https://desk.example.test{DOOR}", params),
+        },
+    )
+    assert answer.status_code == 200, answer.text
+    await _drain()
+
+
+async def test_the_configured_address_wins_over_the_proxy_headers(stage) -> None:
+    """A forwarded header is only read where nothing better was configured.
+
+    With `PUBLIC_BASE_URL` set, a stranger who sends their own `X-Forwarded-Host`
+    cannot move the address the signature is checked against.
+    """
+    _, public, _, _, _, app = stage
+    _configure_base(app, "https://desk.example.test")
+    params = _delivery()
+
+    refused = await public.post(
+        DOOR,
+        content=urlencode(params),
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-Forwarded-Proto": "https",
+            "X-Forwarded-Host": "attacker.example.test",
+            "X-Twilio-Signature": _signature(f"https://attacker.example.test{DOOR}", params),
+        },
+    )
+    assert refused.status_code == 403
+    assert refused.json()["error"]["code"] == "not_recognised"
+
+
+async def test_a_signature_header_that_is_not_ascii_is_refused_and_not_a_failure(
+    stage,
+) -> None:
+    """`hmac.compare_digest` raises on a non-ASCII `str`; the door owes one refusal."""
+    _, public, _, _, _, _ = stage
+    refused = await public.post(
+        DOOR,
+        content=urlencode(_delivery()),
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            # Sent as bytes: the header never was text, and this is the shape a
+            # stranger can actually put on the wire.
+            "X-Twilio-Signature": "التوقيع".encode(),
+        },
+    )
+    assert refused.status_code == 403
+    assert refused.json()["error"]["code"] == "not_recognised"
+
+
+async def test_an_older_delivery_repeated_after_a_newer_one_is_still_dropped(stage) -> None:
+    """Dedup is a ring, not one slot: a platform does not retry in order."""
+    _, _, ids, _, db, _ = stage
+    channel = await _channel_row(db, ids["channel"])
+
+    first = _delivery("Are you open?", message_sid="SM-first")
+    second = _delivery("Anyone there?", message_sid="SM-second")
+    assert await transport.ingest(db, channel, first) is not None
+    assert await transport.ingest(db, channel, second) is not None
+
+    assert await transport.ingest(db, channel, first) is None
+    assert await transport.ingest(db, channel, second) is None
+
+    db.expire_all()
+    lines = (await db.execute(select(Message))).scalars().all()
+    assert [line.text for line in lines] == ["Are you open?", "Anyone there?"]

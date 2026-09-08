@@ -9,6 +9,9 @@ never be able to ride along inside it.
 from __future__ import annotations
 
 import json
+import pathlib
+import subprocess
+import sys
 import types
 
 import pytest
@@ -160,3 +163,44 @@ def test_a_module_whose_declaration_names_another_kind_is_refused(monkeypatch) -
     module.KIND = "telegram"
     with pytest.raises(TypeError, match=r"SETUP\.kind"):
         generic.register(module)
+
+
+# --- The registry does not depend on who imported whom first ----------------------
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+def _in_a_fresh_interpreter(program: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603
+        [sys.executable, "-c", program],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_a_transport_can_be_the_first_module_imported() -> None:
+    """`import api.channels.sms` on its own must not raise.
+
+    It is what a script, a migration or a test that only wants the transport does. The
+    transport imports the registry for `ChannelRefused`, so a registry that registered
+    at its own import time would reach back into a module Python has not finished
+    building and refuse it for declaring nothing.
+    """
+    done = _in_a_fresh_interpreter("import api.channels.sms")
+    assert done.returncode == 0, done.stderr
+
+
+@pytest.mark.parametrize(
+    "first",
+    ["api.channels.sms", "api.channels.generic"],
+    ids=["transport first", "registry first"],
+)
+def test_the_registry_lists_the_channel_whichever_was_imported_first(first: str) -> None:
+    """Same answer both ways round, in a process that imported nothing else."""
+    done = _in_a_fresh_interpreter(
+        f"import {first}\nfrom api.channels import generic\nprint(sorted(generic.channels()))\n"
+    )
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "['sms']"

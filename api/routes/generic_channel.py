@@ -146,10 +146,24 @@ async def _ensure(db: DbSession, workspace_id: int, module: ModuleType) -> Chann
     return row
 
 
+def _base(request: Request) -> str:
+    """What every public address this card prints is built on.
+
+    `PUBLIC_BASE_URL` when the installation has one, because behind a reverse proxy
+    the request's own address is the proxy's back end and not the address a platform
+    will ever call. The door reconstructs the same string in
+    `generic.public_url_for`, and a signature over the address only checks out when
+    the two agree.
+    """
+    settings = getattr(request.app.state, "settings", None)
+    configured = (getattr(settings, "public_base_url", None) or "").strip().rstrip("/")
+    return configured or str(request.base_url).rstrip("/")
+
+
 def _out(request: Request, module: ModuleType, row: Channel) -> GenericChannelOut:
     setup: Setup = module.SETUP
     stored = generic.secrets_of(row)
-    base = str(request.base_url).rstrip("/")
+    base = _base(request)
     is_door = getattr(module, "INBOUND", "") == "door"
     return GenericChannelOut(
         setup=setup.public(),
@@ -298,7 +312,7 @@ async def _activate(request: Request, module: ModuleType, row: Channel) -> objec
     if activate is None:
         return None
 
-    base = str(request.base_url).rstrip("/")
+    base = _base(request)
     webhook_url = (
         f"{base}/public/{row.kind}/{row.webhook_path or ''}"
         if getattr(module, "INBOUND", "") == "door"

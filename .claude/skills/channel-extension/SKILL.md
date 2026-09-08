@@ -33,7 +33,7 @@ One kind, one transport module, one manifest, one descriptor, one test file. In 
 | 2 | `api/extensions/builtin/<kind>.py` | `MANIFEST` + `register(context)`. Copy the Discord one; change slug, name, description. Category `channels`, origin `official`, scopes `conversations.write`, `messages.read`, `messages.write`, hooks `message.received`, ui_slots `conversation.detail`. |
 | 3 | `api/extensions/builtin/__init__.py` | Append the module to `BUILTIN`. |
 | 4 | `api/models/conversation.py` | The kind is already in `CHANNEL_KINDS` (one migration added every kind of this wave). If yours is not, add it **and** an Alembic revision that widens the `channel_kind` CHECK constraint — `tests/test_migrations.py` runs it on SQLite and PostgreSQL. |
-| 5 | `api/channels/generic.py` | Register the module in `CHANNELS`. That is what serves its card and its routes. |
+| 5 | `api/channels/generic.py` | Add the module's import path to `_DECLARED`. The registry imports it on first read; that is what serves its card and its routes. |
 | 6 | `api/main.py` | Dial-out channels: append `transport.loop(sessionmaker)` to `background`. Door channels: nothing — the generic public route dispatches by kind. |
 | 7 | `tests/test_<kind>_channel.py` | The test file. Shape below. |
 | 8 | `web/components/brands/marks.tsx` + `source/<kind>.svg` | The mark, when the platform has a logo. Record the source and licence in `web/components/brands/README.md`. A channel with no owner (SMS, IRC) gets a drawn glyph in `web/components/shell/channel-mark.tsx`. |
@@ -63,6 +63,14 @@ async def ingest(db, channel, event) -> int | None: ...
 async def respond(sessionmaker, channel_id: int, message_id: int) -> None: ...
 def schedule_reply(sessionmaker, channel_id: int, message_id: int) -> None: ...
 
+# optional
+def reply_target(conversation) -> str | None: ...
+    # The address `send_text` needs for this thread, when it is not the conversation's
+    # own `external_id` — a room id, a thread key, a mailbox. Declare nothing and
+    # `generic.reply_target_of` falls back to `external_id`. It is what the human
+    # takeover route delivers to as well, so a channel that answers somewhere other
+    # than where the customer wrote from owes this one function and nothing else.
+
 # dial-out only
 async def loop(sessionmaker) -> None: ...            # the supervisor, reconciles every 15 s
 
@@ -75,6 +83,41 @@ async def receive(db, channel, request: Request) -> Response: ...
 the descriptor's field names. Never read it on the inbound hot path for anything other
 than a signature check; per-channel state that every message needs lives in
 `settings_json`, which is plain.
+
+### Shared helpers — use these, do not copy Discord
+
+`api/channels/generic.py` holds the half of a transport that is the same on every
+channel. A declarative channel writes the platform-specific half only: its descriptor,
+its signature check, `probe`, `send_text`, `split_text`, `message_text`, `ingest`, and
+its `receive` or `loop`. Everything below is already written.
+
+| Helper | What it does |
+|---|---|
+| `channels()` | The registry, populated on first read. `module_for(kind)` and `dial_out_modules()` go through it, so no import order can change what an installation has. Never read `CHANNELS` directly. |
+| `public_url_for(request, settings)` | The address the platform called, for a signature computed over it. `PUBLIC_BASE_URL` when the installation has one, else the forwarded headers — the one place in this product where those are read, and the reasoning is in the function. The settings card builds its `webhook_url` on the same base, so the two cannot disagree. |
+| `conversation_for(db, channel, external_id, title=None)` | This customer's open thread, and whether it was just started. |
+| `store_line(db, conversation, role, text, language=None)` | One line into the transcript. |
+| `seen_before(conversation, kind, message_id)` | Dedup. A ring of the last 32 platform ids in `state_json[kind]`, because a platform does not retry in order. |
+| `announce(db, channel, conversation, message, started)` | The `conversation.started` and `message.received` hooks. |
+| `preview(text)` | One line of a customer's words, for a notification. |
+| `reply_target_of(module, conversation)` | Where a reply goes: the module's `reply_target`, else `external_id`. |
+| `deliver(module, client, credentials, target, text)` | One answer out, cut into the platform's messages through the module's `split_text`. |
+| `schedule_reply(sessionmaker, module, channel_id, message_id)` | The answer as its own task, held so it cannot be collected mid-reply. |
+| `respond(sessionmaker, module, channel_id, message_id)` | The whole answer path: its own session, takeover read before generating **and again before sending**, delivery before storage, health timing. |
+
+A module still exposes `respond` and `schedule_reply` itself — the registry requires
+them — but each is one line handing the shared one this module:
+
+```python
+def _self() -> ModuleType:
+    return sys.modules[__name__]
+
+async def respond(sessionmaker, channel_id: int, message_id: int) -> None:
+    await generic.respond(sessionmaker, _self(), channel_id, message_id)
+```
+
+The human takeover route needs no branch per channel: `api/routes/conversations.py`
+delivers through the registry for any kind on it.
 
 ## The setup descriptor
 

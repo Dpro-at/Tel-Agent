@@ -31,32 +31,33 @@ interface, which is why SMS needs the full step machine the phone needs (§B13).
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import hashlib
 import hmac
 import logging
+import sys
+from types import ModuleType
 from typing import Any
-from urllib.parse import parse_qsl, urlunsplit
+from urllib.parse import parse_qsl
 
 import httpx
 from fastapi import Request, Response
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from agent.config import ConfigurationError
-from agent.reply import reply as generate_reply
-from agent.tools import TakenMessage
-from api import llm, routing, webhooks
-from api.channels.generic import ChannelRefused, credentials_of, secrets_of, shown_of
+from api import routing
+from api.channels import generic
+from api.channels.generic import ChannelRefused, secrets_of, shown_of
 from api.channels.setup import Field, Setup
-from api.conversations import position_ms
-from api.db import session_scope
-from api.models import Channel, Conversation, Message
-from api.notifications import raise_notification
+from api.models import Channel
 
 logger = logging.getLogger("api.sms")
+
+
+def _self() -> ModuleType:
+    """This module, for the shared helpers that are handed the transport they serve."""
+    return sys.modules[__name__]
+
 
 KIND = "sms"
 INBOUND = "door"
@@ -99,17 +100,12 @@ SETUP = Setup(
 API_BASE = "https://api.twilio.com"
 API_VERSION = "2010-04-01"
 
-PREVIEW_MAX = 80
-
 # One text may carry 1600 characters; a longer answer goes out as several.
 MESSAGE_MAX = 1600
 
 # The header the platform proves itself with, and the empty document it waits for.
 SIGNATURE_HEADER = "X-Twilio-Signature"
 ACKNOWLEDGEMENT = '<?xml version="1.0" encoding="UTF-8"?><Response/>'
-
-# The replies still running, so a task is not collected mid-answer.
-_REPLIES: set[asyncio.Task] = set()
 
 
 def make_client() -> httpx.AsyncClient:
@@ -177,19 +173,21 @@ def split_text(text: str, limit: int) -> list[str]:
 async def send_text(
     client: httpx.AsyncClient, credentials: dict[str, str], target: str, text: str
 ) -> None:
-    """One answer out to one number, as however many texts it takes."""
+    """One text out to one number.
+
+    One, not an answer of any length: `generic.deliver` is what cuts a long answer
+    into texts through `split_text` above, so that the human-takeover route and the
+    agent's own reply divide it exactly alike.
+    """
     account_sid, auth_token = _account(credentials)
     from_number = str(credentials.get("from_number") or "")
-    for piece in split_text(text, MESSAGE_MAX):
-        if not piece:
-            continue
-        response = await client.post(
-            f"/{API_VERSION}/Accounts/{account_sid}/Messages.json",
-            auth=(account_sid, auth_token),
-            data={"From": from_number, "To": target, "Body": piece},
-        )
-        if response.status_code >= 400:
-            raise _refusal(response)
+    response = await client.post(
+        f"/{API_VERSION}/Accounts/{account_sid}/Messages.json",
+        auth=(account_sid, auth_token),
+        data={"From": from_number, "To": target, "Body": text},
+    )
+    if response.status_code >= 400:
+        raise _refusal(response)
 
 
 # --- The signature --------------------------------------------------------------
@@ -215,7 +213,14 @@ def signature_for(auth_token: str, url: str, params: dict[str, str]) -> str:
 def verify_signature(
     auth_token: str, url: str, params: dict[str, str], header: str | None
 ) -> bool:
-    if not header:
+    """Whether this header is the signature this delivery should carry.
+
+    The ASCII test is not a formality: `hmac.compare_digest` on two `str` raises
+    `TypeError` the moment either of them holds a character above U+007F, so a header
+    of Arabic text would be a 500 from the door rather than the one refusal every other
+    reason gets. A real signature is base64 and cannot contain one.
+    """
+    if not header or not header.isascii():
         return False
     return hmac.compare_digest(header, signature_for(auth_token, url, params))
 
@@ -223,18 +228,15 @@ def verify_signature(
 def public_url(request: Request) -> str:
     """The address the platform called, which is the address it signed.
 
-    Behind a reverse proxy the application server sees `http` and its own host while
-    the platform called `https` and the public name. The forwarded headers are what
-    close that gap; the first value of each is the original client's, per the header's
-    own convention. Reconstructed rather than taken whole so nothing but the scheme
-    and the host can be influenced from outside.
+    One line, because the reconstruction is `generic.public_url_for` and every door
+    channel of this wave owes the same answer as the settings card that printed the
+    address. The settings are read from the application rather than the process so a
+    test can stand a different installation up beside this one.
     """
-    url = request.url
-    forwarded_proto = request.headers.get("X-Forwarded-Proto")
-    forwarded_host = request.headers.get("X-Forwarded-Host")
-    scheme = forwarded_proto.split(",")[0].strip() if forwarded_proto else url.scheme
-    host = forwarded_host.split(",")[0].strip() if forwarded_host else url.netloc
-    return urlunsplit((scheme, host, url.path, url.query, ""))
+    from api.config import get_settings
+
+    settings = getattr(request.app.state, "settings", None) or get_settings()
+    return generic.public_url_for(request, settings)
 
 
 # --- The conversation half ------------------------------------------------------
@@ -252,92 +254,6 @@ def message_text(event: dict[str, Any], identity: str) -> str | None:
     if not sender or (identity and sender == identity):
         return None
     return str(event.get("Body") or "").strip() or None
-
-
-async def _conversation_for(
-    db: DbSession, channel: Channel, sender: str
-) -> tuple[Conversation, bool]:
-    row = await db.scalar(
-        select(Conversation).where(
-            Conversation.channel_id == channel.id,
-            Conversation.external_id == sender,
-            Conversation.status == "open",
-        )
-    )
-    if row is not None:
-        return row, False
-    row = Conversation(
-        workspace_id=channel.workspace_id,
-        channel_id=channel.id,
-        direction="inbound",
-        external_id=sender,
-        handling="ai",
-        status="open",
-    )
-    db.add(row)
-    await db.flush()
-    await db.refresh(row)
-    return row, True
-
-
-async def _store_line(
-    db: DbSession, conversation: Conversation, *, speaker: str, text: str
-) -> Message:
-    line = Message(
-        workspace_id=conversation.workspace_id,
-        conversation_id=conversation.id,
-        ts_ms=position_ms(conversation.started_at),
-        speaker=speaker,
-        text=text,
-        language=None,
-    )
-    db.add(line)
-    await db.commit()
-    await db.refresh(line)
-    return line
-
-
-async def _announce(
-    db: DbSession, channel: Channel, conversation: Conversation, message: Message, started: bool
-) -> None:
-    try:
-        if started:
-            await webhooks.queue(
-                db,
-                workspace_id=channel.workspace_id,
-                event="conversation.started",
-                data={
-                    "conversation": conversation.external_id,
-                    "channel": KIND,
-                    "started_at": conversation.started_at.isoformat()
-                    if conversation.started_at
-                    else None,
-                },
-            )
-        await webhooks.queue(
-            db,
-            workspace_id=channel.workspace_id,
-            event="message.received",
-            data={
-                "conversation": conversation.external_id,
-                "message_id": message.id,
-                "speaker": "caller",
-                "text": message.text,
-                "ts_ms": message.ts_ms,
-            },
-        )
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        logger.exception(
-            "could not queue webhooks for a text message",
-            extra={"conversation_id": conversation.id},
-        )
-
-
-def _preview(text: str) -> str:
-    collapsed = " ".join(text.split())
-    return collapsed if len(collapsed) <= PREVIEW_MAX else collapsed[: PREVIEW_MAX - 1] + "…"
 
 
 async def ingest(db: DbSession, channel: Channel, event: dict[str, Any]) -> int | None:
@@ -369,25 +285,19 @@ async def ingest(db: DbSession, channel: Channel, event: dict[str, Any]) -> int 
         )
         return None
 
-    conversation, started = await _conversation_for(db, channel, sender)
+    conversation, started = await generic.conversation_for(db, channel, sender)
     if decision.action == "pass":
         await routing.apply_pass(db, conversation, decision)
 
-    state = dict((conversation.state_json or {}).get(KIND) or {})
-    message_sid = str(event.get("MessageSid") or "")
-    if message_sid and state.get("last_message_sid") == message_sid:
+    if generic.seen_before(conversation, KIND, str(event.get("MessageSid") or "")):
         logger.info(
             "text delivery repeated, dropped",
             extra={"conversation_id": conversation.id},
         )
         return None
-    conversation.state_json = {
-        **(conversation.state_json or {}),
-        KIND: {**state, "last_message_sid": message_sid},
-    }
 
-    line = await _store_line(db, conversation, speaker="caller", text=text)
-    await _announce(db, channel, conversation, line, started)
+    line = await generic.store_line(db, conversation, "caller", text)
+    await generic.announce(db, channel, conversation, line, started)
 
     if conversation.handling == "human":
         logger.info(
@@ -399,89 +309,17 @@ async def ingest(db: DbSession, channel: Channel, event: dict[str, Any]) -> int 
 
 
 async def respond(sessionmaker: async_sessionmaker, channel_id: int, message_id: int) -> None:
-    """Generate and deliver the answer to one stored line — the channels' contract:
-    its own session, the takeover state read again, delivery before storage."""
-    async with session_scope(sessionmaker) as db:
-        line = await db.scalar(select(Message).where(Message.id == message_id))
-        if line is None:
-            return
-        conversation = await db.scalar(
-            select(Conversation).where(Conversation.id == line.conversation_id)
-        )
-        channel = await db.scalar(select(Channel).where(Channel.id == channel_id))
-        if conversation is None or channel is None or conversation.handling == "human":
-            return
-        credentials = credentials_of(channel)
-        target = conversation.external_id or ""
-        if not all(_account(credentials)) or not credentials.get("from_number") or not target:
-            return
+    """The shared answer path, told which transport it is answering through.
 
-        async def took(taken: TakenMessage) -> None:
-            await raise_notification(
-                db,
-                workspace_id=channel.workspace_id,
-                category="review",
-                message_key="message_taken",
-                params={"name": taken.name, "reason": _preview(taken.reason)},
-                needs_decision=True,
-                primary_action="open_conversation",
-                action_payload={"conversation_id": conversation.id},
-                conversation_id=conversation.id,
-            )
-
-        try:
-            provider = await llm.resolve_provider(db)
-        except ConfigurationError:
-            logger.exception("sms could not resolve a model", extra={"channel_id": channel_id})
-            provider = None
-
-        from api.routes.public_chat import _history
-
-        history = await _history(db, conversation, line)
-
-        import time
-
-        reply_started = time.perf_counter()
-        from api.agent_tools import toolset
-
-        # §B7's tools, bound to this conversation.
-        tools = toolset(
-            sessionmaker,
-            workspace_id=channel.workspace_id,
-            conversation_id=conversation.id,
-        )
-
-        pieces: list[str] = []
-        async for chunk in generate_reply(
-            line.text, provider=provider, history=history, on_message_taken=took, tools=tools
-        ):
-            pieces.append(chunk)
-        whole = "".join(pieces)
-        if not whole:
-            return
-
-        try:
-            async with make_client() as client:
-                await send_text(client, credentials, target, whole)
-        except (ChannelRefused, httpx.HTTPError) as error:
-            logger.warning(
-                "text reply not delivered",
-                extra={"conversation_id": conversation.id, "error": type(error).__name__},
-            )
-            return
-        await _store_line(db, conversation, speaker="agent", text=whole)
-
-        from api.channels import health
-
-        # Rule 4: the whole journey, generation to delivery, measured per channel.
-        health.note_reply(KIND, channel.id, (time.perf_counter() - reply_started) * 1000)
+    Nothing here is SMS-specific: its own session, takeover read before generating and
+    again before sending, delivery before storage. `generic.respond` is where that
+    lives, so the next fourteen channels inherit it instead of copying it.
+    """
+    await generic.respond(sessionmaker, _self(), channel_id, message_id)
 
 
 def schedule_reply(sessionmaker: async_sessionmaker, channel_id: int, message_id: int) -> None:
-    """The answer as its own task, kept in a set so it cannot be collected mid-reply."""
-    task = asyncio.create_task(respond(sessionmaker, channel_id, message_id))
-    _REPLIES.add(task)
-    task.add_done_callback(_REPLIES.discard)
+    generic.schedule_reply(sessionmaker, _self(), channel_id, message_id)
 
 
 # --- The door -------------------------------------------------------------------
