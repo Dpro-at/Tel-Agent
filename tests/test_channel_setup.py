@@ -204,3 +204,31 @@ def test_the_registry_lists_the_channel_whichever_was_imported_first(first: str)
     )
     assert done.returncode == 0, done.stderr
     assert done.stdout.strip() == "['sms']"
+
+
+def test_a_reply_needs_every_field_the_descriptor_calls_required() -> None:
+    """Not "any credential at all" - the descriptor says which fields matter.
+
+    A channel holding one stale field out of three used to pass the guard, which meant a
+    whole answer generated, a send the platform refuses, and nothing stored.
+    """
+    module = types.ModuleType("api.channels.fake_for_the_guard")
+    module.SETUP = SETUP
+
+    filled = {"api_key": "k", "account": "AC1", "service_key": "{}"}
+
+    # `label` is not required, so its absence is not what holds the answer back.
+    assert generic.has_credentials(module, filled) is True
+    assert generic.has_credentials(module, {**filled, "label": "Reception"}) is True
+
+    assert generic.has_credentials(module, {"api_key": "k"}) is False
+    assert generic.has_credentials(module, {**filled, "account": ""}) is False
+    assert generic.has_credentials(module, {}) is False
+
+
+def test_a_module_with_no_descriptor_keeps_the_older_test() -> None:
+    """Nothing on the registry is shaped like this, but the registry is open."""
+    module = types.ModuleType("api.channels.fake_without_a_descriptor")
+
+    assert generic.has_credentials(module, {"anything": "at all"}) is True
+    assert generic.has_credentials(module, {}) is False

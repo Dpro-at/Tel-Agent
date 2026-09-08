@@ -425,6 +425,24 @@ def preview(text: str) -> str:
     return collapsed if len(collapsed) <= PREVIEW_MAX else collapsed[: PREVIEW_MAX - 1] + "…"
 
 
+def has_credentials(module: ModuleType, credentials: dict[str, str]) -> bool:
+    """Whether every field this module's descriptor calls required is actually filled in.
+
+    "Any credential at all" was the older test, and it passes for a channel holding one
+    stale field out of three: the whole answer is generated, the platform refuses the
+    send, and nothing is stored - work done and a health timing missed for a channel
+    that was never configured. The descriptor already says which fields are required,
+    so the guard asks it rather than guessing.
+
+    A module with no descriptor - none ships, but the registry is open - keeps the old
+    test, because there is nothing better to ask.
+    """
+    setup = getattr(module, "SETUP", None)
+    if not isinstance(setup, Setup):
+        return bool(credentials)
+    return all(credentials.get(name) for name in setup.required_names())
+
+
 def reply_target_of(module: ModuleType, conversation: Conversation) -> str | None:
     """Where a reply on this thread goes. `external_id` unless the module says otherwise."""
     own = getattr(module, "reply_target", None)
@@ -503,7 +521,7 @@ async def respond(
             return
         credentials = credentials_of(channel)
         target = reply_target_of(module, conversation)
-        if not credentials or not target:
+        if not target or not has_credentials(module, credentials):
             return
 
         async def took(taken: TakenMessage) -> None:
