@@ -67,15 +67,28 @@ ADDED = (
 AFTER = BEFORE + ADDED
 
 
-def _rewrite(values: tuple[str, ...]) -> None:
+def _rewrite(values: tuple[str, ...], previous: tuple[str, ...]) -> None:
+    # The column is not only constrained, it is also *sized*. `enum_column` renders a
+    # non-native enum, which is a VARCHAR as wide as the longest value it was created
+    # with - nine characters, from `instagram`. PostgreSQL enforces that length, so
+    # `google_chat` (eleven) and `mattermost` (ten) would be rejected by the column
+    # itself no matter what the CHECK constraint says. Widening it belongs in the same
+    # batch as the constraint, and narrowing it belongs in the downgrade.
     listed = ", ".join(f"'{value}'" for value in values)
+    width = max(len(value) for value in values)
     with op.batch_alter_table("channels") as batch:
         batch.drop_constraint(CONSTRAINT, type_="check")
+        batch.alter_column(
+            "kind",
+            type_=sa.String(length=width),
+            existing_type=sa.String(length=max(len(value) for value in previous)),
+            existing_nullable=False,
+        )
         batch.create_check_constraint(CONSTRAINT, sa.text(f"kind IN ({listed})"))
 
 
 def upgrade() -> None:
-    _rewrite(AFTER)
+    _rewrite(AFTER, BEFORE)
 
 
 def downgrade() -> None:
@@ -86,4 +99,4 @@ def downgrade() -> None:
     # to deal with the transcripts rather than losing them silently.
     listed = ", ".join(f"'{value}'" for value in ADDED)
     op.execute(sa.text(f"DELETE FROM channels WHERE kind IN ({listed})"))  # noqa: S608
-    _rewrite(BEFORE)
+    _rewrite(BEFORE, AFTER)

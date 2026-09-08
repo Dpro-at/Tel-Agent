@@ -16,6 +16,8 @@ touched.
 
 from __future__ import annotations
 
+import hmac
+
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 _AES_BLOCK = 16
@@ -55,6 +57,8 @@ def decrypt_cbc(key: bytes, iv: bytes, payload: bytes, *, block: int = 32) -> by
     fill = padded[-1]
     if not 1 <= fill <= block or fill > len(padded):
         raise PaddingError("the padding length is not a length this block size can produce")
-    if padded[-fill:] != bytes([fill]) * fill:
+    # Constant time, because this comparison runs on attacker-supplied ciphertext and
+    # a padding oracle is built out of exactly this kind of early exit.
+    if not hmac.compare_digest(padded[-fill:], bytes([fill]) * fill):
         raise PaddingError("the padding bytes do not agree with the padding length")
     return padded[:-fill]

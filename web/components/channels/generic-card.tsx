@@ -116,7 +116,10 @@ export function ChannelCard({ kind, t }: { kind: string; t: object }) {
     return String(thrown);
   };
 
-  const act = async (run: () => Promise<unknown>) => {
+  // `wrote` is false for the test button: it changes nothing on this installation, so
+  // it must not answer "Saved" - a line that would tell the operator their edits are
+  // stored when they are still sitting in the boxes.
+  const act = async (run: () => Promise<unknown>, wrote = true) => {
     if (busy) return;
     setBusy(true);
     setProblem(null);
@@ -124,7 +127,7 @@ export function ChannelCard({ kind, t }: { kind: string; t: object }) {
     setTested(null);
     try {
       await run();
-      setSaved(true);
+      if (wrote) setSaved(true);
       channel.reload();
     } catch (thrown) {
       setProblem(describe(thrown));
@@ -239,7 +242,7 @@ export function ChannelCard({ kind, t }: { kind: string; t: object }) {
             void act(async () => {
               const answer = await testGenericChannel(kind);
               setTested(answer.identity ?? "");
-            })
+            }, false)
           }
           className={buttonClass}
         >

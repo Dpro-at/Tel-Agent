@@ -61,4 +61,18 @@ async def door(request: Request, kind: str, path: str) -> object:
         logger.info("public door refused", extra={"reason": "no such channel", "kind": kind})
         return _refused()
 
-    return await module.receive(db, channel, request)
+    try:
+        return await module.receive(db, channel, request)
+    except (generic.ChannelRefused, ValueError):
+        # A refusal is what the channel raises when the body did not verify, and the
+        # door owes a stranger the same answer it gives to an unknown address. Letting
+        # it escape would answer 500 instead, which is itself an admission that
+        # something is here.
+        logger.info("public door refused", extra={"reason": "not verified", "kind": kind})
+        return _refused()
+    except Exception as error:  # the door never leaks a traceback to a stranger
+        logger.exception(
+            "public door failed",
+            extra={"kind": kind, "error": type(error).__name__},
+        )
+        return _refused()

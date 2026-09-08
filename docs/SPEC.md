@@ -234,7 +234,7 @@ HTTP tool**. n8n and Home Assistant do that job better than we would.
 A **channel** is where the conversation happens: the person is on the other end of it,
 speaking or typing. An **integration** is a system the agent acts *on* during that
 conversation. Tel-Agent owns channels and reaches integrations through the HTTP tool.
-Twenty-five channels are in scope, and the official list is decided rather than open
+Twenty-four channels are in scope, and the official list is decided rather than open
 (§B13). Integrations are unbounded by nature, which is why they are somebody else's
 product.
 
@@ -1075,9 +1075,10 @@ LINE · WeChat Official Account · WeCom · QQ Bot · DingTalk · Feishu/Lark ·
 alongside the phone. The same agent, the same tools, the same transcript archive; a
 different transport.
 
-The first nine were built in Milestone 3; the rest arrived together with the setup
-descriptor that made them cheap (D-044), because fifteen hand-written settings cards
-would have been fifteen times the same file.
+Eight were built in Milestone 3; the rest arrived together with the setup descriptor
+that made them cheap (D-044) - fourteen new kinds plus SMS, which was promised but
+never built - because fifteen hand-written settings cards would have been fifteen times
+the same file.
 
 **Three of them need no platform at all**, and they come first:
 
@@ -1105,13 +1106,13 @@ family serves that declaration under §B9's write-only rules and one generic car
 it. Eight hand-written cards were fine for eight channels; they stay as they are, and
 nothing after them is written twice.
 
-**The list is decided, not open — D-044.** Twenty-five official channels including the
+**The list is decided, not open — D-044.** Twenty-four official channels including the
 phone: supported, tested, shipped in the release. A channel is an extension (D-032), so
-nothing stops a community extension from adding a twenty-sixth; what the word
+nothing stops a community extension from adding a twenty-fifth; what the word
 *official* means is a commitment from this project, and that commitment is made here
 rather than in a pull request.
 
-Three of the twenty-five carry a note that belongs on the card rather than in a
+Three of the twenty-four carry a note that belongs on the card rather than in a
 changelog. Teams is a channel under the same test Slack passes — an outside customer
 reaching a business is a route in, an internal workspace is not. WeChat is the Official
 Account API and never a personal account: driving a personal login by automation breaks

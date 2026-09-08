@@ -150,7 +150,7 @@ prevent.
 
 **A channel is an extension — D-032.** The core defines what a channel *is*; each
 actual channel is an extension, official or community. Tel-Agent commits to the
-twenty-five named above (D-044): supported, tested, shipped as official applications.
+twenty-four named above (D-044): supported, tested, shipped as official applications.
 Anything beyond them is a community extension carrying no commitment from this project.
 
 **A channel declares itself — D-044.** From the second wave onwards a channel is one
@@ -199,7 +199,7 @@ Settled. Do not reopen without a concrete reason.
 | Languages | en / de / ar from day one, RTL supported |
 | Analog lines | Out of scope — users bridge with an ATA; we only ever speak SIP |
 | Workflow automation | Out of scope — webhooks + generic HTTP tool; n8n does the rest |
-| Messaging channels | In scope. **Web chat is the first channel built (D-017).** Tel-Agent commits to twenty-five including the phone (D-044): web chat, SMS, email, WhatsApp, Telegram, Messenger, Instagram, Discord, Slack, Microsoft Teams, Signal, Viber, Google Chat, Mattermost, Matrix, IRC, LINE, WeChat Official Account, WeCom, QQ Bot, DingTalk, Feishu/Lark, iMessage — supported, tested, shipped as official applications. **A channel is an extension, so the list is no longer closed (D-032):** anything beyond them is a community extension carrying no commitment from this project. The customer connects their own app credentials; Tel-Agent never holds a shared platform app |
+| Messaging channels | In scope. **Web chat is the first channel built (D-017).** Tel-Agent commits to twenty-four including the phone (D-044): web chat, SMS, email, WhatsApp, Telegram, Messenger, Instagram, Discord, Slack, Microsoft Teams, Signal, Viber, Google Chat, Mattermost, Matrix, IRC, LINE, WeChat Official Account, WeCom, QQ Bot, DingTalk, Feishu/Lark, iMessage — supported, tested, shipped as official applications. **A channel is an extension, so the list is no longer closed (D-032):** anything beyond them is a community extension carrying no commitment from this project. The customer connects their own app credentials; Tel-Agent never holds a shared platform app |
 
 ---
 

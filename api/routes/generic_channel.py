@@ -22,7 +22,7 @@ from typing import Annotated, Any
 
 import httpx
 from fastapi import APIRouter, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
@@ -61,15 +61,42 @@ class GenericChannelOut(BaseModel):
     verified_live: bool
 
 
+# What a single field value may weigh. Eight kibibytes is generous for a token and
+# still holds a service-account JSON key, which is the largest thing a multiline field
+# is asked to carry; and thirty-two keys is more fields than any descriptor declares.
+# Both exist so an unbounded body cannot reach the encryption path at all.
+_MAX_FIELD_LENGTH = 8192
+_MAX_FIELDS = 32
+
+
 class GenericChannelIn(BaseModel):
     enabled: bool | None = None
     # Write-only per field: "" removes, a mask-echo is ignored, anything else is stored.
-    fields: dict[str, str] | None = None
+    fields: (
+        dict[
+            str,
+            Annotated[str, Field(max_length=_MAX_FIELD_LENGTH)],
+        ]
+        | None
+    ) = Field(default=None, max_length=_MAX_FIELDS)
 
 
 class TestResult(BaseModel):
     ok: bool
     identity: str | None
+
+
+def _why(error: Exception) -> dict[str, Any]:
+    """What a failed platform call may be recorded as - never the exception's text.
+
+    `str()` of an `httpx` error carries the full request URL, and several platforms of
+    this wave authenticate with a token in the path or the query string. The class name
+    and the status code say everything an operator needs and carry no credential.
+    """
+    recorded: dict[str, Any] = {"error": type(error).__name__}
+    if isinstance(error, httpx.HTTPStatusError):
+        recorded["status"] = error.response.status_code
+    return recorded
 
 
 def _unknown(kind: str) -> object:
@@ -283,7 +310,7 @@ async def _activate(request: Request, module: ModuleType, row: Channel) -> objec
     except (generic.ChannelRefused, httpx.HTTPError) as error:
         logger.info(
             "channel activation refused",
-            extra={"channel_id": row.id, "kind": row.kind, "error": str(error)[:200]},
+            extra={"channel_id": row.id, "kind": row.kind, **_why(error)},
         )
         row.status = "disabled"
         return envelope_response(
@@ -321,7 +348,7 @@ async def test_connection(
     except (generic.ChannelRefused, httpx.HTTPError) as error:
         logger.info(
             "channel test failed",
-            extra={"channel_id": row.id, "kind": kind, "error": str(error)[:200]},
+            extra={"channel_id": row.id, "kind": kind, **_why(error)},
         )
         return envelope_response(
             status_code=status.HTTP_502_BAD_GATEWAY,

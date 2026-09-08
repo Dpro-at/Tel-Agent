@@ -55,6 +55,9 @@ class ChannelModule(Protocol):
         self, client: httpx.AsyncClient, credentials: dict[str, str], target: str, text: str
     ) -> None: ...
 
+    def message_text(self, event: Any, identity: Any) -> str | None:
+        """The answering policy: the text to reply to, or `None` to ignore the event."""
+
     async def ingest(self, db: DbSession, channel: Channel, event: Any) -> int | None:
         """Store one inbound line. `None` when it was a duplicate or not for us."""
 
@@ -79,8 +82,56 @@ class ChannelModule(Protocol):
 CHANNELS: dict[str, ModuleType] = {}
 
 
+# The surface every declarative channel owes, whichever way it receives.
+# `.claude/skills/channel-extension/SKILL.md` is where this list is written for humans;
+# this tuple is the same list, enforced.
+_REQUIRED_CALLABLES = (
+    "make_client",
+    "probe",
+    "send_text",
+    "message_text",
+    "ingest",
+    "respond",
+    "schedule_reply",
+)
+
+# What each way of receiving adds to it.
+_BY_INBOUND = {"dial_out": "loop", "door": "receive"}
+
+
 def register(module: ModuleType) -> None:
-    """Put one transport module on the registry, keyed by its own `KIND`."""
+    """Put one transport module on the registry, keyed by its own `KIND`.
+
+    The surface is checked here rather than at the first request. A module missing
+    `receive` is a door that answers 500 to a stranger, and a module missing `SETUP` is
+    a settings card that cannot be drawn - both of them at runtime, in production,
+    long after import. Registration is the one moment where the whole module is in
+    hand, so it is where the contract is enforced.
+    """
+    missing = [name for name in ("KIND", "SETUP", "INBOUND") if not hasattr(module, name)]
+    if missing:
+        raise TypeError(f"{module.__name__} declares no {', '.join(missing)}")
+
+    inbound = module.INBOUND
+    if inbound not in _BY_INBOUND:
+        raise TypeError(
+            f"{module.__name__} declares INBOUND={inbound!r}; "
+            f"it must be one of {', '.join(sorted(_BY_INBOUND))}"
+        )
+
+    wanted = (*_REQUIRED_CALLABLES, _BY_INBOUND[inbound])
+    absent = [name for name in wanted if not callable(getattr(module, name, None))]
+    if absent:
+        raise TypeError(f"{module.__name__} has no callable {', '.join(absent)}")
+
+    if not isinstance(module.SETUP, Setup):
+        raise TypeError(f"{module.__name__}.SETUP is not a Setup descriptor")
+    if module.SETUP.kind != module.KIND:
+        raise TypeError(
+            f"{module.__name__}.SETUP.kind is {module.SETUP.kind!r}, "
+            f"but KIND is {module.KIND!r}"
+        )
+
     kind = module.KIND
     if kind in CHANNELS and CHANNELS[kind] is not module:
         raise ValueError(f"two modules claim the channel kind {kind!r}")

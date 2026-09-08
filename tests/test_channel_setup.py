@@ -9,7 +9,11 @@ never be able to ride along inside it.
 from __future__ import annotations
 
 import json
+import types
 
+import pytest
+
+from api.channels import generic
 from api.channels.setup import Field, Setup
 
 SETUP = Setup(
@@ -70,3 +74,89 @@ def test_the_names_the_route_needs_are_derived_from_the_declaration() -> None:
     assert SETUP.secret_names() == ("api_key", "service_key")
     assert SETUP.field("account").label == "Account"
     assert SETUP.field("nothing") is None
+
+
+# --- What `register` refuses ------------------------------------------------------
+
+
+def _complete_module(name: str = "api.channels._probe") -> types.ModuleType:
+    """A module that satisfies the whole contract, for a test to break one piece of."""
+    module = types.ModuleType(name)
+    module.KIND = "sms"
+    module.INBOUND = "door"
+    module.SETUP = Setup(
+        kind="sms",
+        title="SMS",
+        note="A complete declaration.",
+        guide_url="https://example.invalid/guide",
+        fields=(Field("api_key", "API key"),),
+    )
+
+    async def nothing(*args: object, **kwargs: object) -> None:
+        return None
+
+    def plain(*args: object, **kwargs: object) -> None:
+        return None
+
+    module.make_client = plain
+    module.probe = nothing
+    module.send_text = nothing
+    module.message_text = plain
+    module.ingest = nothing
+    module.respond = nothing
+    module.schedule_reply = plain
+    module.receive = nothing
+    return module
+
+
+def test_a_complete_module_registers(monkeypatch) -> None:
+    monkeypatch.setattr(generic, "CHANNELS", {})
+    generic.register(_complete_module())
+    assert generic.module_for("sms") is not None
+
+
+@pytest.mark.parametrize(
+    ("missing", "says"),
+    [
+        ("SETUP", "SETUP"),
+        ("receive", "receive"),
+        ("message_text", "message_text"),
+        ("schedule_reply", "schedule_reply"),
+    ],
+)
+def test_a_module_missing_a_piece_of_the_contract_is_named(
+    monkeypatch, missing: str, says: str
+) -> None:
+    """The failure is at registration, with the missing name in it.
+
+    Not at the first request from a stranger, where a door with no `receive` is a 500
+    and a card with no `SETUP` is a screen that cannot be drawn.
+    """
+    monkeypatch.setattr(generic, "CHANNELS", {})
+    module = _complete_module()
+    delattr(module, missing)
+    with pytest.raises(TypeError, match=says):
+        generic.register(module)
+
+
+def test_a_dial_out_module_owes_a_loop_and_not_a_receive(monkeypatch) -> None:
+    monkeypatch.setattr(generic, "CHANNELS", {})
+    module = _complete_module()
+    module.INBOUND = "dial_out"
+    with pytest.raises(TypeError, match="loop"):
+        generic.register(module)
+
+    async def loop(sessionmaker: object) -> None:
+        return None
+
+    module.loop = loop
+    generic.register(module)
+    assert generic.dial_out_modules() == [module]
+
+
+def test_a_module_whose_declaration_names_another_kind_is_refused(monkeypatch) -> None:
+    monkeypatch.setattr(generic, "CHANNELS", {})
+    module = _complete_module()
+    module.KIND = "telegram"
+    with pytest.raises(TypeError, match=r"SETUP\.kind"):
+        generic.register(module)

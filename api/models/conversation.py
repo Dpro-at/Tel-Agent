@@ -33,7 +33,7 @@ from api.db import Base
 from api.models.common import enum_column, utc_now_column, workspace_fk
 from api.models.encrypted import EncryptedStr
 
-# The twenty-five channels Tel-Agent commits to. The list is no longer closed
+# The twenty-four channels Tel-Agent commits to. The list is no longer closed
 # (D-032) — a channel is an extension — but these are the kinds the core ships
 # support for, and `channels.app_id` is what points at the extension that actually
 # implements one. D-044 added the last fourteen in one migration rather than one

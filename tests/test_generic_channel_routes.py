@@ -56,6 +56,8 @@ class FakePlatform:
     def __init__(self) -> None:
         self.refuse = False
         self.delivered: list[dict] = []
+        # What `receive` raises instead of answering, when a test asks it to.
+        self.door_raises: Exception | None = None
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         if self.refuse:
@@ -98,10 +100,32 @@ def _stub_module(platform: FakePlatform) -> types.ModuleType:
         return str(response.json()["name"])
 
     async def receive(db, channel, request) -> JSONResponse:
+        if platform.door_raises is not None:
+            raise platform.door_raises
         return JSONResponse({"heard": channel.kind})
+
+    async def send_text(client, credentials, target: str, text: str) -> None:
+        await client.post("/send", json={"to": target, "text": text})
+
+    def message_text(event, identity) -> str | None:
+        return str(event.get("text") or "") or None
+
+    async def ingest(db, channel, event) -> int | None:
+        return None
+
+    async def respond(sessionmaker, channel_id: int, message_id: int) -> None:
+        return None
+
+    def schedule_reply(sessionmaker, channel_id: int, message_id: int) -> None:
+        return None
 
     module.probe = probe
     module.receive = receive
+    module.send_text = send_text
+    module.message_text = message_text
+    module.ingest = ingest
+    module.respond = respond
+    module.schedule_reply = schedule_reply
     return module
 
 
@@ -349,3 +373,48 @@ async def test_the_door_answers_a_get_the_same_way_it_answers_a_post(stage) -> N
     path = await _live_path(clients, db)
     assert (await public.get(f"/public/sms/{path}")).json() == {"heard": "sms"}
     assert (await public.get("/public/sms/not-an-address")).status_code == 403
+
+
+@pytest.mark.parametrize(
+    "thrown",
+    [generic.ChannelRefused("the signature did not check out"), RuntimeError("boom")],
+    ids=["refused", "unexpected"],
+)
+async def test_a_channel_that_cannot_answer_still_answers_one_refusal(stage, thrown) -> None:
+    """A raise inside `receive` is a 403, never a 500.
+
+    A JWT-signed door raises `ChannelRefused` on every verification failure, and a 500
+    would tell a stranger that the address exists and that something went wrong behind
+    it. An unexpected error gets the same treatment, for the same reason.
+    """
+    clients, public, platform, db = stage
+    path = await _live_path(clients, db)
+    platform.door_raises = thrown
+
+    refused = await public.post(f"/public/sms/{path}", json={})
+    unknown = await public.post("/public/sms/not-an-address", json={})
+    assert refused.status_code == 403, refused.text
+    # Everything but the request id, which is per request by design.
+    assert {
+        key: value for key, value in refused.json()["error"].items() if key != "request_id"
+    } == {key: value for key, value in unknown.json()["error"].items() if key != "request_id"}
+
+
+async def test_a_field_value_has_a_ceiling(stage) -> None:
+    """No credential is eight kibibytes, and an unbounded body never reaches the cipher."""
+    clients, _, _, _ = stage
+    over = await clients["mohamed"].put(
+        "/api/channels/sms", json={"fields": {"api_key": "k" * 8193}}
+    )
+    assert over.status_code == 422, over.text
+    fits = await clients["mohamed"].put(
+        "/api/channels/sms", json={"fields": {"api_key": "k" * 8192}}
+    )
+    assert fits.status_code == 200, fits.text
+
+
+async def test_a_body_cannot_carry_more_fields_than_a_descriptor_declares(stage) -> None:
+    clients, _, _, _ = stage
+    too_many = {f"field_{index}": "x" for index in range(33)}
+    answer = await clients["mohamed"].put("/api/channels/sms", json={"fields": too_many})
+    assert answer.status_code == 422, answer.text
