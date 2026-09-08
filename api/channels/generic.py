@@ -205,3 +205,19 @@ def missing_fields(channel: Channel, setup: Setup) -> tuple[str, ...]:
     """The required fields that are still empty — what holds a channel switched off."""
     filled = credentials_of(channel)
     return tuple(name for name in setup.required_names() if not filled.get(name))
+
+
+def _register_declared_channels() -> None:
+    """Put every channel that ships with the core on the registry, at import time.
+
+    Here rather than in `api/main.py` because the registry is what the routes, the
+    health rollup and the tests all read, and half of them never build an app. The
+    import is inside the function so that a transport may import this module for
+    `ChannelRefused` without the two chasing each other at import time.
+    """
+    from api.channels import sms
+
+    register(sms)
+
+
+_register_declared_channels()

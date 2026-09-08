@@ -1893,7 +1893,7 @@ function ChannelsPanels({ t }: { t: SettingsDictionary }) {
  * contracts; every channel after them is one line here and one descriptor on the
  * backend.
  */
-export const GENERIC_CHANNELS: string[] = [];
+export const GENERIC_CHANNELS: string[] = ["sms"];
 
 /**
  * The Discord card — the Telegram card's contract: one bot token from the

@@ -1162,6 +1162,7 @@ Decided by how much interface the platform provides, not by preference:
 | Channel | Interface offered | State needed |
 |---|---|---|
 | Discord | Native modal — a real form | None. One submission arrives complete |
+| SMS | Plain text, 1600 characters, nothing else | Full step machine — the phone's problem without the latency |
 | Telegram | Inline keyboards, Mini Apps | Light |
 | WhatsApp / Messenger / Instagram | Buttons and list menus | Full step machine |
 | **Phone** | **Nothing at all** | **Full step machine, plus interruption** |
