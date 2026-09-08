@@ -572,3 +572,58 @@ async def test_an_older_delivery_repeated_after_a_newer_one_is_still_dropped(sta
     db.expire_all()
     lines = (await db.execute(select(Message))).scalars().all()
     assert [line.text for line in lines] == ["Are you open?", "Anyone there?"]
+
+
+# --- The takeover reply, delivered ----------------------------------------------
+
+
+async def _taken_over_thread(clients, db, ids) -> int:
+    """One customer's thread, with a person holding it — the id, not the row.
+
+    The row is expired the moment the route commits, and reading an expired column
+    from this session would be database work in the wrong place.
+    """
+    channel = await _channel_row(db, ids["channel"])
+    await transport.ingest(db, channel, _delivery("I would rather talk to a person."))
+    thread = await db.scalar(select(Conversation).where(Conversation.external_id == CUSTOMER))
+    thread_id = thread.id
+    taken = await clients["sabine"].post(f"/api/conversations/{thread_id}/takeover")
+    assert taken.status_code == 200, taken.text
+    db.expire_all()
+    return thread_id
+
+
+async def test_a_human_reply_is_delivered_before_it_is_stored(stage) -> None:
+    """A declarative channel needs no branch of its own for a person to answer on it."""
+    clients, _, ids, fake, db, _ = stage
+    thread_id = await _taken_over_thread(clients, db, ids)
+
+    sent = await clients["sabine"].post(
+        f"/api/conversations/{thread_id}/reply",
+        json={"text": "Yes — this is Sabine. How can I help?"},
+    )
+    assert sent.status_code == 201, sent.text
+    assert (fake.sent[-1]["To"], fake.sent[-1]["From"]) == (CUSTOMER, OUR_NUMBER)
+    assert fake.sent[-1]["Body"] == "Yes — this is Sabine. How can I help?"
+
+    db.expire_all()
+    lines = (await db.execute(select(Message))).scalars().all()
+    assert lines[-1].speaker == "human"
+
+
+async def test_a_human_reply_that_is_refused_is_not_stored(stage) -> None:
+    """Delivery before storage holds for a person's words exactly as for the agent's."""
+    clients, _, ids, fake, db, _ = stage
+    thread_id = await _taken_over_thread(clients, db, ids)
+    before = await db.scalar(select(Message).order_by(Message.id.desc()).limit(1))
+
+    fake.refuse = True
+    refused = await clients["sabine"].post(
+        f"/api/conversations/{thread_id}/reply", json={"text": "Hello?"}
+    )
+    assert refused.status_code == 502
+    assert refused.json()["error"]["code"] == "not_delivered"
+
+    db.expire_all()
+    last = await db.scalar(select(Message).order_by(Message.id.desc()).limit(1))
+    assert last.id == before.id
