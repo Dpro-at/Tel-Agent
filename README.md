@@ -6,8 +6,10 @@
 
 **Connect any phone line to any AI model. Self-hosted, bring your own keys.**
 
-<!-- Twelve marks, eleven channels: call and landline are two drawings of the one phone
-     channel. This row is about recognition, not arithmetic. -->
+<!-- Two rows of marks. The first is the channels that ship today (call and
+     landline are two drawings of the one phone channel); the second is the wave-2
+     channels being added now, tracked in the issues labelled "channel". The rows are
+     about recognition, not arithmetic. -->
 <p>
   <img src="docs/brand/channels/call.svg" alt="Call" title="Call" height="26">
   &nbsp;&nbsp;
@@ -30,8 +32,35 @@
   <img src="docs/brand/channels/discord.svg" alt="Discord" title="Discord" height="26">
   &nbsp;&nbsp;
   <img src="docs/brand/channels/slack.png" alt="Slack" title="Slack" height="26">
-  &nbsp;&nbsp;
+</p>
+<p>
   <img src="docs/brand/channels/teams.svg" alt="Microsoft Teams" title="Microsoft Teams" height="26">
+  &nbsp;&nbsp;
+  <img src="docs/brand/channels/signal.svg" alt="Signal" title="Signal" height="26">
+  &nbsp;&nbsp;
+  <img src="docs/brand/channels/viber.svg" alt="Viber" title="Viber" height="26">
+  &nbsp;&nbsp;
+  <img src="docs/brand/channels/google-chat.svg" alt="Google Chat" title="Google Chat" height="26">
+  &nbsp;&nbsp;
+  <img src="docs/brand/channels/mattermost.svg" alt="Mattermost" title="Mattermost" height="26">
+  &nbsp;&nbsp;
+  <img src="docs/brand/channels/matrix.svg" alt="Matrix" title="Matrix" height="26">
+  &nbsp;&nbsp;
+  <img src="docs/brand/channels/irc.svg" alt="IRC" title="IRC" height="26">
+  &nbsp;&nbsp;
+  <img src="docs/brand/channels/line.svg" alt="LINE" title="LINE" height="26">
+  &nbsp;&nbsp;
+  <img src="docs/brand/channels/wechat.svg" alt="WeChat" title="WeChat" height="26">
+  &nbsp;&nbsp;
+  <img src="docs/brand/channels/wecom.svg" alt="WeCom" title="WeCom" height="26">
+  &nbsp;&nbsp;
+  <img src="docs/brand/channels/qq.svg" alt="QQ" title="QQ" height="26">
+  &nbsp;&nbsp;
+  <img src="docs/brand/channels/dingtalk.svg" alt="DingTalk" title="DingTalk" height="26">
+  &nbsp;&nbsp;
+  <img src="docs/brand/channels/feishu.svg" alt="Feishu / Lark" title="Feishu / Lark" height="26">
+  &nbsp;&nbsp;
+  <img src="docs/brand/channels/imessage.svg" alt="iMessage" title="iMessage" height="26">
 </p>
 
 <p>Connect them over MCP — and get full control.</p>
@@ -63,7 +92,8 @@
 </p>
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
-[![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange.svg)](#project-status)
+[![Status: alpha](https://img.shields.io/badge/status-alpha-blue.svg)](#project-status)
+[![Release](https://img.shields.io/github/v/release/Dpro-at/Tel-Agent?label=release)](https://github.com/Dpro-at/Tel-Agent/releases/latest)
 
 [tel-agent.com](https://tel-agent.com) · maintained by [Dpro GmbH](https://dpro.at), Vienna
 
@@ -111,35 +141,40 @@ models, and decide which callers ever reach the AI at all.
 
 ## Project status
 
-**Pre-alpha. Not usable yet.** There is no installable release.
+**Alpha. Installable today.** The first packaged releases are on the
+[releases page](https://github.com/Dpro-at/Tel-Agent/releases/latest): a Windows
+installer, macOS packages for Apple Silicon and Intel, DEB and RPM packages for Linux,
+and a `docker-compose.release.yml` that pulls the published images. The installers are
+unsigned while code signing is not yet configured, so the operating system will ask
+once before it runs.
 
-The project is at Milestone 0: getting a single conversation answered end to end in a
-web chat — the reply streaming token by token, interruptible mid-sentence, with the
-message captured and the transcript printed. The messaging channels follow, and **the
-phone comes last**, at Milestone 11.
+**What works now.** A conversation is answered end to end: the reply streams token by
+token, can be interrupted mid-sentence, is stored, and raises a notification so a person
+knows someone wrote in. The core channels are wired — web chat, WhatsApp, Telegram,
+Messenger, Instagram, Discord, Slack, email and SMS — and the dashboard serves them
+from a real API: sign-in and the account flows, home, the conversation archive, the
+notification tray, contacts, assistants, knowledge, the catalogue, apps, numbers,
+routing rules, backups, system health, settings and workspaces. The product speaks
+five languages: English, German, Arabic, Spanish and Dutch.
 
-**Most of the screens now have something behind them.** Twenty-three are served by a
-real API — sign-in and the account flows, home, the conversation archive and one
-conversation in full, the notification tray, contacts, assistants, knowledge, the
-catalogue, apps, numbers, routing rules, backups, system health, settings and
-workspaces. Eight are still design with fixture data in them: the calendar, outbound
-campaigns, connectors, the consent log, the live call, usage, updates and the install
-wizard. Every one of those eight belongs to a milestone that has not been reached.
+**What is being added now.** A second wave of channels, one issue each under the
+[`channel` label](https://github.com/Dpro-at/Tel-Agent/issues?q=is%3Aissue%20state%3Aopen%20label%3Achannel):
+Microsoft Teams, Signal, Viber, Google Chat, Mattermost, Matrix, IRC, LINE, WeChat,
+WeCom, QQ, DingTalk, Feishu / Lark and iMessage. They share one declarative setup
+contract (#220), so each new channel is a definition plus a transport rather than a
+fork of the last one. More translations are open as
+[good first issues](https://github.com/Dpro-at/Tel-Agent/issues?q=is%3Aissue%20state%3Aopen%20label%3Ai18n).
 
-**This is still not a product you can run.** There is no installable release, no
-packaging, and the agent does not answer with a model until one is configured — the
-loop that carries the reply is built and the model is a key away.
+**What is not there yet.** The phone. The build order is deliberate: every messaging
+channel first, and **the phone comes last**, at Milestone 11, because the voice loop
+was proven elsewhere and the unproven part was whether anyone could reach the agent at
+all. That decision and its cost are recorded in `internal/DECISIONS.md` as D-017. A few
+screens are still design with fixture data behind them - the calendar, outbound
+campaigns, the consent log, the live call, usage and updates - and each belongs to a
+milestone that has not been reached.
 
-The build order is deliberate, and it was reversed once, on 2026-08-22. It originally
-required an answered phone call before anything else was built; the phone loop was
-proven elsewhere, which retired the risk that ordering existed to cover. What was not
-proven is that anyone can reach the agent at all. The superseded rule and the cost of
-reversing it are recorded in `internal/DECISIONS.md` as D-017.
-
-**Milestone 0 of 12 — in progress.** The full plan, and what each milestone means, is
-in [`docs/ROADMAP.md`](docs/ROADMAP.md).
-
-Watch or star the repository if you want to know when it becomes installable.
+The full plan, and what each milestone means, is in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Watch or star the repository to hear when a release lands.
 
 ---
 
@@ -180,10 +215,12 @@ there are no default credentials. The API and its documentation are on
 http://localhost:38472/docs, and conversations live on the `tel-agent-data`
 volume (SQLite by default; a `postgres` profile is in `docker-compose.yml`).
 
-From the first tagged release on, the images are also published to GitHub
-Container Registry, so the build step can be skipped entirely:
+Every tagged release also publishes the images to GitHub Container Registry, so
+the build step can be skipped entirely:
 `docker compose -f docker-compose.release.yml up -d` — same layout, same
-volumes, interchangeable with the from-source file on one machine.
+volumes, interchangeable with the from-source file on one machine. If you would
+rather not run Docker at all, the [releases page](https://github.com/Dpro-at/Tel-Agent/releases/latest)
+has native installers for Windows, macOS and Linux.
 
 Both ports are published on **loopback only**. Reaching the installation from
 other machines is a decision made in `.env` — the `TEL_AGENT_*` block there
@@ -195,7 +232,7 @@ to run the code without rebuilding an image on every edit. See
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the manual run, [`docs/SPEC.md`](docs/SPEC.md)
 for the full design and [`CLAUDE.md`](CLAUDE.md) for the development rules.
 
-### Requirements when it ships
+### Requirements for the phone channel, when it ships
 
 - API keys for an STT, an LLM, and a TTS provider (or a GPU for local models)
 - A machine on the same LAN as the PBX

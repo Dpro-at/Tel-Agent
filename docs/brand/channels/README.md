@@ -1,8 +1,9 @@
 # Channel icons
 
-The icons in the README's opening row, one file each.
+The icons in the README's opening rows, one file each. Every file is vendored here:
+the product is self-hosted, so nothing in it may fetch a logo from a CDN.
 
-> **Twelve icons, not twelve channels.** `call` and `landline` are two
+> **Eleven icons, not eleven channels** in the first row. `call` and `landline` are two
 > drawings of the *one* phone channel — the row is about recognition, not arithmetic.
 > Slack is a separate question: see the note at the bottom.
 
@@ -19,7 +20,35 @@ The icons in the README's opening row, one file each.
 | `instagram.svg` | Instagram | Simple Icons style | Brand gradient |
 | `discord.svg` | Discord | Simple Icons style | `#5865F2` |
 | `slack.png` | Slack | 96x96, resized from a 1280px source | Brand four-colour |
-| `teams.svg` | Microsoft Teams | theSVG, MIT | Brand purple |
+
+## Second row — wave-2 channels
+
+Added 2026-09-09 for the channels tracked in the issues labelled `channel` (#220–#235).
+Source is [theSVG](https://thesvg.org) unless stated; the per-icon licence is the
+registry's own field, checked before copying.
+
+| File | Shows | Origin | Licence | Colour |
+|---|---|---|---|---|
+| `teams.svg` | Microsoft Teams | theSVG `microsoft-teams` | MIT | Brand gradient |
+| `signal.svg` | Signal | theSVG `signal` | CC0-1.0 | `#3B45FD` |
+| `viber.svg` | Viber | theSVG `viber` | CC0-1.0 | `#7360F2` |
+| `google-chat.svg` | Google Chat | theSVG `google-chat` | CC0-1.0 | Brand four-colour |
+| `mattermost.svg` | Mattermost | theSVG `mattermost`, mono variant recoloured | CC0-1.0 | `#0058CC` |
+| `matrix.svg` | Matrix `[m]` | theSVG `matrix-org`, recoloured | CC0-1.0 | `#0DBD8B` |
+| `irc.svg` | Speech bubble with a `#` | Drawn here | — | `#475569` |
+| `line.svg` | LINE | theSVG `line` | CC0-1.0 | `#00C300` |
+| `wechat.svg` | WeChat | theSVG `wechat` | CC0-1.0 | `#07C160` |
+| `wecom.svg` | WeCom | Iconify `tdesign:logo-wecom`, recoloured | MIT | `#0082EF` |
+| `qq.svg` | QQ | theSVG `qq` | CC0-1.0 | `#1EBAFC` |
+| `dingtalk.svg` | DingTalk | Iconify `ant-design:dingtalk`, recoloured | MIT | `#0089FF` |
+| `feishu.svg` | Feishu / Lark | Iconify `icon-park:lark` (ByteDance), recoloured | Apache-2.0 | `#3370FF` |
+| `imessage.svg` | iMessage | theSVG `imessage` | CC0-1.0 | `#34DA50` |
+
+WeCom, DingTalk and Feishu are absent from theSVG, Simple Icons and Lobe Icons; the
+Iconify sets above were the nearest faithful marks. The theSVG Mattermost `default`
+variant is white-on-transparent and vanishes on GitHub's light theme, which is why
+the mono variant is used and filled by hand. IRC has no owner and no logo, so it
+gets a drawn glyph in the same family as `sms` and `email`.
 
 ## One hue each
 
@@ -70,7 +99,7 @@ like, so the conflict is gone.
 
 ## Trademarks
 
-WhatsApp, Telegram, Messenger, Instagram, Discord, Slack and Microsoft Teams are
-trademarks of their
-respective owners. They appear here to name the channel a user would reach us on -
+WhatsApp, Telegram, Messenger, Instagram, Discord, Slack, Microsoft Teams, Signal,
+Viber, Google Chat, Mattermost, Matrix, LINE, WeChat, WeCom, QQ, DingTalk, Feishu,
+Lark and iMessage are trademarks of their respective owners. They appear here to name the channel a user would reach us on -
 nominative use - and imply no endorsement of, or affiliation with, Tel-Agent.
