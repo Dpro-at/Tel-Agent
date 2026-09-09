@@ -113,10 +113,10 @@ transcribed, and searchable.
 
 It runs on your own hardware, on your own LAN, with your own API keys.
 
-The phone comes first and is the hardest case. After it works, the same agent answers
+The same agent handles phone calls and answers
 on **web chat, SMS, email, WhatsApp, Telegram, Messenger, Instagram, Discord and
 Slack** — connected with your own credentials from each platform, never a shared
-application of ours. **Ten channels, and the list is closed.** A channel is a route a
+application of ours. The official channel scope now covers **24 channels including the phone**, with additional channels built on the extension contract. A channel is a route a
 customer uses to reach you; a system you run your own business on is an integration,
 and those are reached through webhooks and the HTTP tool.
 
@@ -141,7 +141,7 @@ models, and decide which callers ever reach the AI at all.
 
 ## Project status
 
-**Alpha. Installable today.** The first packaged releases are on the
+**Alpha. Native installers and container images are available today.** Choose a platform on the [download page](https://tel-agent.com/download), or get the packages from the
 [releases page](https://github.com/Dpro-at/Tel-Agent/releases/latest): a Windows
 installer, macOS packages for Apple Silicon and Intel, DEB and RPM packages for Linux,
 and a `docker-compose.release.yml` that pulls the published images. The installers are
@@ -150,7 +150,7 @@ once before it runs.
 
 **What works now.** A conversation is answered end to end: the reply streams token by
 token, can be interrupted mid-sentence, is stored, and raises a notification so a person
-knows someone wrote in. The core channels are wired — web chat, WhatsApp, Telegram,
+knows someone wrote in. The phone implementation includes streaming speech recognition and synthesis, interruption handling, caller-ID routing, and stored call transcripts through the SIP/LiveKit transport. Twilio integration handles SMS with customer-owned credentials. The core messaging channels are wired — web chat, WhatsApp, Telegram,
 Messenger, Instagram, Discord, Slack, email and SMS — and the dashboard serves them
 from a real API: sign-in and the account flows, home, the conversation archive, the
 notification tray, contacts, assistants, knowledge, the catalogue, apps, numbers,
@@ -165,30 +165,24 @@ contract (#220), so each new channel is a definition plus a transport rather tha
 fork of the last one. More translations are open as
 [good first issues](https://github.com/Dpro-at/Tel-Agent/issues?q=is%3Aissue%20state%3Aopen%20label%3Ai18n).
 
-**What is not there yet.** The phone. The build order is deliberate: every messaging
-channel first, and **the phone comes last**, at Milestone 11, because the voice loop
-was proven elsewhere and the unproven part was whether anyone could reach the agent at
-all. That decision and its cost are recorded in `internal/DECISIONS.md` as D-017. A few
-screens are still design with fixture data behind them - the calendar, outbound
-campaigns, the consent log, the live call, usage and updates - and each belongs to a
-milestone that has not been reached.
+**Deployment.** The Windows installer starts the local service and opens the dashboard in your browser. Native macOS and Linux packages and Docker images provide the other installation paths. Phone and messaging connections use your own provider credentials; configure the channels you want to use in your installation.
 
 The full plan, and what each milestone means, is in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 Watch or star the repository to hear when a release lands.
 
 ---
 
-## Planned architecture
+## Architecture
 
 | Layer | Choice |
 |---|---|
 | Voice agent | Python + [LiveKit Agents](https://github.com/livekit/agents) |
 | API | Python + FastAPI |
 | Frontend | Next.js + React |
-| Database | PostgreSQL — transcripts need real full-text search |
+| Database | SQLite by default; PostgreSQL is also supported |
 | Cache / queue | Redis |
 | Reverse proxy | Caddy — automatic HTTPS |
-| Packaging | Docker Compose |
+| Packaging | Windows installer, macOS packages, Linux DEB/RPM and Docker Compose |
 
 **Providers for v1:** Deepgram (STT) · one cloud LLM · ElevenLabs (TTS).
 Local models (Ollama, Whisper, Piper) follow in v1.1 — they need a GPU to hold a
@@ -232,7 +226,7 @@ to run the code without rebuilding an image on every edit. See
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the manual run, [`docs/SPEC.md`](docs/SPEC.md)
 for the full design and [`CLAUDE.md`](CLAUDE.md) for the development rules.
 
-### Requirements for the phone channel, when it ships
+### Requirements for the phone channel
 
 - API keys for an STT, an LLM, and a TTS provider (or a GPU for local models)
 - A machine on the same LAN as the PBX
@@ -271,9 +265,7 @@ cable.
 to a merged pull request** — a translation, one file, no setup and no API keys. Thirty
 languages are sitting at 0% and any language you actually speak is welcome.
 
-Contributions are welcome, but note the current state: until the agent answers on one
-channel end to end, pull requests adding features will be pointed at
-[`IDEAS.md`](IDEAS.md) rather than merged. That is not a judgement on the idea — it is how this project stays finishable.
+Contributions are welcome. Check the open issues and the channel extension contract before starting a feature, and keep each pull request focused on one concern.
 
 **All contributors must sign the [CLA](CLA.md)** before their first pull request is
 merged. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening one. Everything in the
