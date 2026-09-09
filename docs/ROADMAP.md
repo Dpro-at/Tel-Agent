@@ -10,18 +10,25 @@ live in [`IDEAS.md`](../IDEAS.md).
 
 ## Where the project is now
 
-**Milestone 0. Nothing else is being worked on.**
+**Milestone 3, messaging channels. Milestones 0 to 2 are closed, and the packaging of
+Milestone 10 shipped early.**
 
-That is not a formality. The previous attempt at this stalled with plenty of plan and
-nothing a customer could reach. The order is the only thing being changed this time.
+The first packaged releases are out: v0.1.1 carries a Windows installer, macOS packages
+for Apple Silicon and Intel, DEB and RPM packages for Linux, and container images pulled
+by `docker-compose.release.yml`. A conversation is answered end to end - streamed,
+interruptible, stored, with a notification raised - and the dashboard serves its screens
+from a real API. The core channels are wired: web chat, WhatsApp, Telegram, Messenger,
+Instagram, Discord, Slack, email and SMS.
 
-> **Nothing gets built until the agent answers on one channel, end to end.**
-> Not the second channel. Not the rules engine. Not the UI beyond what it takes to
-> watch one conversation happen.
+What is being built now is the second wave of channels decided in D-044 - Microsoft
+Teams, Signal, Viber, Google Chat, Mattermost, Matrix, IRC, LINE, WeChat Official
+Account, WeCom, QQ Bot, DingTalk, Feishu/Lark and iMessage - one issue each under the
+[`channel` label](https://github.com/Dpro-at/Tel-Agent/issues?q=is%3Aissue%20state%3Aopen%20label%3Achannel),
+on the declarative setup contract of #220.
 
-Milestone 0 has a **two-week time box**. If it is not working by then, the constraint
-is time rather than architecture — and learning that early is worth more than any
-feature.
+The rule below still holds for what comes after: routing rules, tools, webhooks, the MCP
+server, live intervention and health wait their turn. The phone transport exists ahead of
+its milestone - see Milestone 11 for what that does and does not mean.
 
 ---
 
@@ -58,7 +65,7 @@ The cost is real, and is written here so nobody rediscovers it as a surprise:
 
 ---
 
-## 0 — Web chat · **in progress**
+## 0 — Web chat · **done**
 
 A visitor types on a web page, the agent answers, the thread holds, and a transcript is
 printed. One process, one page, one model.
@@ -99,35 +106,15 @@ gets postponed. The order is the whole protection.
 
 Steps 1–2 are plumbing. **Step 4 is the product. Step 5 is what protects Milestone 11.**
 
-**Where this stands.** Steps 0, 1 and 2 are done and proven in a browser, not only in
-tests: a message from an origin the channel does not allow is refused and nothing is
-stored; a message typed into the embedded widget reaches the agent process, is stored,
-and raises a notification so a person knows a stranger wrote in; and the greeting
-arrives streamed, chunk by chunk, over server-sent events that close when the reply
-ends.
+**Closed.** All six checks pass on a configured installation: the origin guard refuses
+what it should and stores nothing; a message typed into the embedded widget reaches the
+agent, is stored and raises a notification; the reply streams over server-sent events in
+the visitor's language; the thread holds across turns and a page reload; cancellation
+stops generation rather than only hiding it; and `take_message` returns a structured
+result that lands in the tray. The model, endpoint and key are settings saved from the
+dashboard (§B9.2), masked on the way back out, with a one-token probe beside the form.
 
-Step 3 is built and not yet proven. The model sits behind `LLMProvider` (§B3) with one
-implementation - an OpenAI-compatible `/chat/completions` endpoint, which is the shape a
-hosted gateway and a model on your own machine both speak - and `agent.reply` streams
-from it, asking for the answer in the language the visitor wrote in. What it has not had
-is a key: the check says *the model's reply appears in the page*, and that is a browser
-away from a configured installation, not a test away. Until one is configured the agent
-says so in words and the message is still stored, which is the honest state of a fresh
-install rather than a placeholder.
-
-**The key now has a place to be typed.** §B9.2 puts a credential the user enters in an
-encrypted column rather than in `.env`, and says the move happens at Milestone 1 - so
-the provider, the model, the endpoint and the key are declared settings, saved from the
-settings screen, masked on the way back out, and read on every turn rather than at
-startup. The environment still configures a model and still works; what changed is that
-a value saved on the screen wins over it, per value, so an installation already running
-on `.env` moves one field at a time instead of all at once. Beside the form is the
-proof: one token asked of the configured model and the stream closed immediately, which
-answers "does this key reach anything" without spending an answer - and exercises the
-cancellation path Rule 3 requires, on the cheapest request in the product.
-
-What is still outstanding is the browser: a real key on a real installation, and the
-reply read on the page in the visitor's language. Nothing here claims that has happened.
+The notes that follow are kept as the record of how each check was built.
 
 Steps 4 and 5 are built on top of it. The thread is handed to the model oldest first,
 capped at ten exchanges, so the second question is asked with the first still attached -
@@ -164,7 +151,7 @@ when they arrive, at Milestone 11.
 **Measured:** time to first token, whether the thread survives a page reload, and
 whether cancel actually stops generation rather than only hiding it.
 
-## 1 — Persistence
+## 1 — Persistence · **done**
 
 PostgreSQL. Conversations and messages stored.
 
@@ -181,7 +168,7 @@ the milestones is a change of sequence and not of architecture.
 **`user_id` on every table even while it is always `1`**, and a full-text index on
 `messages.text` in the first migration.
 
-## 2 — Web UI
+## 2 — Web UI · **done**
 
 In this order: **conversation detail** → conversations list → home → rules → agent →
 settings.
@@ -193,23 +180,30 @@ because it should be assembled from components the rest of the product already p
 No screen may assume a channel. A conversation is a conversation; the phone is a kind,
 not a layout.
 
-## 3 — Messaging channels
+## 3 — Messaging channels · **in progress**
 
 WhatsApp, Telegram, Messenger, Instagram, Discord, Slack — plus SMS and email. The same agent,
 the same tools, the same searchable archive; a different transport.
-**Ten channels including the phone, and the list is closed.**
 
-The line that keeps it closed: a channel is any route a **customer** uses to reach a
-business. It is not any system the business itself runs on — Teams and project
-trackers are integrations, reached through the HTTP tool. Slack is on the list for the
+**Twenty-four official channels including the phone.** The list was ten and closed
+until D-032 opened it to extensions and D-044 decided what goes on it. The first ten are
+wired. The second wave - Microsoft Teams, Signal, Viber, Google Chat, Mattermost, Matrix,
+IRC, LINE, WeChat Official Account, WeCom, QQ Bot, DingTalk, Feishu/Lark and iMessage -
+is in progress, one issue per channel, each a definition plus a transport on the
+declarative setup contract of #220 rather than a fork of the last one. This milestone
+closes when every one of them answers end to end on a configured installation.
+
+The line that keeps the list finite: a channel is any route a **customer** uses to
+reach a business. It is not any system the business itself runs on - project trackers
+are integrations, reached through the HTTP tool. Slack and Teams are on the list for the
 shared-channel case only: an outside customer in a channel with a supplier is a route
-in, an internal workspace is not. Without that line, "add one more connector" has no
-end.
+in, an internal workspace is not. WeChat means the Official Account API, never a
+personal account driven by automation. Without that line, "add one more connector" has
+no end.
 
-WhatsApp and Telegram come first: that is where the customers of the businesses this is
-built for already are, and Telegram needs no platform review at all. Email follows. SMS
-arrives with the telephony account, which does not exist until Milestone 11 — it is the
-one channel here that may legitimately land late.
+WhatsApp and Telegram came first: that is where the customers of the businesses this is
+built for already are, and Telegram needs no platform review at all. Email followed. SMS
+arrived with the Twilio transport on the customer's own credentials.
 
 The customer connects credentials from their own developer account on each platform.
 Tel-Agent never holds a shared platform application: one shared app would put every
@@ -270,15 +264,27 @@ Real checks on every connected channel, on provider reachability and on the data
 immediate alerting on a channel that stops delivering; per-message latency telemetry.
 SIP registration joins this list at Milestone 11.
 
-## 10 — Docker packaging
+## 10 — Docker packaging · **shipped early**
 
 One-command install. Manual development runs stay documented — contributors need to run
 the code without rebuilding an image on every edit.
+
+Delivered ahead of its turn with v0.1.0 and v0.1.1: container images on GitHub
+Container Registry pulled by `docker-compose.release.yml`, and native installers besides
+- Windows, macOS on both architectures, DEB and RPM. Packaging came early because a
+release nobody can install is a release nobody can test. Code signing is still not
+configured, so the installers are unsigned and the operating system asks once.
 
 ## 11 — Phone call
 
 A phone number rings, the agent answers, speaks, listens, replies, takes a message, and
 the transcript lands in the same archive as every other conversation.
+
+**Where this stands.** The transport exists ahead of its milestone: streaming
+speech recognition and synthesis, interruption handling, caller-ID routing and stored
+call transcripts over SIP and LiveKit, on the customer's own provider credentials. What
+this milestone still owes is the measurement below - the latency budget, endpointing and
+barge-in on a live line - and no check here is ticked until it is taken on one.
 
 The number comes from a SIP provider and is pointed at the agent. An extension on an
 existing PBX reaches the same place and stays a first-class way to connect a line.
@@ -325,7 +331,7 @@ forced.
 | | Why |
 |---|---|
 | General workflow automation | Webhooks and a generic HTTP tool reach n8n and Home Assistant, which do it better |
-| Integrations with SaaS applications | A **channel** is where the conversation happens; an **integration** is a system the agent acts on. We own the first and reach the second through the HTTP tool. Channels are a closed list of ten; integrations are unbounded, which is why they are somebody else's product |
+| Integrations with SaaS applications | A **channel** is where the conversation happens; an **integration** is a system the agent acts on. We own the first and reach the second through the HTTP tool. Channels are a finite official list of twenty-four plus the extension contract; integrations are unbounded, which is why they are somebody else's product |
 | Being a CRM | Not what this is |
 | Being a PBX replacement | It connects to your PBX as an extension |
 | Analog hardware support | We only ever speak SIP. A genuinely analog line is bridged with an ATA — see the requirements in the README |
