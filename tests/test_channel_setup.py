@@ -232,3 +232,33 @@ def test_a_module_with_no_descriptor_keeps_the_older_test() -> None:
 
     assert generic.has_credentials(module, {"anything": "at all"}) is True
     assert generic.has_credentials(module, {}) is False
+
+
+def test_an_answer_is_split_on_word_boundaries_and_nothing_is_lost() -> None:
+    """The cut every channel shares: rejoining the pieces returns what went in.
+
+    It lived in two transports verbatim before it lived here. A silently truncated
+    answer reads as a complete one, which is the whole reason this is not a slice.
+    """
+    words = " ".join(f"word{index}" for index in range(400))
+    limit = 1600
+    assert len(words) > limit
+
+    pieces = generic.split_on_words(words, limit)
+    assert len(pieces) > 1
+    assert all(len(piece) <= limit for piece in pieces)
+    assert " ".join(pieces) == words
+
+
+def test_an_answer_shorter_than_the_limit_is_left_whole() -> None:
+    assert generic.split_on_words("Yes, we open at nine.", 1600) == ["Yes, we open at nine."]
+    assert generic.split_on_words("", 1600) == [""]
+
+
+def test_a_single_word_longer_than_the_limit_is_cut_rather_than_dropped() -> None:
+    """Nothing to cut between. Losing it silently would be the worse of the two."""
+    pieces = generic.split_on_words(f"before {'x' * 25} after", 10)
+
+    assert all(len(piece) <= 10 for piece in pieces)
+    assert "".join(pieces).replace(" ", "") == f"before{'x' * 25}after"
+    assert "x" * 25 in "".join(pieces)

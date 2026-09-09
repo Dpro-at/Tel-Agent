@@ -104,16 +104,23 @@ def _jwk(kid: str) -> dict[str, str]:
     }
 
 
-def _bearer(*, audience: str = APP_ID, issuer: str = ISSUER, seconds: int = 300) -> str:
+def _bearer(
+    *,
+    audience: str = APP_ID,
+    issuer: str = ISSUER,
+    seconds: int = 300,
+    service_url: str | None = SERVICE_URL,
+) -> str:
     """One inbound token, signed with the key the fake platform publishes."""
     now = dt.datetime.now(tz=dt.UTC).timestamp()
-    claims = {
+    claims: dict[str, Any] = {
         "iss": issuer,
         "aud": audience,
         "exp": int(now + seconds),
         "iat": int(now),
-        "serviceurl": SERVICE_URL,
     }
+    if service_url is not None:
+        claims["serviceurl"] = service_url
     return sign_rs256(claims, _private_key_pem(), KID)
 
 
@@ -199,12 +206,13 @@ def _activity(
     group: bool = False,
     entities: list[dict[str, Any]] | None = None,
     role: str | None = None,
+    service_url: str = SERVICE_URL,
 ) -> dict[str, Any]:
     activity: dict[str, Any] = {
         "type": kind,
         "id": activity_id,
         "timestamp": "2026-09-08T10:00:00.000Z",
-        "serviceUrl": SERVICE_URL,
+        "serviceUrl": service_url,
         "channelId": "msteams",
         "from": {"id": sender, "name": "Anna Berger", "aadObjectId": "outside"},
         "recipient": {"id": BOT_ID, "name": "Reception"},
@@ -314,6 +322,39 @@ def test_a_group_message_is_answered_only_when_the_bot_is_addressed() -> None:
     assert transport.message_text(addressed, APP_ID) == "do you open on Saturday?"
 
 
+def test_a_team_channel_is_a_group_even_when_nothing_says_isGroup() -> None:
+    """The connector states a team channel as a type, and does not always add the flag.
+
+    Reading only `isGroup` answers a whole team channel as though it were a private
+    chat, which is the mention rule failing exactly where it matters most.
+    """
+    overheard = _activity("Shall we meet at four?")
+    overheard["conversation"] = {"id": CONVERSATION_ID, "conversationType": "channel"}
+    assert transport.message_text(overheard, APP_ID) is None
+
+    addressed = _activity("<at>Reception</at> and on Sunday?", entities=[_mention()])
+    addressed["conversation"] = {"id": CONVERSATION_ID, "conversationType": "groupChat"}
+    assert transport.message_text(addressed, APP_ID) == "and on Sunday?"
+
+
+def test_an_id_that_merely_contains_ours_is_not_ours() -> None:
+    """An identity is matched whole. A substring test answers to somebody else's id."""
+    lookalike = f"29:{APP_ID}-and-then-some"
+    assert transport.message_text(_activity(sender=lookalike), APP_ID) is not None
+
+    quoting = _activity(
+        "<at>Reception</at> ask them",
+        group=True,
+        entities=[
+            {
+                "type": "mention",
+                "mentioned": {"id": f"28:{APP_ID}-elsewhere", "name": "Reception"},
+            }
+        ],
+    )
+    assert transport.message_text(quoting, APP_ID) is None
+
+
 def test_the_mention_is_stripped_before_the_text_reaches_the_model() -> None:
     """The model must read the customer's question, not the markup around our name."""
     written = _activity(
@@ -329,16 +370,6 @@ def test_an_activity_that_is_not_a_message_carries_nothing_to_answer() -> None:
     assert transport.message_text(_activity(kind="typing"), APP_ID) is None
     assert transport.message_text(_activity(""), APP_ID) is None
     assert transport.message_text(_activity("<at>Reception</at>"), APP_ID) is None
-
-
-def test_a_long_answer_is_split_on_word_boundaries_and_nothing_is_lost() -> None:
-    words = " ".join(f"word{index}" for index in range(900))
-    assert len(words) > transport.MESSAGE_MAX
-
-    pieces = transport.split_text(words, transport.MESSAGE_MAX)
-    assert len(pieces) > 1
-    assert all(len(piece) <= transport.MESSAGE_MAX for piece in pieces)
-    assert " ".join(pieces) == words
 
 
 # --- The door -------------------------------------------------------------------
@@ -405,6 +436,17 @@ async def test_every_reason_the_door_says_no_reads_exactly_alike(stage) -> None:
         await _post(public, _activity(), Authorization="Basic bm90OmEtdG9rZW4="),
         # An address nothing is listening on.
         await public.post("/public/teams/not-an-address", json=_activity()),
+        # An activity naming a service address its token never named. The body is not
+        # signed, so this is where our own access token would otherwise be posted.
+        await _post(public, _activity(service_url="https://collector.example.invalid/")),
+        # The same address over plaintext. A bearer token is never handed to `http`.
+        await _post(
+            public,
+            _activity(service_url="http://serviceurl.teams.test/emea/"),
+            Authorization=f"Bearer {_bearer(service_url='http://serviceurl.teams.test/emea/')}",
+        ),
+        # A token that names no service address proves nothing about where we answer.
+        await _post(public, _activity(), Authorization=f"Bearer {_bearer(service_url=None)}"),
     ]
     await clients["mohamed"].put("/api/channels/teams", json={"enabled": False})
     refusals.append(await _post(public, _activity()))
@@ -412,6 +454,25 @@ async def test_every_reason_the_door_says_no_reads_exactly_alike(stage) -> None:
     for refused in refusals:
         assert refused.status_code == 403, refused.text
         assert refused.json()["error"]["code"] == "not_recognised"
+
+
+async def test_a_service_address_spelled_differently_is_still_the_signed_one(stage) -> None:
+    """The comparison is of addresses, not of strings.
+
+    A trailing slash means nothing and the host is case-insensitive, so the same
+    address written two ways has to go through — a door that refused it would refuse
+    real deliveries over a spelling difference nobody controls.
+    """
+    _, public, _, fake, _, _ = stage
+    answer = await _post(
+        public,
+        _activity(service_url="https://ServiceUrl.Teams.Test/emea"),
+        Authorization=f"Bearer {_bearer(service_url='https://serviceurl.teams.test/emea/')}",
+    )
+
+    assert answer.status_code == 200, answer.text
+    await _drain()
+    assert [sent["url"] for sent in fake.sent] == [ACTIVITIES_URL]
 
 
 async def test_a_body_that_is_not_an_activity_is_refused_like_everything_else(stage) -> None:
@@ -562,7 +623,7 @@ async def test_the_card_declares_its_fields_and_its_public_address(stage) -> Non
         "Answers customers who reach your Teams bot from outside your organisation. "
         "Internal chat is not a channel."
     )
-    assert body["verified_live"] is True
+    assert body["verified_live"] is False
     assert body["webhook_url"] == f"http://localhost{DOOR}"
     assert body["values"] == {"app_id": APP_ID}
 
@@ -609,6 +670,28 @@ async def test_the_test_button_takes_a_token_and_reports_the_application(stage) 
     assert answer.json() == {"ok": True, "identity": APP_ID}
     assert fake.tokens_issued == 1
     assert (await clients["mohamed"].get("/api/channels/teams")).json()["identity"] == APP_ID
+
+
+async def test_writing_the_credentials_drops_the_token_bought_with_the_old_ones(
+    stage,
+) -> None:
+    """A rotated secret that keeps working for an hour is a rotation that did not happen."""
+    clients, public, _, fake, _, _ = stage
+    assert (await _post(public, _activity())).status_code == 200
+    await _drain()
+    assert fake.tokens_issued == 1
+
+    saved = await clients["mohamed"].put(
+        "/api/channels/teams", json={"fields": {"app_password": "the-rotated-secret-8802"}}
+    )
+    assert saved.status_code == 200, saved.text
+
+    assert (
+        await _post(public, _activity("And on Sunday?", activity_id="activity-0002"))
+    ).status_code == 200
+    await _drain()
+    assert fake.tokens_issued == 2
+    assert fake.authorisations[-1] == "Bearer outbound-token-2"
 
 
 async def test_a_refused_credential_names_the_kind_and_confirms_nothing_else(stage) -> None:

@@ -92,7 +92,7 @@ SETUP = Setup(
             placeholder="+431234567",
         ),
     ),
-    verified_live=True,
+    verified_live=False,
 )
 
 # Where the messaging REST API lives. Tests replace `make_client` rather than this,
@@ -142,32 +142,10 @@ async def probe(client: httpx.AsyncClient, credentials: dict[str, str]) -> str:
 def split_text(text: str, limit: int) -> list[str]:
     """One answer as the platform's text-sized pieces, cut between words.
 
-    Never in the middle of a word, and never silently short: a truncated answer reads
-    as a complete one, which is the failure this exists to prevent.
+    The cut itself is `generic.split_on_words`, which every channel of this wave
+    shares; what this module owns is the limit above it.
     """
-    if len(text) <= limit:
-        return [text]
-    pieces: list[str] = []
-    current = ""
-    for word in text.split(" "):
-        remaining = word
-        while len(remaining) > limit:
-            # A single word longer than a whole text. Nothing to cut between, so it is
-            # cut at the limit rather than dropped.
-            if current:
-                pieces.append(current)
-                current = ""
-            pieces.append(remaining[:limit])
-            remaining = remaining[limit:]
-        candidate = f"{current} {remaining}" if current else remaining
-        if len(candidate) > limit:
-            pieces.append(current)
-            current = remaining
-        else:
-            current = candidate
-    if current:
-        pieces.append(current)
-    return pieces
+    return generic.split_on_words(text, limit)
 
 
 async def send_text(

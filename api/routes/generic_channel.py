@@ -187,6 +187,26 @@ def _forget_identity(row: Channel) -> None:
     row.settings_json = settings
 
 
+def _tell_the_module(module: ModuleType, channel_id: int) -> None:
+    """Let a module drop what it cached for this channel, if it caches anything.
+
+    Optional, because most transports hold nothing between requests. One that buys an
+    access token with the credentials declares `credentials_changed` and is told here;
+    a failure in it is logged and swallowed, because a stale cache is a smaller
+    failure than a settings write that would not save.
+    """
+    hook = getattr(module, "credentials_changed", None)
+    if hook is None:
+        return
+    try:
+        hook(channel_id)
+    except Exception:  # a cache is not worth refusing a write over
+        logger.exception(
+            "channel could not be told its credentials changed",
+            extra={"channel_id": channel_id, "kind": module.KIND},
+        )
+
+
 @router.get("/{kind}", response_model=GenericChannelOut, summary="One channel's settings")
 async def read_settings(
     request: Request, kind: str, context: Annotated[WorkspaceContext, require_viewer]
@@ -261,6 +281,10 @@ async def write_settings(
         generic.store_secrets(row, stored_secrets)
         generic.store_shown(row, stored_shown)
         _forget_identity(row)
+        # And anything the module cached on the strength of the old credentials — an
+        # access token bought with the secret that was just replaced would otherwise
+        # keep working until it expired, which is a rotation that did not take effect.
+        _tell_the_module(module, row.id)
         # A credential that is gone takes the channel down with it, rather than
         # leaving a channel switched on that cannot answer anybody.
         if generic.missing_fields(row, setup):

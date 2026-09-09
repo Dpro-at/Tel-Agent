@@ -52,6 +52,10 @@ PREVIEW_MAX = 80
 # and lets an older repeat through, which is a duplicate line and a duplicate answer.
 RECENT_IDS_KEPT = 32
 
+# The name the channel row's own id travels under inside a credential dict. Reserved:
+# a descriptor may not declare a field called this, and nothing is stored under it.
+CHANNEL_ID = "__channel_id__"
+
 
 class ChannelRefused(Exception):
     """The platform rejected the credential, or the caller's proof of identity.
@@ -98,6 +102,12 @@ class ChannelModule(Protocol):
     # that keeps one connection per active channel. A door module instead has
     # `async def receive(db, channel, request) -> Response`.
     #
+    # Optional. `def credentials_changed(channel_id: int) -> None` — what a module is
+    # told after the operator writes this channel's fields, so that anything it cached
+    # on the strength of the old ones is dropped. A module holding an access token owes
+    # this one function; one holding nothing declares nothing.
+    def credentials_changed(self, channel_id: int) -> None: ...
+
     # Either may also have `async def activate(client, credentials, webhook_url) -> None`
     # — what the platform has to be told once the operator switches the channel on.
     # The PUT route calls it after enabling, and a `ChannelRefused` from it leaves the
@@ -237,8 +247,16 @@ def credentials_of(channel: Channel | None) -> dict[str, str]:
     What a transport is handed. The split between the two columns is this module's
     business and not the transport's - a channel asks for `credentials["account"]`
     without caring which half of the row it came out of.
+
+    The row's own id rides along under `CHANNEL_ID`. A transport that caches something
+    the credentials bought - an access token - has to key that cache on the row it was
+    bought for, because two workspaces may configure the same application with
+    different secrets and a token issued for one must never answer for the other.
     """
-    return {**shown_of(channel), **secrets_of(channel)}
+    values = {**shown_of(channel), **secrets_of(channel)}
+    if channel is not None and channel.id is not None:
+        values[CHANNEL_ID] = str(channel.id)
+    return values
 
 
 def store_secrets(channel: Channel, values: dict[str, str]) -> None:
@@ -423,6 +441,40 @@ def preview(text: str) -> str:
     """One line of a customer's words, for a notification with room for one."""
     collapsed = " ".join(text.split())
     return collapsed if len(collapsed) <= PREVIEW_MAX else collapsed[: PREVIEW_MAX - 1] + "…"
+
+
+def split_on_words(text: str, limit: int) -> list[str]:
+    """One answer as pieces no longer than `limit`, cut between words.
+
+    Every platform has a message length and every transport needs the same cut, so the
+    cut is written once here and each module's `split_text` is a line handing this its
+    own `MESSAGE_MAX`. Never in the middle of a word, and never silently short: a
+    truncated answer reads as a complete one, which is the failure this exists to
+    prevent. Rejoining the pieces with a single space returns the original text.
+    """
+    if len(text) <= limit:
+        return [text]
+    pieces: list[str] = []
+    current = ""
+    for word in text.split(" "):
+        remaining = word
+        while len(remaining) > limit:
+            # A single word longer than a whole message. Nothing to cut between, so it
+            # is cut at the limit rather than dropped.
+            if current:
+                pieces.append(current)
+                current = ""
+            pieces.append(remaining[:limit])
+            remaining = remaining[limit:]
+        candidate = f"{current} {remaining}" if current else remaining
+        if len(candidate) > limit:
+            pieces.append(current)
+            current = remaining
+        else:
+            current = candidate
+    if current:
+        pieces.append(current)
+    return pieces
 
 
 def has_credentials(module: ModuleType, credentials: dict[str, str]) -> bool:

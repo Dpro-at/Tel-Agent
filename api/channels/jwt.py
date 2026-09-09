@@ -10,7 +10,9 @@ accepts anybody's valid token.
 `cryptography` does the signature; no JWT library is added (D-044). The key set is
 fetched once per address and kept for a day, because a platform that publishes keys
 expects them to be cached and a fetch per callback would put a network round trip on
-the door.
+the door. A day of cache is only safe because a token naming a key the cache does not
+hold buys one refetch — otherwise a signing key rotated early would shut the door for
+up to a day, with every genuine delivery refused for the whole of it.
 """
 
 from __future__ import annotations
@@ -33,15 +35,26 @@ from api.channels.generic import ChannelRefused
 # weeks and publish the new one before they use it, so a day is cache, not staleness.
 JWKS_SECONDS = 24 * 60 * 60
 
+# The shortest gap between two *unscheduled* fetches of one key set. A token naming a
+# key we have never seen is what a rotation looks like from here, so it is worth one
+# fetch — but it is also what a stranger's forged header looks like, and a door that
+# fetched on every one of those would let anybody aim this installation at the issuer.
+# One a minute is fast enough for a rotation and useless as a hammer.
+JWKS_REFETCH_SECONDS = 60
+
 # Room for the clock on the platform's side to differ from this machine's.
 CLOCK_SKEW_SECONDS = 60
 
 _JWKS_CACHE: dict[str, tuple[float, dict[str, rsa.RSAPublicKey]]] = {}
 
+# When each address was last refetched out of turn, for the rate limit above.
+_JWKS_REFETCHED: dict[str, float] = {}
+
 
 def reset_jwks_cache() -> None:
     """For tests, and for an operator who has just been told a key rotated early."""
     _JWKS_CACHE.clear()
+    _JWKS_REFETCHED.clear()
 
 
 def _b64url_decode(value: str) -> bytes:
@@ -65,10 +78,39 @@ def _public_key(jwk: dict[str, Any]) -> rsa.RSAPublicKey | None:
 
 
 async def _key_set(jwks_url: str, client: httpx.AsyncClient) -> dict[str, rsa.RSAPublicKey]:
+    """The published keys for one address, from the cache when it is still warm."""
     cached = _JWKS_CACHE.get(jwks_url)
     if cached is not None and cached[0] > time.monotonic():
         return cached[1]
+    return await _fetch_key_set(jwks_url, client)
 
+
+async def _refetched_key_set(
+    jwks_url: str, client: httpx.AsyncClient, known: dict[str, rsa.RSAPublicKey]
+) -> dict[str, rsa.RSAPublicKey]:
+    """One extra fetch, because a token names a key this address has not published yet.
+
+    A signing key that rotates early would otherwise deafen the door until the day's
+    cache expired: every real delivery would arrive signed by a key we refuse to look
+    up. So an unknown `kid` buys a refetch — at most one per `JWKS_REFETCH_SECONDS`
+    per address, so that a stranger sending forged headers cannot turn this door into
+    a hammer aimed at the issuer. A refetch that fails leaves the keys we already have,
+    and the token is judged against those.
+    """
+    now = time.monotonic()
+    last = _JWKS_REFETCHED.get(jwks_url)
+    if last is not None and now - last < JWKS_REFETCH_SECONDS:
+        return known
+    _JWKS_REFETCHED[jwks_url] = now
+    try:
+        return await _fetch_key_set(jwks_url, client)
+    except ChannelRefused:
+        return known
+
+
+async def _fetch_key_set(
+    jwks_url: str, client: httpx.AsyncClient
+) -> dict[str, rsa.RSAPublicKey]:
     try:
         response = await client.get(jwks_url)
     except httpx.HTTPError as error:
@@ -131,6 +173,10 @@ async def verify_rs256(
 
     keys = await _key_set(jwks_url, client)
     kid = str(header.get("kid") or "")
+    if kid not in keys:
+        # Either the issuer rotated, or this is a stranger. One refetch tells us which,
+        # and the rate limit inside is what keeps the second case cheap.
+        keys = await _refetched_key_set(jwks_url, client, keys)
     candidates = [keys[kid]] if kid in keys else list(keys.values())
 
     for key in candidates:

@@ -28,6 +28,11 @@ address is ever stated. It is kept with the thread at ingest, and `reply_target`
 the conversation's activities address out of it, so the agent's reply and a person's
 takeover reply travel by exactly the same route.
 
+**And that address is checked against the token before it is kept.** The body is not
+signed; only the token is. An unchecked `serviceUrl` is therefore a stranger's choice
+of where this bot posts its own access token, so the token's `serviceurl` claim and the
+activity's field must be the same `https` address or the delivery is refused.
+
 **Outbound needs a token of our own**, from the login endpoint, under the application's
 own credentials. It lasts an hour, so it is cached until shortly before it expires: one
 fetched per message would be one extra round trip on every answer.
@@ -42,7 +47,7 @@ import sys
 import time
 from types import ModuleType
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import httpx
 from fastapi import Request, Response
@@ -100,7 +105,7 @@ SETUP = Setup(
             placeholder="00000000-0000-0000-0000-000000000000",
         ),
     ),
-    verified_live=True,
+    verified_live=False,
 )
 
 # Where the connector publishes what it signs with, and who it says it is.
@@ -124,6 +129,17 @@ MESSAGE_MAX = 4000
 AUTHORIZATION_HEADER = "Authorization"
 BEARER = "bearer"
 
+# What the connector puts in front of an application id to make a bot's own id.
+BOT_PREFIX = "28:"
+
+# The one conversation type that is a private chat between one person and the bot.
+# Anything else — a team channel, a group chat, a meeting — carries other people.
+PERSONAL = "personal"
+
+# The claim the connector states the conversation's regional address in. The activity
+# body is not signed, so this is the only statement of that address anybody has proved.
+SERVICE_URL_CLAIM = "serviceurl"
+
 # `<at>Name</at>` around the bot's own name, which the connector puts in the text and
 # describes again in `entities`. It is markup addressed to the platform, not words
 # addressed to us, so it never reaches the model.
@@ -136,10 +152,24 @@ _METADATA: dict[str, tuple[float, str]] = {}
 _TOKENS: dict[str, tuple[float, str]] = {}
 
 
-def reset_token_cache() -> None:
-    """For tests, and for an operator who has just rotated the client secret."""
-    _METADATA.clear()
-    _TOKENS.clear()
+def reset_token_cache(channel_id: int | None = None) -> None:
+    """Drop the token held for one channel — or, with no channel named, everything.
+
+    Called when an operator writes this channel's credentials: a token bought with the
+    secret that was just replaced would otherwise keep working for the rest of its
+    hour, which is a rotation that did not take effect. The metadata document is the
+    platform's and not the channel's, so it only goes when everything does.
+    """
+    if channel_id is None:
+        _METADATA.clear()
+        _TOKENS.clear()
+        return
+    _TOKENS.pop(str(channel_id), None)
+
+
+def credentials_changed(channel_id: int) -> None:
+    """The generic write route's hook: this channel's credentials were just rewritten."""
+    reset_token_cache(channel_id)
 
 
 def make_client() -> httpx.AsyncClient:
@@ -198,15 +228,20 @@ async def _jwks_url(client: httpx.AsyncClient) -> str:
 
 
 async def _access_token(client: httpx.AsyncClient, credentials: dict[str, str]) -> str:
-    """A token for calling the connector, cached per registration until it nearly expires."""
+    """A token for calling the connector, cached per channel until it nearly expires."""
     app_id = str(credentials.get("app_id") or "")
     password = str(credentials.get("app_password") or "")
     directory = _directory(credentials)
     if not app_id or not password:
         raise ChannelRefused("this channel has no application credentials")
 
-    # The registration *and* the directory, because changing either is a different token.
-    held = _TOKENS.get(f"{directory}/{app_id}")
+    # The channel row, not the registration: two workspaces may configure the same
+    # application with different secrets, and a token bought by one must never answer
+    # for the other. `generic.credentials_of` carries the row's id for exactly this.
+    # Without one — a caller assembling a credential dict by hand — nothing is cached,
+    # which costs a round trip and confuses nothing.
+    holder = str(credentials.get(generic.CHANNEL_ID) or "")
+    held = _TOKENS.get(holder) if holder else None
     if held is not None and held[0] > time.monotonic():
         return held[1]
 
@@ -231,10 +266,11 @@ async def _access_token(client: httpx.AsyncClient, credentials: dict[str, str]) 
         raise ChannelRefused("the login endpoint issued no token")
     lifetime = body.get("expires_in")
     seconds = float(lifetime) if isinstance(lifetime, int | float) else 0.0
-    _TOKENS[f"{directory}/{app_id}"] = (
-        time.monotonic() + max(seconds - TOKEN_EARLY_SECONDS, 0.0),
-        token,
-    )
+    if holder:
+        _TOKENS[holder] = (
+            time.monotonic() + max(seconds - TOKEN_EARLY_SECONDS, 0.0),
+            token,
+        )
     return token
 
 
@@ -256,32 +292,10 @@ async def probe(client: httpx.AsyncClient, credentials: dict[str, str]) -> str:
 def split_text(text: str, limit: int) -> list[str]:
     """One answer as the platform's message-sized pieces, cut between words.
 
-    Never in the middle of a word, and never silently short: a truncated answer reads as
-    a complete one, which is the failure this exists to prevent.
+    The cut itself is `generic.split_on_words`, which every channel of this wave
+    shares; what this module owns is the limit above it.
     """
-    if len(text) <= limit:
-        return [text]
-    pieces: list[str] = []
-    current = ""
-    for word in text.split(" "):
-        remaining = word
-        while len(remaining) > limit:
-            # A single word longer than a whole message. Nothing to cut between, so it
-            # is cut at the limit rather than dropped.
-            if current:
-                pieces.append(current)
-                current = ""
-            pieces.append(remaining[:limit])
-            remaining = remaining[limit:]
-        candidate = f"{current} {remaining}" if current else remaining
-        if len(candidate) > limit:
-            pieces.append(current)
-            current = remaining
-        else:
-            current = candidate
-    if current:
-        pieces.append(current)
-    return pieces
+    return generic.split_on_words(text, limit)
 
 
 async def send_text(
@@ -311,6 +325,23 @@ def _without_mention(text: str) -> str:
     return " ".join(_MENTION_TAG.sub(" ", text).split())
 
 
+def _is_us(candidate: str, identity: str, bot_id: str) -> bool:
+    """Whether one platform id is this installation's own bot.
+
+    Exact, both ways round. A bot's id is the application id behind the connector's
+    `28:` prefix, so both shapes are accepted — but only whole: `identity in candidate`
+    would call `28:<our id>-something-else` us, and an id is not a substring match.
+    """
+    if not candidate:
+        return False
+    if bot_id and candidate == bot_id:
+        return True
+    if not identity:
+        return False
+    bare = candidate[len(BOT_PREFIX) :] if candidate.startswith(BOT_PREFIX) else candidate
+    return bare == identity
+
+
 def _addressed(event: dict[str, Any], identity: str, bot_id: str) -> bool:
     """Whether this message names the bot, per the mentions the platform describes.
 
@@ -323,9 +354,23 @@ def _addressed(event: dict[str, Any], identity: str, bot_id: str) -> bool:
             continue
         mentioned = entity.get("mentioned")
         named = str(mentioned.get("id") or "") if isinstance(mentioned, dict) else ""
-        if named and (named == bot_id or (identity and identity in named)):
+        if _is_us(named, identity, bot_id):
             return True
     return False
+
+
+def _is_group(conversation: dict[str, Any]) -> bool:
+    """Whether this conversation carries other people's talk as well as ours.
+
+    `isGroup` is the plain statement of it, and a conversation that states a type of
+    anything but `personal` — a team channel, a group chat, a meeting — is one too.
+    Reading only `isGroup` answers a whole team channel as though it were a private
+    chat, which is the mention rule not applying where it matters most.
+    """
+    if bool(conversation.get("isGroup")):
+        return True
+    stated = str(conversation.get("conversationType") or "").strip().lower()
+    return bool(stated) and stated != PERSONAL
 
 
 def message_text(event: dict[str, Any], identity: str) -> str | None:
@@ -347,11 +392,11 @@ def message_text(event: dict[str, Any], identity: str) -> str | None:
     # The recipient of an inbound activity is the bot, so this is where it learns its
     # own id — the credential half of it is never read on the inbound path (§B9).
     bot_id = str((event.get("recipient") or {}).get("id") or "")
-    if sender_id == bot_id or (identity and identity in sender_id):
+    if _is_us(sender_id, identity, bot_id):
         return None
 
     conversation = event.get("conversation") or {}
-    if bool(conversation.get("isGroup")) and not _addressed(event, identity, bot_id):
+    if _is_group(conversation) and not _addressed(event, identity, bot_id):
         return None
 
     return _without_mention(str(event.get("text") or "")) or None
@@ -409,7 +454,10 @@ async def ingest(db: DbSession, channel: Channel, event: dict[str, Any]) -> int 
         return None
 
     conversation_id = str((event.get("conversation") or {}).get("id") or "")
-    service_url = str(event.get("serviceUrl") or "").strip()
+    # Normalised here rather than as it arrives, so what is kept beside the thread is
+    # one spelling of the address and never `http`. `receive` has already checked it
+    # against the token; this is what makes `reply_target` unable to build anything else.
+    service_url = _same_address(str(event.get("serviceUrl") or ""))
     if not conversation_id or not service_url:
         return None
     sender_id = str((event.get("from") or {}).get("id") or "")
@@ -474,6 +522,35 @@ def _bearer_token(request: Request) -> str:
     return token.strip()
 
 
+def _same_address(stated: str) -> str | None:
+    """One service address in a form two spellings of it compare equal in.
+
+    Scheme and host are case-insensitive and a trailing slash means nothing, so all
+    three are flattened before the comparison. Anything that is not `https` is not an
+    address this channel will hand a bearer token to, and comes back as `None`.
+    """
+    parsed = urlsplit(stated.strip())
+    if parsed.scheme.lower() != "https" or not parsed.netloc:
+        return None
+    return f"https://{parsed.netloc.lower()}{parsed.path.rstrip('/')}"
+
+
+def _check_service_url(activity: dict[str, Any], claims: dict[str, Any]) -> None:
+    """The address the answer will be posted to has to be one the connector signed.
+
+    **The activity body is not signed — the token is.** So a stranger holding any valid
+    connector token could otherwise state a `serviceUrl` of their own, and `send_text`
+    would post this bot's access token to it. The token states the address it was issued
+    for in its own claims, and the two have to be the same address; a token that states
+    none proves nothing about where the answer goes, and is refused.
+    """
+    signed = _same_address(str(claims.get(SERVICE_URL_CLAIM) or ""))
+    if signed is None:
+        raise ChannelRefused("the token names no service address")
+    if _same_address(str(activity.get("serviceUrl") or "")) != signed:
+        raise ChannelRefused("the activity names a service address the token did not")
+
+
 async def receive(db: DbSession, channel: Channel, request: Request) -> Response:
     """One activity: verify, store, acknowledge, answer afterwards.
 
@@ -490,7 +567,7 @@ async def receive(db: DbSession, channel: Channel, request: Request) -> Response
 
     token = _bearer_token(request)
     async with make_client() as client:
-        await jwt.verify_rs256(
+        claims = await jwt.verify_rs256(
             token,
             jwks_url=await _jwks_url(client),
             issuer=ISSUER,
@@ -505,6 +582,8 @@ async def receive(db: DbSession, channel: Channel, request: Request) -> Response
         raise ChannelRefused("the body is not JSON") from error
     if not isinstance(activity, dict):
         raise ChannelRefused("the body is not an activity")
+
+    _check_service_url(activity, claims)
 
     channel_id = channel.id
     needs_reply = await ingest(db, channel, activity)

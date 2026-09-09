@@ -216,16 +216,6 @@ def test_a_delivery_without_words_is_not_a_conversation() -> None:
     assert transport.message_text(_delivery(sender=""), OUR_NUMBER) is None
 
 
-def test_a_long_answer_is_split_on_word_boundaries_and_nothing_is_lost() -> None:
-    words = " ".join(f"word{index}" for index in range(400))
-    assert len(words) > transport.MESSAGE_MAX
-
-    pieces = transport.split_text(words, transport.MESSAGE_MAX)
-    assert len(pieces) > 1
-    assert all(len(piece) <= transport.MESSAGE_MAX for piece in pieces)
-    assert " ".join(pieces) == words
-
-
 # --- The door -------------------------------------------------------------------
 
 
@@ -421,7 +411,7 @@ async def test_the_card_declares_its_fields_and_its_public_address(stage) -> Non
         "from_number",
     ]
     assert [field["secret"] for field in body["setup"]["fields"]] == [False, True, False]
-    assert body["verified_live"] is True
+    assert body["verified_live"] is False
     assert body["webhook_url"] == PUBLIC_URL
     assert body["values"] == {"account_sid": ACCOUNT_SID, "from_number": OUR_NUMBER}
 

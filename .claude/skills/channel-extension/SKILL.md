@@ -64,6 +64,13 @@ async def respond(sessionmaker, channel_id: int, message_id: int) -> None: ...
 def schedule_reply(sessionmaker, channel_id: int, message_id: int) -> None: ...
 
 # optional
+def credentials_changed(channel_id: int) -> None: ...
+    # What the module is told after the operator writes this channel's fields, so it can
+    # drop anything it cached on the strength of the old ones — an access token bought
+    # with a secret that has just been replaced would otherwise keep working until it
+    # expired, which is a rotation that did not take effect. A module that caches nothing
+    # declares nothing; `api/routes/generic_channel.py` calls it only when it is there.
+
 def reply_target(conversation) -> str | None: ...
     # The address `send_text` needs for this thread, when it is not the conversation's
     # own `external_id` — a room id, a thread key, a mailbox. Declare nothing and
@@ -88,8 +95,9 @@ than a signature check; per-channel state that every message needs lives in
 
 `api/channels/generic.py` holds the half of a transport that is the same on every
 channel. A declarative channel writes the platform-specific half only: its descriptor,
-its signature check, `probe`, `send_text`, `split_text`, `message_text`, `ingest`, and
-its `receive` or `loop`. Everything below is already written.
+its signature check, `probe`, `send_text`, `message_text`, `ingest`, and its `receive`
+or `loop`. `split_text` is a line delegating to `split_on_words` below. Everything below
+is already written.
 
 | Helper | What it does |
 |---|---|
@@ -101,6 +109,7 @@ its `receive` or `loop`. Everything below is already written.
 | `announce(db, channel, conversation, message, started)` | The `conversation.started` and `message.received` hooks. |
 | `preview(text)` | One line of a customer's words, for a notification. |
 | `reply_target_of(module, conversation)` | Where a reply goes: the module's `reply_target`, else `external_id`. |
+| `split_on_words(text, limit)` | The cut every channel shares: pieces no longer than `limit`, never inside a word, never silently short, and a single word longer than the limit cut rather than dropped. A module's `split_text` is one line handing this its own `MESSAGE_MAX`. |
 | `deliver(module, client, credentials, target, text)` | One answer out, cut into the platform's messages through the module's `split_text`. |
 | `schedule_reply(sessionmaker, module, channel_id, message_id)` | The answer as its own task, held so it cannot be collected mid-reply. |
 | `respond(sessionmaker, module, channel_id, message_id)` | The whole answer path: its own session, takeover read before generating **and again before sending**, delivery before storage, health timing. |
