@@ -106,6 +106,12 @@ EVENTS = (
     # credentials, and each switch decides who reaches the agent.
     "discord_channel_changed",
     "slack_channel_changed",
+    # Every channel that declares a setup descriptor rather than a card of its own
+    # (D-044), which is all of them from the second wave onwards. One event with the
+    # kind in `details` rather than one name per kind: the fact being recorded is the
+    # same fact, and a list that grows with the channel count is a list that goes
+    # stale. Field *names* are recorded, never their values.
+    "channel_changed",
     # Machine tokens — §B9.1. Each one is a credential that opens a path the
     # dashboard session cannot, so minting, rotating and removing one all need a
     # name attached afterwards. The token itself never appears in `details`.

@@ -234,8 +234,9 @@ HTTP tool**. n8n and Home Assistant do that job better than we would.
 A **channel** is where the conversation happens: the person is on the other end of it,
 speaking or typing. An **integration** is a system the agent acts *on* during that
 conversation. Tel-Agent owns channels and reaches integrations through the HTTP tool.
-Ten channels are in scope and the list is closed (§B13). Integrations are unbounded by
-nature, which is why they are somebody else's product.
+Twenty-four channels are in scope, and the official list is decided rather than open
+(§B13). Integrations are unbounded by nature, which is why they are somebody else's
+product.
 
 ## Users
 
@@ -1068,9 +1069,16 @@ specification.*
 
 ## B13. Messaging channels — Milestone 3
 
-Nine channels alongside the phone: **web chat · SMS · email · WhatsApp · Telegram ·
-Messenger · Instagram · Discord · Slack**. The same agent, the same tools, the same transcript
-archive; a different transport.
+**web chat · SMS · email · WhatsApp · Telegram · Messenger · Instagram · Discord ·
+Slack · Microsoft Teams · Signal · Viber · Google Chat · Mattermost · Matrix · IRC ·
+LINE · WeChat Official Account · WeCom · QQ Bot · DingTalk · Feishu/Lark · iMessage**,
+alongside the phone. The same agent, the same tools, the same transcript archive; a
+different transport.
+
+Eight were built in Milestone 3; the rest arrived together with the setup descriptor
+that made them cheap (D-044) - fourteen new kinds plus SMS, which was promised but
+never built - because fifteen hand-written settings cards would have been fifteen times
+the same file.
 
 **Three of them need no platform at all**, and they come first:
 
@@ -1080,20 +1088,37 @@ archive; a different transport.
 | **SMS** | Nothing new — it arrives with the telephony account the phone number already uses. |
 | **Email** | An IMAP/SMTP mailbox the customer already owns. |
 
-The remaining six each require an application in the customer's own developer account
-on that platform, and several require review before they can message the public.
-That review is the slow part, not the code.
+Every other channel requires an application in the customer's own developer account on
+that platform, and several require review before they can message the public. That
+review is the slow part, not the code.
 
-**The line that keeps the list closed:** a channel is a route a **customer** uses to
-reach a business. It is not a system the business itself runs on — Teams and project
-trackers are integrations, reached through the HTTP tool. Slack sits on the channel
-side of that line for one case and not the other: an outside customer in a shared
-channel with a supplier is a route in, an internal workspace is not. Without that
-line, "add one more connector" has no end, which is the failure §Rule 5 exists to
-prevent.
+**The line that keeps the list finite:** a channel is a route a **customer** uses to
+reach a business. It is not a system the business itself runs on — a project tracker is
+an integration, reached through the HTTP tool. A workplace messenger sits on the
+channel side of that line for one case and not the other: an outside customer in a
+shared channel with a supplier is a route in, an internal workspace is not, and the
+card says so. Without that line, "add one more connector" has no end, which is the
+failure §Rule 5 exists to prevent.
 
-**The list is closed.** Ten channels total including the phone. Adding an eleventh is
-a decision to reopen this section, not a pull request.
+**Each channel is a descriptor, not a screen — D-044.** A channel declares its
+credential fields once, beside its transport, in a `Setup` object; one generic route
+family serves that declaration under §B9's write-only rules and one generic card draws
+it. Eight hand-written cards were fine for eight channels; they stay as they are, and
+nothing after them is written twice.
+
+**The list is decided, not open — D-044.** Twenty-four official channels including the
+phone: supported, tested, shipped in the release. A channel is an extension (D-032), so
+nothing stops a community extension from adding a twenty-fifth; what the word
+*official* means is a commitment from this project, and that commitment is made here
+rather than in a pull request.
+
+Three of the twenty-four carry a note that belongs on the card rather than in a
+changelog. Teams is a channel under the same test Slack passes — an outside customer
+reaching a business is a route in, an internal workspace is not. WeChat is the Official
+Account API and never a personal account: driving a personal login by automation breaks
+the platform's terms and closes the customer's account. And the platforms that cannot
+be exercised end to end from here ship marked **built against the published API, not
+yet verified with a live account**, on the card, until a real message has gone through.
 
 ### The customer connects their own app
 
@@ -1137,6 +1162,8 @@ Decided by how much interface the platform provides, not by preference:
 | Channel | Interface offered | State needed |
 |---|---|---|
 | Discord | Native modal — a real form | None. One submission arrives complete |
+| SMS | Plain text, 1600 characters, nothing else | Full step machine — the phone's problem without the latency |
+| Microsoft Teams | Rich cards and adaptive forms | Light |
 | Telegram | Inline keyboards, Mini Apps | Light |
 | WhatsApp / Messenger / Instagram | Buttons and list menus | Full step machine |
 | **Phone** | **Nothing at all** | **Full step machine, plus interruption** |

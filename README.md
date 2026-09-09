@@ -6,7 +6,7 @@
 
 **Connect any phone line to any AI model. Self-hosted, bring your own keys.**
 
-<!-- Eleven marks, ten channels: call and landline are two drawings of the one phone
+<!-- Twelve marks, eleven channels: call and landline are two drawings of the one phone
      channel. This row is about recognition, not arithmetic. -->
 <p>
   <img src="docs/brand/channels/call.svg" alt="Call" title="Call" height="26">
@@ -30,6 +30,8 @@
   <img src="docs/brand/channels/discord.svg" alt="Discord" title="Discord" height="26">
   &nbsp;&nbsp;
   <img src="docs/brand/channels/slack.png" alt="Slack" title="Slack" height="26">
+  &nbsp;&nbsp;
+  <img src="docs/brand/channels/teams.svg" alt="Microsoft Teams" title="Microsoft Teams" height="26">
 </p>
 
 <p>Connect them over MCP — and get full control.</p>

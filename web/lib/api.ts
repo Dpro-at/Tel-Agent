@@ -1412,6 +1412,65 @@ export function testSlackChannel(): Promise<{
   return api("/api/channels/slack/test", { method: "POST" });
 }
 
+// --- Every channel that declares a setup descriptor -------------------------------
+//
+// One contract for the channels of D-044's wave. The card is drawn from `setup`,
+// which is metadata only: a secret is never in it, and never in `values` either -
+// stored secrets appear in `previews`, masked, or as null when none is saved.
+
+export type ChannelField = {
+  name: string;
+  label: string;
+  secret: boolean;
+  required: boolean;
+  help: string;
+  placeholder: string;
+  /** A credential the platform hands over as a file rather than as a line. */
+  multiline: boolean;
+};
+
+export type ChannelSetup = {
+  kind: string;
+  title: string;
+  note: string;
+  guide_url: string;
+  verified_live: boolean;
+  fields: ChannelField[];
+};
+
+export type GenericChannel = {
+  setup: ChannelSetup;
+  enabled: boolean;
+  status: string;
+  /** The shown fields, as stored. Secrets are never here. */
+  values: Record<string, string>;
+  previews: Record<string, string | null>;
+  /** What the last connection test said this account is called. */
+  identity: string | null;
+  /** Where the platform must call, for a channel that receives webhooks. */
+  webhook_url: string | null;
+  verified_live: boolean;
+};
+
+export function genericChannel(kind: string): Promise<GenericChannel> {
+  return api<GenericChannel>(`/api/channels/${kind}`);
+}
+
+/** Write-only per field: "" removes one, a mask echo is ignored, anything else stores. */
+export function saveGenericChannel(
+  kind: string,
+  fields: Partial<{ enabled: boolean; fields: Record<string, string> }>,
+): Promise<GenericChannel> {
+  return api<GenericChannel>(`/api/channels/${kind}`, { method: "PUT", json: fields });
+}
+
+/** §A6.8's "Test connection": asks the platform who these credentials are. */
+export function testGenericChannel(
+  kind: string,
+): Promise<{ ok: boolean; identity: string | null }> {
+  return api(`/api/channels/${kind}/test`, { method: "POST" });
+}
+
 // --- Routing rules ------------------------------------------------------------
 
 export type RuleAction = "pass" | "block" | "ai";

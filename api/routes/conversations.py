@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
+from api.channels import generic
 from api.conversations import (
     PAGE,
     conversations_for,
@@ -614,6 +615,45 @@ async def reply_as_business(
     # that did — the web channel is the other way round only because its widget polls
     # the store, so there storing *is* delivering.
     channel = await db.scalar(select(Channel).where(Channel.id == row.channel_id))
+
+    # Every channel that declares itself (D-044) is delivered through one branch, and
+    # it comes first so that the eight hand-written ones below stay exactly as they
+    # are. A kind is on that registry or it is not; there is nothing per-channel to
+    # write here, which is the whole point of the declarative contract.
+    declared = generic.module_for(channel.kind) if channel is not None else None
+    if declared is not None:
+        import httpx
+
+        credentials = generic.credentials_of(channel)
+        target = generic.reply_target_of(declared, row)
+        if not credentials or not target:
+            return envelope_response(
+                status_code=status.HTTP_409_CONFLICT,
+                code="missing_credentials",
+                message="This conversation's channel has no complete credentials "
+                "saved, or the customer has not written from anywhere yet.",
+            )
+        try:
+            async with declared.make_client() as client:
+                await generic.deliver(declared, client, credentials, target, text)
+        except (generic.ChannelRefused, httpx.HTTPError) as error:
+            logger.warning(
+                "channel reply not delivered",
+                # The type only: `str()` of an httpx error carries the request URL,
+                # and several platforms of this wave put a token in one.
+                extra={
+                    "conversation_id": row.id,
+                    "kind": channel.kind,
+                    "error": type(error).__name__,
+                },
+            )
+            return envelope_response(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                code="not_delivered",
+                message="The platform did not accept the message, so nothing was "
+                "written. Check the channel's credentials and try again.",
+            )
+
     if channel is not None and channel.kind == "telegram":
         import httpx
 

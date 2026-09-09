@@ -113,6 +113,18 @@ class Settings(BaseSettings):
     bind_host: str = "127.0.0.1"
     bind_port: int = Field(default=38472, ge=1, le=65535)
 
+    # The address this installation is reached at from outside, scheme and host —
+    # `https://desk.example.com`. Unset on a machine reached directly, which is the
+    # common case, and the request's own address is used instead.
+    #
+    # It exists because two places have to agree on one string and neither can see it:
+    # the settings card prints a channel's public webhook address, and a door verifies
+    # a signature computed over the address the platform called. Behind a reverse
+    # proxy the application server sees `http` and its own host, so the card would
+    # print one address while the door checked another, and every delivery would be
+    # refused. Set this and both derive from it. See `api/channels/generic.py`.
+    public_base_url: str | None = None
+
     # Mail. Most installations have none, and that is a designed state rather than a
     # broken one: the `forgot` screen says so and points at a command on the machine.
     # `smtp_host` being unset is what puts the API into that answer.

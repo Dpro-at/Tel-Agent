@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { ChannelCard } from "@/components/channels/generic-card";
 import { LiveSettings, type FieldCopy } from "@/components/settings/live-settings";
 import { Sidebar } from "@/components/shell/sidebar";
 import { StatePreview, type ScreenState } from "@/components/state-preview";
@@ -1879,9 +1880,20 @@ function ChannelsPanels({ t }: { t: SettingsDictionary }) {
       />
       <DiscordCard t={t} />
       <SlackCard t={t} />
+      {GENERIC_CHANNELS.map((kind) => (
+        <ChannelCard key={kind} kind={kind} t={t} />
+      ))}
     </div>
   );
 }
+
+/**
+ * The channels whose card is drawn from their own setup descriptor (D-044), in the
+ * order they appear on the screen. The eight cards above keep their hand-written
+ * contracts; every channel after them is one line here and one descriptor on the
+ * backend.
+ */
+export const GENERIC_CHANNELS: string[] = ["sms", "teams"];
 
 /**
  * The Discord card — the Telegram card's contract: one bot token from the

@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.channels import discord as discord_transport
 from api.channels import email as email_transport
+from api.channels import generic as generic_channels
 from api.channels import slack as slack_transport
 from api.channels import telegram as telegram_transport
 from api.config import Settings, get_settings
@@ -55,6 +56,7 @@ from api.routes import contacts as contact_routes
 from api.routes import conversations as conversation_routes
 from api.routes import discord_channel as discord_channel_routes
 from api.routes import email_channel as email_channel_routes
+from api.routes import generic_channel as generic_channel_routes
 from api.routes import home as home_routes
 from api.routes import invites as invite_routes
 from api.routes import knowledge as knowledge_routes
@@ -62,6 +64,7 @@ from api.routes import mcp as mcp_routes
 from api.routes import meta_chat_channels as meta_chat_routes
 from api.routes import notifications as notification_routes
 from api.routes import numbers as number_routes
+from api.routes import public_channel as public_channel_routes
 from api.routes import public_chat as public_chat_routes
 from api.routes import recovery as recovery_routes
 from api.routes import rules as rule_routes
@@ -258,6 +261,15 @@ TAGS_METADATA = [
         ),
     },
     {
+        "name": "channels",
+        "description": (
+            "One settings card for every channel that declares a setup descriptor "
+            "(D-044), keyed by kind. The eight channels above keep their own routes; "
+            "everything after them is served from here, under the same write-only "
+            "credential rules — a secret goes in and only a masked preview comes back."
+        ),
+    },
+    {
         "name": "webhooks",
         "description": (
             "Where this installation posts what happened, and the secret that signs it. "
@@ -407,6 +419,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         background.append(asyncio.create_task(email_transport.loop(app.state.sessionmaker)))
         background.append(asyncio.create_task(discord_transport.loop(app.state.sessionmaker)))
         background.append(asyncio.create_task(slack_transport.loop(app.state.sessionmaker)))
+        # The declarative channels say for themselves whether they have a loop to run:
+        # a dial-out module has one, a door module is served by the public route and
+        # has nothing to start. One line here covers every channel of D-044's wave.
+        for module in generic_channels.dial_out_modules():
+            background.append(asyncio.create_task(module.loop(app.state.sessionmaker)))
 
     try:
         yield
@@ -564,6 +581,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(meta_chat_routes.instagram_card)
     app.include_router(discord_channel_routes.router)
     app.include_router(slack_channel_routes.router)
+    # Last of the channel routers on purpose: `/api/channels/{kind}` would otherwise
+    # shadow the eight hand-written cards above, which keep their own contracts.
+    app.include_router(generic_channel_routes.router)
+    app.include_router(public_channel_routes.router)
 
     @app.get(
         "/health",

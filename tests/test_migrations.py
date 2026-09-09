@@ -17,6 +17,10 @@ import re
 from pathlib import Path
 
 import pytest
+from sqlalchemy import inspect, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.models import CHANNEL_KINDS, Channel, Workspace
 
 VERSIONS = Path(__file__).resolve().parent.parent / "alembic" / "versions"
 
@@ -26,6 +30,11 @@ BOOLEAN_INTEGER_DEFAULT = re.compile(
     r"""sa\.Boolean\(\)\s*,\s*server_default\s*=\s*sa\.text\(\s*["']\s*[01]\s*["']\s*\)""",
     re.VERBOSE,
 )
+
+# The kinds this wave added that are longer than the nine characters the column was
+# created with. They are the reason the migration alters the column and not only the
+# constraint.
+_LONG_KINDS = ("google_chat", "mattermost")
 
 
 def _migrations() -> list[Path]:
@@ -104,3 +113,45 @@ def test_a_batch_alter_of_messages_puts_the_search_triggers_back(path: Path) -> 
         "that drops the search triggers and leaves the index frozen. Drop them before "
         "the batch, recreate them after, and rebuild — see afa4aef2e4c9."
     )
+
+
+# --- What the migrated schema has to accept ----------------------------------------
+
+
+async def test_a_channel_of_a_long_named_kind_can_actually_be_written(
+    migrated: AsyncSession,
+) -> None:
+    """The CHECK constraint is only half of what `kind` is.
+
+    `enum_column` renders a non-native enum, which is a VARCHAR sized to the longest
+    value it was created with - nine, from `instagram`. PostgreSQL enforces that width,
+    so widening the constraint alone leaves `google_chat` (eleven) and `mattermost`
+    (ten) rejected by the column itself. SQLite does not enforce it, which is exactly
+    why the width is asserted here as well as the insert: it is the half of this that
+    a developer's machine cannot fail on its own.
+    """
+    workspace = Workspace(name="Wagner & Partner")
+    migrated.add(workspace)
+    await migrated.flush()
+
+    for kind in ("google_chat", "mattermost"):
+        migrated.add(
+            Channel(workspace_id=workspace.id, kind=kind, name=kind, status="disabled")
+        )
+    await migrated.commit()
+
+    stored = sorted(
+        await migrated.scalars(select(Channel.kind).where(Channel.kind.in_(_LONG_KINDS)))
+    )
+    assert stored == sorted(_LONG_KINDS)
+
+
+async def test_the_kind_column_is_wide_enough_for_every_kind(migrated: AsyncSession) -> None:
+    def read(connection: object) -> int | None:
+        columns = inspect(connection).get_columns("channels")
+        kind = next(column for column in columns if column["name"] == "kind")
+        return getattr(kind["type"], "length", None)
+
+    width = await migrated.run_sync(lambda session: read(session.connection()))
+    assert width is not None, "the kind column has no declared width to check"
+    assert width >= max(len(kind) for kind in CHANNEL_KINDS)

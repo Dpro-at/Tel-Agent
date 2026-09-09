@@ -24,6 +24,7 @@ noted below — swap the hard-coded fill for `currentColor`.
 | `ntfy` | ntfy | mono | CC0-1.0 | mono |
 | `deutsche-telekom` | Deutsche Telekom | mono | CC0-1.0 | mono |
 | `slack` | Slack | default | MIT | art, unmodified |
+| `teams` | Microsoft Teams | default | MIT | art, gradient ids prefixed `teams-` |
 | `groq` | Groq | default | MIT | bleed, unmodified |
 | `google-gemini` | Gemini | mono | CC0-1.0 | mono |
 | `kimi` | Kimi | default | MIT | bleed, unmodified |
@@ -47,6 +48,12 @@ above records the one that came with each file. All fifteen are CC0-1.0 or MIT, 
 why these were taken and others were not — `Gong`, for one, is marked
 `Trademark` and `azure` is marked `brand-use`, and both need the owner's brand
 guidelines read before they appear in a shipped interface.
+
+One mark carries a change that is not a recolour. Microsoft Teams is drawn from a
+dozen gradients, and the published file names them `a` to `l` - single letters that
+would collide with any other gradient on the same page, because an SVG `id` is
+document-wide however deeply it is nested. Each is prefixed `teams-` here. No path,
+colour or stop is touched.
 
 Two marks were recoloured rather than reproduced exactly. Both are single-colour logos
 where the published file hard-codes a fill that would be invisible in one of our two

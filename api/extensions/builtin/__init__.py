@@ -14,4 +14,6 @@ BUILTIN = (
     "api.extensions.builtin.instagram",
     "api.extensions.builtin.discord",
     "api.extensions.builtin.slack",
+    "api.extensions.builtin.sms",
+    "api.extensions.builtin.teams",
 )

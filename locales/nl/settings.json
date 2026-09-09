@@ -430,5 +430,20 @@
   "calendar_test_reached": "De agenda heeft geantwoord.",
   "calendar_test_not_configured": "Er is nog geen agenda verbonden. Vul hierboven het CalDAV-adres en het app-wachtwoord in, en sla op.",
   "calendar_test_refused": "De agenda weigerde de aanmelding.",
-  "calendar_test_unreachable": "De agenda kon niet worden gelezen."
+  "calendar_test_unreachable": "De agenda kon niet worden gelezen.",
+  "ch_clear": "Inloggegevens verwijderen",
+  "ch_enabled": "Antwoorden op dit kanaal",
+  "ch_error_missing": "Vul alle verplichte velden in voordat je dit kanaal inschakelt.",
+  "ch_error_no_key": "Deze installatie heeft geen encryptiesleutel, dus een inloggegeven kan niet worden opgeslagen.",
+  "ch_error_refused": "Het platform heeft deze gegevens niet geaccepteerd. Controleer ze in je eigen ontwikkelaarsaccount.",
+  "ch_guide": "Installatiegids",
+  "ch_identity": "Antwoordt als",
+  "ch_keep": "Er is een waarde opgeslagen. Laat dit leeg om die te behouden; typ een nieuwe om die te vervangen.",
+  "ch_optional": "Optioneel",
+  "ch_save": "Opslaan",
+  "ch_saving": "Bezig met opslaan…",
+  "ch_test": "Verbinding testen",
+  "ch_unverified": "Gebouwd op de gepubliceerde API, nog niet geverifieerd met een echt account.",
+  "ch_webhook_help": "Plak dit adres in de webhookinstellingen van het platform. Het hoort alleen bij dit kanaal — behandel het als een geheim.",
+  "ch_webhook_url": "Terugbeladres"
 }

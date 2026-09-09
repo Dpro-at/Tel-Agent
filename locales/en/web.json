@@ -24,7 +24,8 @@
     "telegram": "Telegram",
     "messenger": "Messenger",
     "instagram": "Instagram",
-    "discord": "Discord"
+    "discord": "Discord",
+    "teams": "Microsoft Teams"
   },
   "handling": {
     "ai": "AI handled",

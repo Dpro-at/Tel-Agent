@@ -189,8 +189,13 @@ async def _channels(db: DbSession) -> list[Service]:
     """
     from api.channels import health
     from api.models import Channel
+    from api.models.conversation import CHANNEL_KINDS
 
-    kinds = ("telegram", "email", "whatsapp", "messenger", "instagram", "discord", "slack")
+    # Every kind the product ships, derived rather than listed: a channel added to
+    # `CHANNEL_KINDS` appears in the rollup without a second edit here, which is what
+    # keeps a new channel from being silently unmonitored. `phone` has no transport
+    # yet and `web` has its own row above, which says what a switched-off widget means.
+    kinds = tuple(kind for kind in CHANNEL_KINDS if kind not in ("phone", "web"))
     rows = (await db.execute(select(Channel).where(Channel.kind.in_(kinds)))).scalars().all()
     reports = health.snapshot()
 
