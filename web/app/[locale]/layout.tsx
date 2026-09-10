@@ -2,19 +2,45 @@ import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Noto_Sans_Arabic } from "next/font/google";
 import { notFound } from "next/navigation";
 
+import ar from "../../../locales/ar/shell.json";
+import de from "../../../locales/de/shell.json";
+import en from "../../../locales/en/shell.json";
+import es from "../../../locales/es/shell.json";
+import nl from "../../../locales/nl/shell.json";
+
 import "../globals.css";
 import { DirectionProvider } from "@/components/ui/direction";
-import { LOCALES, getDirection, isLocale } from "@/lib/locales";
+import { pickDictionary } from "@/lib/i18n";
+import { DEFAULT_LOCALE, LOCALES, getDirection, isLocale } from "@/lib/locales";
 import { cn } from "@/lib/utils";
 
 const sans = IBM_Plex_Sans({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-sans" });
 const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono" });
 const arabic = Noto_Sans_Arabic({ subsets: ["arabic"], weight: ["400", "500", "600"], variable: "--font-arabic" });
 
-export const metadata: Metadata = {
-  title: "Tel-Agent",
-  description: "An agent that answers, on every channel.",
-};
+type ShellDictionary = typeof en;
+
+/**
+ * The description is the one piece of shell copy a reader can meet before the page
+ * itself - in a search result or a shared link - so it is translated like the rest.
+ * "Tel-Agent" is the product name and reads the same in every locale.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = pickDictionary<ShellDictionary>(isLocale(locale) ? locale : DEFAULT_LOCALE, {
+    en,
+    de,
+    ar,
+    es,
+    nl,
+  });
+
+  return { title: "Tel-Agent", description: t.meta_description };
+}
 
 /**
  * Applied before first paint, so a light-theme user never sees a dark flash and a
