@@ -225,7 +225,7 @@ export function LiveCall({ locale, t }: { locale: Locale; t: LiveDictionary }) {
       ) : null}
 
       <div className="mx-auto max-w-[1400px] p-[22px_28px_70px]">
-        {state === "error" ? <StreamLost locale={locale} /> : null}
+        {state === "error" ? <StreamLost locale={locale} t={t} /> : null}
         {state === "loading" ? <LiveSkeleton /> : null}
 
         {showPhone ? (
@@ -965,33 +965,27 @@ function ConfirmPanel({
   );
 }
 
-function StreamLost({ locale }: { locale: Locale }) {
+function StreamLost({ locale, t }: { locale: Locale; t: LiveDictionary }) {
   return (
     <div className="flex justify-center py-[70px]">
       <div className="border-od-border-9 bg-od-panel w-full max-w-[560px] rounded-xl border p-8">
         <div className="border-od-red-border bg-od-red-bg inline-flex items-center gap-2 rounded-md border p-[5px_10px] text-[12px] font-semibold text-[color:var(--od-red-text)]">
-          Phone unavailable in this browser
+          {t.error_label}
         </div>
-        <h2 className="mt-[18px] mb-0 text-[21px] font-semibold">
-          This tab lost its connection to the call server
-        </h2>
-        <p className="text-od-muted mt-[10px] max-w-[46ch] text-pretty">
-          The live stream to this page dropped, so you cannot dial or follow a call from here. Calls
-          themselves are unaffected — the assistant is still answering. Reconnect, or pick calls up on a
-          desk phone.
-        </p>
+        <h2 className="mt-[18px] mb-0 text-[21px] font-semibold">{t.error_title}</h2>
+        <p className="text-od-muted mt-[10px] max-w-[46ch] text-pretty">{t.error_body}</p>
         <div className="mt-5 flex flex-wrap gap-[10px]">
           <button
             type="button"
             className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-md border p-[9px_16px] font-medium"
           >
-            Reconnect
+            {t.error_reconnect}
           </button>
           <Link
             href={`/${locale}/settings`}
             className="border-od-border-2 text-od-muted hover:text-od-text-2 inline-block rounded-md border bg-transparent p-[9px_16px] hover:no-underline"
           >
-            Check devices
+            {t.error_devices}
           </Link>
         </div>
       </div>

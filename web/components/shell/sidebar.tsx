@@ -44,12 +44,15 @@ const TONES: Record<Tone, string> = {
   grey: "var(--od-stroke-5)",
 };
 
-/** Channel names - WhatsApp, Telegram - are product names and are never translated. */
-const CHANNELS: { id: string; name: string; count: number; tone: Tone }[] = [
+/**
+ * Channel names - WhatsApp, Telegram - are product names and are never translated.
+ * "Web chat" is not a brand name, so it carries a dictionary key instead of a literal.
+ */
+const CHANNELS: { id: string; name?: string; label?: LabelKey; count: number; tone: Tone }[] = [
   { id: "whatsapp", name: "WhatsApp", count: 3, tone: "green" },
   { id: "telegram", name: "Telegram", count: 1, tone: "grey" },
   { id: "sms", name: "SMS", count: 1, tone: "grey" },
-  { id: "web chat", name: "Web chat", count: 1, tone: "grey" },
+  { id: "web chat", label: "web_chat", count: 1, tone: "grey" },
 ];
 
 const NAV: { label: LabelKey; items: Item[] }[] = [
@@ -77,6 +80,7 @@ const NAV: { label: LabelKey; items: Item[] }[] = [
         kids: CHANNELS.map((channel) => ({
           id: channel.id,
           name: channel.name,
+          label: channel.label,
           count: channel.count,
           tone: channel.tone,
         })),
@@ -89,10 +93,11 @@ const NAV: { label: LabelKey; items: Item[] }[] = [
   },
 ];
 
-const WORKSPACES = [
-  { name: "Wagner & Partner", note: "3 numbers · 4 assistants" },
-  { name: "Wagner Nachbetreuung", note: "1 number · 1 assistant" },
-  { name: "Wolf Studio", note: "shared with you by Sabine" },
+/** Workspace names are business names and are never translated; only the note is. */
+const WORKSPACES: { name: string; noteKey: LabelKey }[] = [
+  { name: "Wagner & Partner", noteKey: "workspace_wagner_partner_note" },
+  { name: "Wagner Nachbetreuung", noteKey: "workspace_nachbetreuung_note" },
+  { name: "Wolf Studio", noteKey: "workspace_wolf_studio_note" },
 ];
 
 export function Sidebar({
@@ -299,7 +304,9 @@ export function Sidebar({
                       </span>
                       <span className="min-w-0 flex-[1_1_auto] text-start">
                         <span className="text-od-text block text-[13px] font-medium">{entry.name}</span>
-                        <span className="text-od-faint mt-px block text-[11.5px]">{entry.note}</span>
+                        <span className="text-od-faint mt-px block text-[11.5px]">
+                          {t[entry.noteKey]}
+                        </span>
                       </span>
                       {current ? (
                         <span className="flex-none text-[12px] text-[color:var(--od-violet-2)]">✓</span>

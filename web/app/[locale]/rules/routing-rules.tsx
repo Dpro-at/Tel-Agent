@@ -285,7 +285,7 @@ export function RoutingRules({ locale, t }: { locale: Locale; t: RulesDictionary
                       onClick={() => setNewOpen(true)}
                       className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 mt-[18px] cursor-pointer rounded-md border p-[9px_16px] font-medium"
                     >
-                      Add the first rule
+                      {t.empty_cta}
                     </button>
                   </div>
                 ) : (
@@ -480,9 +480,7 @@ function NewRuleDialog({ t, onClose }: { t: RulesDictionary; onClose: () => void
         <div className="border-od-border flex items-start justify-between gap-4 border-b p-[20px_24px_16px]">
           <div>
             <h2 className="text-od-text m-0 text-[19px] font-semibold">{t.dialog_title}</h2>
-            <div className="text-od-muted-4 mt-1 text-[13px]">
-              A condition, what happens when it matches, and where it sits in the list.
-            </div>
+            <div className="text-od-muted-4 mt-1 text-[13px]">{t.dialog_subtitle}</div>
           </div>
           <button
             type="button"
@@ -621,14 +619,14 @@ function NewRuleDialog({ t, onClose }: { t: RulesDictionary; onClose: () => void
             onClick={onClose}
             className="border-od-border-2 text-od-muted hover:text-od-text-2 cursor-pointer rounded-[7px] border bg-transparent p-[9px_15px]"
           >
-            Cancel
+            {t.cancel}
           </button>
           <button
             type="button"
             onClick={onClose}
             className="border-od-stroke bg-od-raise-10 text-od-text-2 cursor-pointer rounded-[7px] border p-[9px_17px] font-semibold"
           >
-            Add the rule
+            {t.add_rule}
           </button>
         </div>
       </div>
@@ -641,7 +639,7 @@ function InvalidRulesFile({ t }: { t: RulesDictionary }) {
     <div className="flex justify-center py-20">
       <div className="border-od-border-9 bg-od-panel w-full max-w-[560px] rounded-xl border p-8">
         <div className="border-od-red-border bg-od-red-bg inline-flex items-center gap-2 rounded-md border p-[5px_10px] text-[12px] font-semibold text-[color:var(--od-red-text)]">
-          Rules could not be loaded
+          {t.error_label}
         </div>
         <h2 className="mt-[18px] mb-0 text-[21px] font-semibold">{t.error_title}</h2>
         <p className="text-od-muted mt-[10px] max-w-[46ch] text-pretty">

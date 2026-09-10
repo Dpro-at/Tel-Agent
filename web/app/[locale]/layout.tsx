@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Noto_Sans_Arabic } from "next/font/google";
 import { notFound } from "next/navigation";
 
+import ar from "../../../locales/ar/shell.json";
+import de from "../../../locales/de/shell.json";
+import en from "../../../locales/en/shell.json";
+
 import "../globals.css";
 import { DirectionProvider } from "@/components/ui/direction";
 import { LOCALES, getDirection, isLocale } from "@/lib/locales";
@@ -11,10 +15,20 @@ const sans = IBM_Plex_Sans({ subsets: ["latin"], weight: ["400", "500", "600"], 
 const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono" });
 const arabic = Noto_Sans_Arabic({ subsets: ["arabic"], weight: ["400", "500", "600"], variable: "--font-arabic" });
 
-export const metadata: Metadata = {
-  title: "Tel-Agent",
-  description: "An agent that answers, on every channel.",
-};
+/** "Tel-Agent" is a locked product name (see CLAUDE.md) and is never translated. */
+const META_DESCRIPTIONS: Record<string, string> = { en: en.meta_description, de: de.meta_description, ar: ar.meta_description };
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  return {
+    title: "Tel-Agent",
+    description: META_DESCRIPTIONS[locale] ?? META_DESCRIPTIONS.en,
+  };
+}
 
 /** Applied before first paint so a light-theme user never sees a dark flash. */
 const THEME_SCRIPT = `try{if(localStorage.getItem("od-theme")==="light")document.documentElement.setAttribute("data-od-theme","light")}catch(e){}`;
