@@ -6,6 +6,7 @@
   "channel_web": "Web chat",
   "expand_children": "Show sub-items",
   "group_overview": "Overview",
+  "meta_description": "An agent that answers, on every channel.",
   "nav_archive": "Call archive",
   "nav_assistants": "Assistants",
   "nav_calendar": "Calendar",
