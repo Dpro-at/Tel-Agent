@@ -13,7 +13,14 @@ place for the part of the system that is attacked most.
 from __future__ import annotations
 
 from argon2 import PasswordHasher
-from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
+from argon2.exceptions import VerificationError, VerifyMismatchError
+
+try:
+    from argon2.exceptions import InvalidHashError
+except ImportError:
+    from argon2.exceptions import (
+        InvalidHash as InvalidHashError,  # type: ignore[attr-defined,no-redef]
+    )
 
 # Length, not character classes.
 #

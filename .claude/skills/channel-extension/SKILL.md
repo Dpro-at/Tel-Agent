@@ -49,40 +49,54 @@ keep them.
 
 ```python
 KIND = "<kind>"
-SETUP = Setup(...)                                   # the descriptor, see below
+SETUP = Setup(...)  # the descriptor, see below
 INBOUND = "dial_out"  # or "door"
 
-def make_client() -> httpx.AsyncClient: ...          # tests monkeypatch this
-async def probe(client, credentials: dict[str, str]) -> str: ...
+
+def make_client() -> httpx.AsyncClient: ...  # tests monkeypatch this
+async def probe(client, credentials: dict[str, str]) -> str:
+    ...
     # "Test connection". Returns the identity the platform reports (bot name, number,
     # account) — the card shows it. Raises ChannelRefused on a bad credential.
+
+
 async def send_text(client, credentials, target: str, text: str) -> None: ...
-def message_text(event, identity) -> str | None: ... # the answering policy: None = ignore
-async def ingest(db, channel, event) -> int | None: ...
+def message_text(event, identity) -> str | None: ...  # the answering policy: None = ignore
+async def ingest(db, channel, event) -> int | None:
+    ...
     # store one inbound line; None when it was a duplicate or not for us
+
+
 async def respond(sessionmaker, channel_id: int, message_id: int) -> None: ...
 def schedule_reply(sessionmaker, channel_id: int, message_id: int) -> None: ...
 
+
 # optional
-def credentials_changed(channel_id: int) -> None: ...
+def credentials_changed(channel_id: int) -> None:
+    ...
     # What the module is told after the operator writes this channel's fields, so it can
     # drop anything it cached on the strength of the old ones — an access token bought
     # with a secret that has just been replaced would otherwise keep working until it
     # expired, which is a rotation that did not take effect. A module that caches nothing
     # declares nothing; `api/routes/generic_channel.py` calls it only when it is there.
 
-def reply_target(conversation) -> str | None: ...
+
+def reply_target(conversation) -> str | None:
+    ...
     # The address `send_text` needs for this thread, when it is not the conversation's
     # own `external_id` — a room id, a thread key, a mailbox. Declare nothing and
     # `generic.reply_target_of` falls back to `external_id`. It is what the human
     # takeover route delivers to as well, so a channel that answers somewhere other
     # than where the customer wrote from owes this one function and nothing else.
 
+
 # dial-out only
-async def loop(sessionmaker) -> None: ...            # the supervisor, reconciles every 15 s
+async def loop(sessionmaker) -> None: ...  # the supervisor, reconciles every 15 s
+
 
 # door only
-async def receive(db, channel, request: Request) -> Response: ...
+async def receive(db, channel, request: Request) -> Response:
+    ...
     # verify, dedup, store, schedule, acknowledge. One refusal for every failure.
 ```
 
@@ -121,6 +135,7 @@ them — but each is one line handing the shared one this module:
 def _self() -> ModuleType:
     return sys.modules[__name__]
 
+
 async def respond(sessionmaker, channel_id: int, message_id: int) -> None:
     await generic.respond(sessionmaker, _self(), channel_id, message_id)
 ```
@@ -142,12 +157,20 @@ SETUP = Setup(
     note="An official account from your own LINE Developers console answers people who message it.",
     guide_url="https://developers.line.biz/en/docs/messaging-api/getting-started/",
     fields=(
-        Field("channel_secret", "Channel secret", secret=True,
-              help="From the Basic settings tab of your channel."),
-        Field("channel_access_token", "Channel access token", secret=True,
-              help="Issue a long-lived token on the Messaging API tab."),
+        Field(
+            "channel_secret",
+            "Channel secret",
+            secret=True,
+            help="From the Basic settings tab of your channel.",
+        ),
+        Field(
+            "channel_access_token",
+            "Channel access token",
+            secret=True,
+            help="Issue a long-lived token on the Messaging API tab.",
+        ),
     ),
-    verified_live=False,   # True once a real message has gone through on a customer's account
+    verified_live=False,  # True once a real message has gone through on a customer's account
 )
 ```
 
@@ -228,10 +251,12 @@ class FakeLine:
     def __init__(self) -> None:
         self.sent: list[dict] = []
         self.refuse = False
-    def handler(self, request: httpx.Request) -> httpx.Response: ...   # route by path
+
+    def handler(self, request: httpx.Request) -> httpx.Response: ...  # route by path
     def client(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(base_url="https://line.test",
-                                 transport=httpx.MockTransport(self.handler))
+        return httpx.AsyncClient(
+            base_url="https://line.test", transport=httpx.MockTransport(self.handler)
+        )
 ```
 
 The `stage` fixture builds a workspace, a channel row with credentials, three users at

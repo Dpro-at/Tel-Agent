@@ -154,7 +154,7 @@ def test_a_dial_out_module_owes_a_loop_and_not_a_receive(monkeypatch) -> None:
 
     module.loop = loop
     generic.register(module)
-    assert generic.dial_out_modules() == [module]
+    assert module in generic.dial_out_modules()
 
 
 def test_a_module_whose_declaration_names_another_kind_is_refused(monkeypatch) -> None:
@@ -190,12 +190,14 @@ def test_a_transport_can_be_the_first_module_imported() -> None:
     """
     done = _in_a_fresh_interpreter("import api.channels.sms")
     assert done.returncode == 0, done.stderr
+    done_mm = _in_a_fresh_interpreter("import api.channels.mattermost")
+    assert done_mm.returncode == 0, done_mm.stderr
 
 
 @pytest.mark.parametrize(
     "first",
-    ["api.channels.sms", "api.channels.generic"],
-    ids=["transport first", "registry first"],
+    ["api.channels.sms", "api.channels.mattermost", "api.channels.generic"],
+    ids=["sms first", "mattermost first", "registry first"],
 )
 def test_the_registry_lists_the_channel_whichever_was_imported_first(first: str) -> None:
     """Same answer both ways round, in a process that imported nothing else."""
@@ -203,7 +205,7 @@ def test_the_registry_lists_the_channel_whichever_was_imported_first(first: str)
         f"import {first}\nfrom api.channels import generic\nprint(sorted(generic.channels()))\n"
     )
     assert done.returncode == 0, done.stderr
-    assert done.stdout.strip() == "['sms', 'teams']"
+    assert done.stdout.strip() == "['mattermost', 'sms', 'teams']"
 
 
 def test_a_reply_needs_every_field_the_descriptor_calls_required() -> None:
