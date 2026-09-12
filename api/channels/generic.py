@@ -126,7 +126,11 @@ CHANNELS: dict[str, ModuleType] = {}
 # which of the two Python happened to import first - and importing the transport first
 # left it half-built and unregistrable. Reading is the one moment where both modules
 # are certainly whole.
-_DECLARED: tuple[str, ...] = ("api.channels.sms", "api.channels.teams")
+_DECLARED: tuple[str, ...] = (
+    "api.channels.sms",
+    "api.channels.teams",
+    "api.channels.mattermost",
+)
 
 
 # The surface every declarative channel owes, whichever way it receives.

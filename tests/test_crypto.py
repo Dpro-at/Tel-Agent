@@ -321,10 +321,9 @@ def test_env_example_documents_every_setting_and_nothing_else() -> None:
             re.MULTILINE,
         )
     }
-    modeled = (
-        {name.upper() for name in Settings.model_fields}
-        | AGENT_INSTALLATION_ENVIRONMENT_VARIABLES
-    )
+    modeled = {
+        name.upper() for name in Settings.model_fields
+    } | AGENT_INSTALLATION_ENVIRONMENT_VARIABLES
 
     undocumented = modeled - documented
     assert not undocumented, (

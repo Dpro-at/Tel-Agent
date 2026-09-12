@@ -16,4 +16,5 @@ BUILTIN = (
     "api.extensions.builtin.slack",
     "api.extensions.builtin.sms",
     "api.extensions.builtin.teams",
+    "api.extensions.builtin.mattermost",
 )

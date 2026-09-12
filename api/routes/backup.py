@@ -22,7 +22,7 @@ import logging
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -351,14 +351,17 @@ def _warnings(manifest: dict[str, Any]) -> list[str]:
 
 
 @router.delete(
-    "/{backup_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete one archive"
+    "/{backup_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    summary="Delete one archive",
 )
 async def delete_backup(
     request: Request,
     context: Annotated[WorkspaceContext, require_owner],
     user: CurrentUser,
     backup_id: int,
-) -> None:
+) -> Response:
     db: DbSession = request.state.db
     row = await _load(db, backup_id)
     if row.path:
@@ -368,3 +371,4 @@ async def delete_backup(
     )
     await db.delete(row)
     await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

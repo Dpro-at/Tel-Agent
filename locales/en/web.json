@@ -25,7 +25,8 @@
     "messenger": "Messenger",
     "instagram": "Instagram",
     "discord": "Discord",
-    "teams": "Microsoft Teams"
+    "teams": "Microsoft Teams",
+    "mattermost": "Mattermost"
   },
   "handling": {
     "ai": "AI handled",
