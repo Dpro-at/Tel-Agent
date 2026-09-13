@@ -16,9 +16,10 @@ kick. The mention is stripped before the text enters the record.
 `props.from_bot == "true"` is skipped whole. Two bots answering each other is an
 infinite loop, and `from_bot` is the platform's own word for it.
 
-**Replies keep the thread root.** A post in a thread carries a `root_id`; a top-level
-post's id becomes the `root_id` for answers, so conversations stay grouped in threads
-on the Mattermost side.
+**Replies keep the thread root.** In a channel, conversations stay grouped in threads:
+a top-level post's id becomes the `root_id` for answers, and an existing thread's
+`root_id` is preserved. In a DM, answers are posted top-level unless the customer
+wrote inside a thread.
 """
 
 from __future__ import annotations
@@ -47,7 +48,9 @@ from api.models import Channel, Conversation, Message
 
 logger = logging.getLogger("api.mattermost")
 
-# Mattermost default post character limit.
+# Mattermost default post character limit. Server configurations can raise
+# MaxPostSize up to 16383 (the current server maximum), but 4000 is the safe
+# default for any installation.
 MESSAGE_MAX = 4000
 
 # How often the supervisor reconciles running connections against the channels table.
@@ -228,11 +231,9 @@ def message_text(event: Any, identity: Any) -> str | None:
         # Public or private channels require @mention
         if not bot_username:
             return None
-        mention = f"@{bot_username}"
-        if mention.lower() not in raw_text.lower():
+        pattern = re.compile(rf"(?<![\w.-])@{re.escape(bot_username)}(?![\w.-])", re.IGNORECASE)
+        if not pattern.search(raw_text):
             return None
-        # Strip the mention
-        pattern = re.compile(rf"{re.escape(mention)}\b", re.IGNORECASE)
         cleaned = pattern.sub("", raw_text).strip()
         return cleaned or None
 
@@ -305,8 +306,9 @@ async def ingest(
     root_id = str(post.get("root_id") or "")
     channel_type = str(data.get("channel_type") or "")
 
-    # For threads, keep root_id (or post_id if this is the start of a thread)
-    thread_root = root_id or post_id
+    # For DMs, post replies top-level unless the customer wrote inside a thread.
+    # For channels, keep conversations grouped in threads.
+    thread_root = root_id if channel_type == "D" else (root_id or post_id)
 
     # For DMs, conversation identity is the user; for channels, it is the thread
     external_id = user_id if channel_type == "D" else f"{channel_id}:{thread_root}"
@@ -351,6 +353,26 @@ def schedule_reply(sessionmaker: async_sessionmaker, channel_id: int, message_id
     generic.schedule_reply(sessionmaker, _self(), channel_id, message_id)
 
 
+async def _report_state(
+    sessionmaker: async_sessionmaker, channel_id: int, *, ok: bool, detail: str | None = None
+) -> None:
+    """Tell the health registry how this connection is doing, on its own session.
+
+    The gateway task holds no request and no session; borrowing one for the report
+    keeps the transition alert (Milestone 9) working from inside a dropped socket.
+    """
+    from api.channels import health
+
+    async with session_scope(sessionmaker) as db:
+        channel = await db.scalar(select(Channel).where(Channel.id == channel_id))
+        if channel is None:
+            return
+        if ok:
+            await health.report_ok(db, channel)
+        else:
+            await health.report_down(db, channel, detail=detail or "connection lost")
+
+
 # --- The WebSocket gateway ----------------------------------------------------
 
 
@@ -360,7 +382,7 @@ async def _run_gateway(
     server_url = credentials.get("server_url", "").rstrip("/")
     bot_token = credentials.get("bot_token", "")
     if not server_url or not bot_token:
-        return
+        raise ChannelRefused("Missing server_url or bot_token for Mattermost gateway")
 
     async with make_client() as rest:
         try:
@@ -370,14 +392,25 @@ async def _run_gateway(
                 "mattermost gateway could not reach server",
                 extra={"channel_id": channel_id, "error": str(exc)},
             )
-            return
-        if resp.status_code >= 400:
+            raise ChannelRefused(f"Mattermost server unreachable: {exc}") from exc
+
+        if resp.status_code in (401, 403):
             logger.warning(
                 "mattermost gateway rejected bot credentials",
                 extra={"channel_id": channel_id, "status": resp.status_code},
             )
-            return
-        bot_user = resp.json()
+            raise ChannelRefused(f"Mattermost rejected bot access token ({resp.status_code})")
+        if resp.status_code >= 400:
+            logger.warning(
+                "mattermost gateway returned error status",
+                extra={"channel_id": channel_id, "status": resp.status_code},
+            )
+            raise ChannelRefused(f"Mattermost returned status {resp.status_code}")
+
+        try:
+            bot_user = resp.json()
+        except ValueError as exc:
+            raise ChannelRefused("Mattermost returned invalid JSON for bot user") from exc
 
     ws_url = _ws_url(server_url)
     async with websockets.connect(ws_url, max_size=2**22) as connection:
@@ -390,6 +423,18 @@ async def _run_gateway(
                 }
             )
         )
+
+        raw_auth = await connection.recv()
+        try:
+            auth_frame = json.loads(raw_auth)
+        except ValueError as exc:
+            raise ChannelRefused("Mattermost returned invalid JSON on authentication") from exc
+
+        if auth_frame.get("status") != "OK" or auth_frame.get("seq_reply") != 1:
+            raise ChannelRefused(f"Mattermost WebSocket authentication failed: {auth_frame}")
+
+        logger.info("mattermost gateway ready", extra={"channel_id": channel_id})
+        await _report_state(sessionmaker, channel_id, ok=True)
 
         while True:
             raw = await connection.recv()
@@ -427,6 +472,7 @@ async def _connection(
                 "mattermost gateway dropped",
                 extra={"channel_id": channel_id, "error": str(error)[:200]},
             )
+            await _report_state(sessionmaker, channel_id, ok=False, detail=str(error))
         await asyncio.sleep(backoff)
         backoff = min(backoff * 2, 300.0)
 

@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.reply import GREETING
-from api.channels import generic
+from api.channels import generic, health
 from api.channels import mattermost as transport
 from api.channels.generic import ChannelRefused
 from api.config import Settings
@@ -303,6 +303,26 @@ def test_channel_talk_answers_only_when_mentioned_and_mention_is_stripped() -> N
     # String identity accepted as well
     assert transport.message_text(asked, f"@{BOT_USERNAME}") == "do you open on Saturday?"
 
+    # Mentioning another bot sharing a prefix must not trigger this bot
+    prefix_bot = _channel_post(f"hello @{BOT_USERNAME}2", mentions_bot=False, channel_type="O")
+    assert transport.message_text(prefix_bot, bot_identity) is None
+    hyphen_bot = _channel_post(f"hello @{BOT_USERNAME}-2", mentions_bot=False, channel_type="O")
+    assert transport.message_text(hyphen_bot, bot_identity) is None
+    dot_bot = _channel_post(
+        f"hello @{BOT_USERNAME}.other", mentions_bot=False, channel_type="O"
+    )
+    assert transport.message_text(dot_bot, bot_identity) is None
+    email_text = _channel_post(
+        f"contact user@{BOT_USERNAME}", mentions_bot=False, channel_type="O"
+    )
+    assert transport.message_text(email_text, bot_identity) is None
+
+    # Punctuation adjacent to mention still triggers and strips cleanly
+    punct_asked = _channel_post(
+        f"hello @{BOT_USERNAME}, can you help?", mentions_bot=True, channel_type="O"
+    )
+    assert transport.message_text(punct_asked, bot_identity) == "hello , can you help?"
+
 
 def test_irrelevant_or_malformed_events_are_ignored() -> None:
     bot_identity = {"id": BOT_USER_ID, "username": BOT_USERNAME}
@@ -335,8 +355,8 @@ async def test_a_dm_becomes_a_conversation_and_the_agent_answers_into_the_room(
     assert path.endswith("/api/v4/posts")
     assert body["channel_id"] == "dm-room-1"
     assert body["message"] == GREETING
-    # DMs use post_id as root_id for the thread
-    assert body["root_id"] == "p1"
+    # Top-level DM gets a top-level reply (no root_id)
+    assert "root_id" not in body
 
     db.expire_all()
     thread = await db.scalar(
@@ -349,6 +369,27 @@ async def test_a_dm_becomes_a_conversation_and_the_agent_answers_into_the_room(
         .all()
     )
     assert [line.speaker for line in lines] == ["caller", "agent"]
+
+
+async def test_a_dm_inside_a_thread_replies_to_that_thread(stage) -> None:
+    _, ids, fake, db, app = stage
+    channel = await _channel_row(db, ids["channel"])
+    bot_identity = {"id": BOT_USER_ID, "username": BOT_USERNAME}
+
+    # Customer wrote inside an existing thread in a DM
+    event = _dm("following up in this thread", root_id="p-thread-root-42", post_id="p2")
+    needs_reply = await transport.ingest(db, channel, event, bot_identity)
+    assert needs_reply is not None
+
+    await transport.respond(app.state.sessionmaker, ids["channel"], needs_reply)
+
+    assert len(fake.sent) == 1
+    path, body = fake.sent[0]
+    assert path.endswith("/api/v4/posts")
+    assert body["channel_id"] == "dm-room-1"
+    assert body["message"] == GREETING
+    # Only thread a reply when customer wrote inside a thread
+    assert body["root_id"] == "p-thread-root-42"
 
 
 async def test_channel_mention_keeps_incoming_root_id(stage) -> None:
@@ -528,7 +569,7 @@ async def test_a_human_reply_reaches_the_room_and_the_record_in_that_order(stage
     assert path.endswith("/api/v4/posts")
     assert body["channel_id"] == "dm-room-1"
     assert body["message"] == "Hello, this is Sabine from customer care."
-    assert body["root_id"] == "p-cust-1"
+    assert "root_id" not in body
 
 
 async def test_an_undelivered_reply_is_not_written_into_the_record(stage) -> None:
@@ -556,3 +597,102 @@ async def test_an_undelivered_reply_is_not_written_into_the_record(stage) -> Non
     last = await db.scalar(select(Message).order_by(Message.id.desc()).limit(1))
     assert last is not None and before is not None
     assert last.id == before.id
+
+
+# --- Gateway and health reporting ----------------------------------------------
+
+
+class _MockWS:
+    def __init__(self, incoming: list[str]) -> None:
+        self.incoming = list(incoming)
+        self.sent: list[str] = []
+
+    async def __aenter__(self) -> _MockWS:
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        pass
+
+    async def send(self, data: str) -> None:
+        self.sent.append(data)
+
+    async def recv(self) -> str:
+        if self.incoming:
+            return self.incoming.pop(0)
+        raise asyncio.CancelledError()
+
+
+async def test_report_state_records_ok_and_down(stage) -> None:
+    _, ids, _, _, app = stage
+
+    await transport._report_state(app.state.sessionmaker, ids["channel"], ok=True)
+    report = health.snapshot().get(("mattermost", ids["channel"]))
+    assert report is not None
+    assert report.state == "ok"
+
+    await transport._report_state(
+        app.state.sessionmaker, ids["channel"], ok=False, detail="socket closed"
+    )
+    report = health.snapshot().get(("mattermost", ids["channel"]))
+    assert report is not None
+    assert report.state == "down"
+    assert report.detail == "socket closed"
+
+
+async def test_run_gateway_verifies_authentication_challenge_and_reports_ok(
+    stage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, ids, _, _, app = stage
+    creds = {"server_url": SERVER_URL, "bot_token": BOT_TOKEN}
+
+    # Successful authentication challenge reply
+    auth_ok_reply = json.dumps({"status": "OK", "seq_reply": 1})
+    mock_ws = _MockWS([auth_ok_reply])
+
+    monkeypatch.setattr(
+        "websockets.connect",
+        lambda *args, **kwargs: mock_ws,
+    )
+
+    # Let the gateway connect, authenticate, and cancel on the next recv
+    with pytest.raises(asyncio.CancelledError):
+        await transport._run_gateway(app.state.sessionmaker, ids["channel"], creds)
+
+    # Verify challenge payload was sent
+    assert len(mock_ws.sent) == 1
+    sent_challenge = json.loads(mock_ws.sent[0])
+    assert sent_challenge["action"] == "authentication_challenge"
+    assert sent_challenge["data"]["token"] == BOT_TOKEN
+
+    # Verify health was reported ok
+    report = health.snapshot().get(("mattermost", ids["channel"]))
+    assert report is not None
+    assert report.state == "ok"
+
+
+async def test_run_gateway_fails_on_rejected_authentication_challenge(
+    stage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, ids, _, _, app = stage
+    creds = {"server_url": SERVER_URL, "bot_token": BOT_TOKEN}
+
+    # Failed authentication challenge reply
+    auth_fail_reply = json.dumps({"status": "FAIL", "seq_reply": 1, "error": "invalid token"})
+    mock_ws = _MockWS([auth_fail_reply])
+
+    monkeypatch.setattr(
+        "websockets.connect",
+        lambda *args, **kwargs: mock_ws,
+    )
+
+    with pytest.raises(ChannelRefused, match="Mattermost WebSocket authentication failed"):
+        await transport._run_gateway(app.state.sessionmaker, ids["channel"], creds)
+
+
+async def test_run_gateway_raises_on_rejected_credentials(stage) -> None:
+    _, ids, fake, _, app = stage
+    creds = {"server_url": SERVER_URL, "bot_token": BOT_TOKEN}
+
+    fake.refuse = True
+    with pytest.raises(ChannelRefused, match="Mattermost rejected bot access token"):
+        await transport._run_gateway(app.state.sessionmaker, ids["channel"], creds)

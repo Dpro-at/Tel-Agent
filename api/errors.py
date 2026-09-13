@@ -91,9 +91,7 @@ _CODES = {
     status.HTTP_404_NOT_FOUND: "not_found",
     status.HTTP_405_METHOD_NOT_ALLOWED: "method_not_allowed",
     status.HTTP_409_CONFLICT: "conflict",
-    getattr(
-        status, "HTTP_422_UNPROCESSABLE_CONTENT", status.HTTP_422_UNPROCESSABLE_ENTITY
-    ): "validation_error",
+    status.HTTP_422_UNPROCESSABLE_CONTENT: "validation_error",
     status.HTTP_429_TOO_MANY_REQUESTS: "rate_limited",
 }
 
