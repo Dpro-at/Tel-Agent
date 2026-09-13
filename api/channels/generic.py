@@ -132,6 +132,7 @@ _DECLARED: tuple[str, ...] = (
     "api.channels.mattermost",
     "api.channels.irc",
     "api.channels.matrix",
+    "api.channels.line",
 )
 
 

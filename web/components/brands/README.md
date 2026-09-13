@@ -18,6 +18,7 @@ noted below — swap the hard-coded fill for `currentColor`.
 | `signal` | Signal | mono | CC0-1.0 | mono |
 | `matrix` | Matrix | mono | CC0-1.0 | mono |
 | `mattermost` | Mattermost | mono | CC0-1.0 | mono |
+| `line` | LINE | mono | CC0-1.0 | mono |
 | `anthropic` | Anthropic | mono | CC0-1.0 | mono |
 | `mistral` | Mistral | mono | MIT | mono |
 | `openai` | OpenAI | default | MIT | mono, `#fff` → `currentColor` |
