@@ -274,7 +274,7 @@ async def list_channels(
 ) -> list[Any]:
     """What the filter chips should offer.
 
-    Built from what the workspace actually has rather than from the ten channels the
+    Built from what the workspace actually has rather than from every channel the
     product commits to: a chip for a channel with nothing behind it is a chip that
     always returns an empty list, and the screen already has an empty state for the
     real thing.

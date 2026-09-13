@@ -1,7 +1,7 @@
 """What a channel declares about itself, so that nobody has to write its card.
 
 Eight channels justified eight hand-written React cards and eight hand-written route
-files. Twenty-five do not (D-044). Everything that differs between one channel's
+files. Twenty-four do not (D-044). Everything that differs between one channel's
 settings card and the next is words and field names, and both of those are data — so
 each transport declares a `Setup` next to itself, one generic route family serves it
 and one generic card draws it.

@@ -200,7 +200,7 @@ These are settled. Do not reopen them without a concrete reason.
 | Languages | Multi-language from day one: en / de / ar, RTL supported |
 | Analog phone lines | Out of scope. Users bridge with an ATA; we only ever speak SIP. |
 | Workflow automation | Out of scope. Webhooks + generic HTTP tool; n8n does the rest. |
-| Messaging channels | In scope at Milestone 3 — web chat, SMS, email, WhatsApp, Telegram, Messenger, Instagram, Discord, Slack. Ten with the phone, and Tel-Agent commits to those ten. **A channel is an extension, so the list is open (D-032);** anything beyond the ten is community-owned and unsupported. Customer connects their own app credentials (§B13). |
+| Messaging channels | In scope at Milestone 3 — web chat, SMS, email, WhatsApp, Telegram, Messenger, Instagram, Discord, Slack, Microsoft Teams, Signal, Viber, Google Chat, Mattermost, Matrix, IRC, LINE, WeChat Official Account, WeCom, QQ Bot, DingTalk, Feishu/Lark, iMessage. Twenty-four with the phone, and Tel-Agent commits to those twenty-four (D-044). **A channel is an extension, so the list is open (D-032);** anything beyond them is community-owned and unsupported. Customer connects their own app credentials (§B13). |
 
 ---
 
@@ -710,7 +710,7 @@ live view. That is the entire reason for the split.
    which is correct: typed text has no recognition confidence, and that null is itself
    the signal that the line was typed rather than spoken.
 6. **`conversations` as the core table, with `calls` as a phone-only extension.**
-   The product answers on ten channels (§B13), so a schema whose master table is named
+   The product answers on twenty-four channels (§B13), so a schema whose master table is named
    `calls` and whose lines are keyed by `call_id` is wrong from the first migration.
    Renaming today costs nothing — there is no code and no stored row. Renaming after
    Milestone 2 means migrating every transcript, every query, every API path and every
@@ -1018,7 +1018,7 @@ Do not start step N+1 before step N works.
 | 0 | **Web chat** | A visitor types, the model replies token by token, the reply can be cancelled mid-sentence, a message is taken and a transcript printed. **No dashboard, no Docker, no database.** |
 | 1 | Persistence | Postgres, conversations + messages stored, schema per §B5 |
 | 2 | Web UI | Conversation detail → conversations list → home → rules → agent → settings |
-| 3 | Messaging channels | The nine in §B13, same agent and tools, different transport |
+| 3 | Messaging channels | The text channels in §B13, same agent and tools, different transport |
 | 4 | Routing rules | Pass / block / AI, from a channel identity rather than a phone number |
 | 5 | Tools | The seven in B7 |
 | 6 | Webhooks + REST | Documented, signed |

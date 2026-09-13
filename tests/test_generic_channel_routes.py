@@ -1,7 +1,7 @@
 """The generic channel routes — one card contract, and one public door, for every kind.
 
-Fifteen channels share these four routes, so what they promise is tested once here
-rather than fifteen times over. The channel under test is a stub registered into the
+Every declarative channel shares these four routes, so what they promise is tested once
+here rather than once per channel. The channel under test is a stub registered into the
 registry by a fixture: it declares one secret field, one shown field and one optional
 one, and it answers a fake platform. `sms` is its kind because the kind has to exist
 in the database and a made-up one does not.
@@ -269,6 +269,64 @@ async def test_a_channel_with_every_required_field_can_be_switched_on(stage) -> 
     on = await clients["mohamed"].put("/api/channels/sms", json={"enabled": True})
     assert on.status_code == 200, on.text
     assert on.json()["enabled"] is True
+
+
+async def test_switching_on_tells_the_platform_where_the_door_is(
+    stage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`activate` is optional; a module that declares it is told the credentials and
+    the public address on the way on, and not on the way off."""
+    clients, _, _, _ = stage
+    told: list[tuple[dict[str, str], str | None]] = []
+
+    async def activate(client, credentials: dict[str, str], webhook_url: str | None) -> None:
+        told.append((credentials, webhook_url))
+
+    monkeypatch.setattr(generic.CHANNELS["sms"], "activate", activate, raising=False)
+    await clients["mohamed"].put(
+        "/api/channels/sms", json={"fields": {"api_key": API_KEY, "account": "AC-77"}}
+    )
+    assert told == []  # Still off: nothing to announce.
+
+    on = await clients["mohamed"].put("/api/channels/sms", json={"enabled": True})
+
+    assert on.status_code == 200, on.text
+    assert len(told) == 1
+    credentials, webhook_url = told[0]
+    assert credentials["api_key"] == API_KEY
+    assert credentials["account"] == "AC-77"
+    assert webhook_url is not None
+    assert webhook_url == on.json()["webhook_url"]
+
+    off = await clients["mohamed"].put("/api/channels/sms", json={"enabled": False})
+    assert off.status_code == 200, off.text
+    assert len(told) == 1
+
+
+async def test_a_platform_that_refuses_activation_leaves_the_channel_off(
+    stage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A channel the platform has never heard of is not a working channel, so the
+    switch does not stay on - but the credentials that were typed are kept."""
+    clients, _, _, db = stage
+
+    async def activate(client, credentials: dict[str, str], webhook_url: str | None) -> None:
+        raise generic.ChannelRefused("webhook rejected")
+
+    monkeypatch.setattr(generic.CHANNELS["sms"], "activate", activate, raising=False)
+    await clients["mohamed"].put(
+        "/api/channels/sms", json={"fields": {"api_key": API_KEY, "account": "AC-77"}}
+    )
+
+    refused = await clients["mohamed"].put("/api/channels/sms", json={"enabled": True})
+
+    assert refused.status_code == 502
+    assert refused.json()["error"]["code"] == "sms_refused"
+    row = await _row(db)
+    assert row.status == "disabled"
+    card = (await clients["mohamed"].get("/api/channels/sms")).json()
+    assert card["enabled"] is False
+    assert card["previews"]["api_key"] is not None
 
 
 async def test_nothing_is_stored_when_the_installation_has_no_key(
