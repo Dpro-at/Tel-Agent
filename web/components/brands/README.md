@@ -82,8 +82,9 @@ Where the marks are used is decided per set, in `BRANDED_CATEGORIES` in `apps.ts
 `brandSlug` elsewhere:
 
 - **The channels** — the installer's channel list and the store's channels category. Every
-  company in them has a mark; the four that are not companies (a phone line, web chat, SMS,
-  email) carry a drawn glyph, which is what they should have had all along.
+  company in them has a mark; the five that are not companies (a phone line, web chat, SMS,
+  email, IRC) carry a drawn glyph, which is what they should have had all along. The
+  glyphs are drawn here, so there is no licence to record.
 - **The model providers** — the four in the installer. "Any OpenAI-compatible URL" keeps
   its neutral mark, because it is a description and not a company.
 - **Notifications** — Slack and ntfy, both covered.

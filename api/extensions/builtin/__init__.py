@@ -17,4 +17,5 @@ BUILTIN = (
     "api.extensions.builtin.sms",
     "api.extensions.builtin.teams",
     "api.extensions.builtin.mattermost",
+    "api.extensions.builtin.irc",
 )

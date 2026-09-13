@@ -26,7 +26,8 @@
     "instagram": "Instagram",
     "discord": "Discord",
     "teams": "Microsoft Teams",
-    "mattermost": "Mattermost"
+    "mattermost": "Mattermost",
+    "irc": "IRC"
   },
   "handling": {
     "ai": "Gestionado por IA",

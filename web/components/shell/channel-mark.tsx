@@ -19,6 +19,8 @@ const DRAWN: Record<string, string> = {
   sms: "M4 5h16v10.5H9.5L5 19.5V15.5H4V5Z M7.5 9h9 M7.5 12h5.5",
   // An envelope.
   email: "M3 6h18v12H3V6Z M3.5 6.5l8.5 6 8.5-6",
+  // A bubble with a hash: the channel sign IRC gave every chat room since.
+  irc: "M4 5h16v10.5H9.5L5 19.5V15.5H4V5Z M10.5 7.5l-1 6 M14.5 7.5l-1 6 M8 9.25h8 M7.5 11.75h8",
 };
 
 /** Where a screen's own id for a channel differs from the id the marks are keyed by. */
