@@ -24,7 +24,9 @@
     "telegram": "Telegram",
     "messenger": "Messenger",
     "instagram": "Instagram",
-    "discord": "Discord"
+    "discord": "Discord",
+    "teams": "Microsoft Teams",
+    "mattermost": "Mattermost"
   },
   "handling": {
     "ai": "Vom Agenten bearbeitet",

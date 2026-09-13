@@ -24,7 +24,9 @@
     "telegram": "تيليجرام",
     "messenger": "ماسنجر",
     "instagram": "إنستغرام",
-    "discord": "ديسكورد"
+    "discord": "ديسكورد",
+    "teams": "مايكروسوفت تيمز",
+    "mattermost": "ماترموست"
   },
   "handling": {
     "ai": "عالجه الوكيل",
