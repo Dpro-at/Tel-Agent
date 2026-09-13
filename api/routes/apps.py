@@ -1,28 +1,34 @@
-"""What this installation can actually do, and what it refused — the apps screen's
-real half.
+"""What this installation can do, what this workspace has switched on, and what the
+process refused — the apps screen's real half.
 
 The `apps` table is written at startup by `sync_catalogue`, mirroring the manifests
 the registry loaded; the registry itself knows which of those are live in *this*
-process and which modules were refused. This endpoint reads both, so the screen shows
-what is running rather than what was installed at some point in the past.
+process and which modules were refused. `app_installs` says which of them the current
+workspace has installed and switched on. The overview reads all three, so the screen
+shows what is running and what is allowed to run here rather than what was installed
+at some point in the past.
 
-**Read-only, deliberately.** `Registry.disable` exists and `AppInstall.enabled` is a
-real column, but nothing at runtime consults per-workspace enablement yet, and a
-deactivate button whose state nothing reads would be a control that lies. The write
-half arrives when the hook bus checks enablement per workspace — a design decision,
-not an endpoint.
+**The switch is per workspace, and for now it governs channels.** Switching a channel
+app off switches that workspace's channels of its kind off in the same transaction,
+and a channel card cannot switch its channel back on while the app is off (see
+`api/extensions/installs.py`). Hooks on the event bus still run for every workspace;
+filtering them per workspace is its own design decision (#242), not this endpoint.
 """
 
 from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
-from api.models import App
+from api.dependencies import CurrentUser
+from api.errors import envelope_response
+from api.extensions import installs
+from api.models import App, AppInstall, Channel
+from api.security import audit
 from api.security.permissions import WorkspaceContext, require_admin
 
 router = APIRouter(prefix="/api/apps", tags=["apps"])
@@ -45,6 +51,12 @@ class InstalledApp(BaseModel):
     # Live in this process right now. A row can be in the table and not running —
     # a module that loaded once and was refused on the last start.
     running: bool
+    # This workspace's installation. Installed and switched off is a real state, and a
+    # different one from not installed: it keeps the settings while the app stops.
+    installed: bool
+    enabled: bool
+    # Part of the core: always installed, always on, and never switchable.
+    system: bool
 
 
 class RefusedApp(BaseModel):
@@ -59,6 +71,28 @@ class AppsOverview(BaseModel):
     refused: list[RefusedApp]
 
 
+class AppSwitch(BaseModel):
+    enabled: bool
+
+
+def _entry(request: Request, row: App, install: AppInstall | None) -> InstalledApp:
+    system = installs.is_system(row.slug)
+    return InstalledApp(
+        slug=row.slug,
+        name=str(row.manifest.get("name") or row.slug),
+        version=row.version,
+        origin=row.origin,
+        category=str(row.manifest.get("category") or ""),
+        description=str(row.manifest.get("description") or ""),
+        scopes=list(row.manifest.get("scopes") or ()),
+        hooks=list(row.manifest.get("hooks") or ()),
+        running=row.slug in request.app.state.extensions.loaded,
+        installed=system or install is not None,
+        enabled=system or (install is not None and install.enabled),
+        system=system,
+    )
+
+
 @router.get("", response_model=AppsOverview, summary="Installed applications, and refusals")
 async def overview(
     request: Request, context: Annotated[WorkspaceContext, require_admin]
@@ -67,19 +101,76 @@ async def overview(
     registry = request.app.state.extensions
 
     rows = (await db.execute(select(App).order_by(App.slug))).scalars().all()
-    installed = [
-        InstalledApp(
-            slug=row.slug,
-            name=str(row.manifest.get("name") or row.slug),
-            version=row.version,
-            origin=row.origin,
-            category=str(row.manifest.get("category") or ""),
-            description=str(row.manifest.get("description") or ""),
-            scopes=list(row.manifest.get("scopes") or ()),
-            hooks=list(row.manifest.get("hooks") or ()),
-            running=row.slug in registry.loaded,
-        )
-        for row in rows
-    ]
+    mine = await installs.installs_by_slug(db, context.id)
+    installed = [_entry(request, row, mine.get(row.slug)) for row in rows]
     refused = [RefusedApp(slug=entry.slug, reason=entry.reason) for entry in registry.failed]
     return AppsOverview(installed=installed, refused=refused)
+
+
+@router.put("/{slug}", response_model=InstalledApp, summary="Install an app, or switch it")
+async def switch(
+    request: Request,
+    context: Annotated[WorkspaceContext, require_admin],
+    user: CurrentUser,
+    slug: str,
+    payload: AppSwitch,
+) -> object:
+    """Switch an app on or off in this workspace, installing it on the way if needed.
+
+    Switching a channel app off switches this workspace's channels of that kind off in
+    the same transaction. Switching one on leaves its channels as they are.
+    """
+    db: DbSession = request.state.db
+
+    row = await installs.app_row(db, slug)
+    if row is None:
+        return envelope_response(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="app_not_found",
+            message="This installation has no app by that name.",
+        )
+    if installs.is_system(slug):
+        return envelope_response(
+            status_code=status.HTTP_409_CONFLICT,
+            code="app_is_system",
+            message="This app is part of the core and cannot be switched off.",
+        )
+
+    install = await installs.install_row(db, context.id, slug)
+    channels_disabled = 0
+    if payload.enabled or install is not None:
+        install = await installs.install(db, context.id, slug, enabled=payload.enabled)
+
+    if not payload.enabled and row.manifest.get("category") == "channels":
+        result = await db.execute(
+            update(Channel)
+            .where(
+                Channel.workspace_id == context.id,
+                Channel.kind == installs.kind_of(slug),
+                # `error` too: a channel that is failing is still one trying to run.
+                Channel.status != "disabled",
+            )
+            .values(status="disabled")
+            .execution_options(synchronize_session="fetch")
+        )
+        channels_disabled = result.rowcount or 0
+
+    await db.commit()
+    if install is not None:
+        await db.refresh(install)
+    await db.refresh(row)
+
+    await audit.record(
+        db,
+        "app_changed",
+        request=request,
+        user_id=user.id,
+        username=user.username,
+        details={
+            "workspace_id": context.id,
+            "slug": slug,
+            "enabled": payload.enabled,
+            "channels_disabled": channels_disabled,
+        },
+    )
+    return _entry(request, row, install)

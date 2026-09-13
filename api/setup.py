@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.extensions import installs
 from api.models import Channel, Membership, User, Workspace
 from api.security.password import hash_password
 
@@ -85,6 +86,8 @@ async def create_first_administrator(
     # Milestone 3 is a write rather than a redesign.
     channel = Channel(workspace_id=workspace.id, kind="web", name="Web chat")
     session.add(channel)
+    # And the app that channel belongs to, or its card could never be switched on.
+    await installs.install_defaults(session, workspace.id)
 
     await session.commit()
     return FirstRun(user=user, workspace=workspace, channel=channel)

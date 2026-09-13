@@ -25,6 +25,7 @@ from agent.reply import GREETING
 from api.channels import email as email_transport
 from api.channels.email import Inbound, MailboxConfig
 from api.config import Settings
+from api.extensions import installs
 from api.main import create_app
 from api.models import (
     BackgroundJob,
@@ -133,6 +134,8 @@ async def stage(migrated: AsyncSession, settings: Settings, database_url: str, m
         migrated.add(user)
         await migrated.flush()
         migrated.add(Membership(user_id=user.id, workspace_id=mine.id, role=role))
+    # The channel's app is installed, as in every workspace that uses the channel.
+    await installs.install(migrated, mine.id, "email")
     await migrated.commit()
 
     ids = {"channel": channel.id, "workspace": mine.id}

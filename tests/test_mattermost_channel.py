@@ -24,6 +24,7 @@ from api.channels import generic
 from api.channels import mattermost as transport
 from api.channels.generic import ChannelRefused
 from api.config import Settings
+from api.extensions import installs
 from api.main import create_app
 from api.models import Channel, Conversation, Membership, Message, User, Workspace
 from api.security.password import hash_password
@@ -175,6 +176,8 @@ async def stage(migrated: AsyncSession, settings: Settings, database_url: str, m
         migrated.add(user)
         await migrated.flush()
         migrated.add(Membership(user_id=user.id, workspace_id=mine.id, role=role))
+    # The channel's app is installed, as in every workspace that uses the channel.
+    await installs.install(migrated, mine.id, "mattermost")
     await migrated.commit()
 
     ids = {"channel": channel.id, "workspace": mine.id}

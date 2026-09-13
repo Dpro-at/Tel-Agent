@@ -445,5 +445,8 @@
   "ch_test": "Probar la conexión",
   "ch_unverified": "Construido sobre la API publicada, todavía sin verificar con una cuenta real.",
   "ch_webhook_help": "Pega esta dirección en los ajustes de webhook de la plataforma. Pertenece solo a este canal: trátala como un secreto.",
-  "ch_webhook_url": "Dirección de retorno"
+  "ch_webhook_url": "Dirección de retorno",
+  "ch_add_title": "Añadir un canal",
+  "ch_add_body": "Aquí solo aparecen los canales añadidos a este espacio de trabajo. Añade más desde la tienda en Apps.",
+  "ch_add_link": "Abrir la tienda"
 }

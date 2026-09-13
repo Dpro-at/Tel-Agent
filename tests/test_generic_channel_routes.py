@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.channels import generic
 from api.channels.setup import Field, Setup
 from api.config import Settings
+from api.extensions import installs
 from api.main import create_app
 from api.models import Channel, Membership, User, Workspace
 from api.security.password import hash_password
@@ -152,6 +153,8 @@ async def stage(
         migrated.add(user)
         await migrated.flush()
         migrated.add(Membership(user_id=user.id, workspace_id=mine.id, role=role))
+    # The channel's app is installed, as in every workspace that uses the channel.
+    await installs.install(migrated, mine.id, "sms")
     await migrated.commit()
 
     app = create_app(settings.model_copy(update={"database_url": database_url}))

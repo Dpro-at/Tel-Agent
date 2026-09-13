@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { ChannelCard } from "@/components/channels/generic-card";
 import { LiveSettings, type FieldCopy } from "@/components/settings/live-settings";
@@ -13,6 +13,8 @@ import {
   ASSIGNABLE_ROLES,
   ApiError,
   accountEvents,
+  appsOverview,
+  type AppsOverview,
   addWebhook,
   changeMemberRole,
   changePassword,
@@ -288,10 +290,25 @@ function announceFields(t: SettingsDictionary): FieldCopy[] {
   return [{ key: "recording.announce", label: t.f_announce, help: t.f_announce_help }];
 }
 
+/** The tab the address bar names, when it names one this screen deep-links to. */
+function tabFromAddress(): string | null {
+  return new URLSearchParams(window.location.search).get("tab") === "channels"
+    ? "channels"
+    : null;
+}
+
+// The address bar does not change under this screen, so there is nothing to subscribe to.
+const noSubscription = () => () => {};
+
 export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary }) {
   const router = useRouter();
   const [state, setState] = useState<ScreenState>("default");
-  const [tab, setTab] = useState("general");
+  // `?tab=channels` is where an app's Settings link lands. Read through
+  // `useSyncExternalStore` so the first render matches the server, which has no
+  // address bar, and the client's answer follows straight after hydration.
+  const asked = useSyncExternalStore(noSubscription, tabFromAddress, () => null);
+  const [picked, setTab] = useState<string | null>(null);
+  const tab = picked ?? asked ?? "general";
 
   const offline = state === "offline";
   const empty = state === "empty";
@@ -420,7 +437,7 @@ export function Settings({ locale, t }: { locale: Locale; t: SettingsDictionary 
 
                     {tab === "profile" ? <ProfilePanels t={t} /> : null}
                     {tab === "users" ? <UsersPanels t={t} /> : null}
-                    {tab === "channels" ? <ChannelsPanels t={t} /> : null}
+                    {tab === "channels" ? <ChannelsPanels locale={locale} t={t} /> : null}
                     {tab === "api" ? <ApiPanels locale={locale} t={t} /> : null}
                     {tab === "mcp" ? (
                       <McpPanels locale={locale} t={t} onOpenApiTab={() => setTab("api")} />
@@ -1621,7 +1638,82 @@ function UsersPanels({ t }: { t: SettingsDictionary }) {
  * actually means, and the switch cannot be turned on until there is an entry - so the
  * screen refuses the same thing the server refuses, in the same words.
  */
-function ChannelsPanels({ t }: { t: SettingsDictionary }) {
+/**
+ * The channels tab: one card per channel app this workspace has installed and switched
+ * on, and a way to add the rest.
+ *
+ * A channel whose app is not here is not drawn, because its card could not switch it on
+ * anyway (#241). When the apps list cannot be read - a viewer, who may look at the cards
+ * but not at Apps - every card is drawn, as it was before apps could be switched.
+ */
+function ChannelsPanels({ locale, t }: { locale: Locale; t: SettingsDictionary }) {
+  const apps = useResource<AppsOverview>(() => appsOverview(), []);
+
+  if (apps.data === null && apps.loading) {
+    return <p className="text-od-faint m-0 text-[13px]">{t.live_loading}</p>;
+  }
+
+  const on = new Set(
+    apps.data?.installed.filter((entry) => entry.enabled).map((entry) => entry.slug) ?? [],
+  );
+  const shows = (slug: string) => apps.data === null || on.has(slug);
+
+  return (
+    <div className="flex flex-col gap-4">
+      {apps.data !== null ? (
+        <div className="border-od-line bg-od-panel-deep-2 flex flex-wrap items-center justify-between gap-x-5 gap-y-3 rounded-[10px] border p-[14px_16px]">
+          <div className="max-w-[74ch] min-w-0">
+            <div className="text-od-text-5 font-medium">{t.ch_add_title}</div>
+            <div className="text-od-muted-5 mt-[3px] text-[13px] text-pretty">{t.ch_add_body}</div>
+          </div>
+          <Link
+            href={`/${locale}/apps?tab=store`}
+            className="text-od-violet text-[13px] whitespace-nowrap hover:underline"
+          >
+            {t.ch_add_link}
+          </Link>
+        </div>
+      ) : null}
+
+      {shows("web_chat") ? <WebChatCard t={t} /> : null}
+      {shows("telegram") ? <TelegramCard t={t} /> : null}
+      {shows("email") ? <EmailCard t={t} /> : null}
+      {shows("whatsapp") ? <WhatsAppCard t={t} /> : null}
+      {shows("messenger") ? (
+        <MetaChatCard
+          t={t}
+          kind="messenger"
+          words={{
+            title: t.ms_title,
+            note: t.ms_note,
+            accountId: t.ms_account_id,
+            knownAs: t.ms_known_as,
+          }}
+        />
+      ) : null}
+      {shows("instagram") ? (
+        <MetaChatCard
+          t={t}
+          kind="instagram"
+          words={{
+            title: t.ig_title,
+            note: t.ig_note,
+            accountId: t.ig_account_id,
+            knownAs: t.ig_known_as,
+          }}
+        />
+      ) : null}
+      {shows("discord") ? <DiscordCard t={t} /> : null}
+      {shows("slack") ? <SlackCard t={t} /> : null}
+      {GENERIC_CHANNELS.filter(shows).map((kind) => (
+        <ChannelCard key={kind} kind={kind} t={t} />
+      ))}
+    </div>
+  );
+}
+
+/** The web chat card: the embed snippet, the allowed sites, the switch and reCAPTCHA. */
+function WebChatCard({ t }: { t: SettingsDictionary }) {
   const channel = useResource<WebChannel>(() => webChannel(), []);
 
   // A textarea, not a tag editor. Somebody with four domains pastes four lines; a chip
@@ -1854,35 +1946,6 @@ function ChannelsPanels({ t }: { t: SettingsDictionary }) {
           {busy ? t.wc_saving : t.wc_save}
         </button>
       </div>
-
-      <TelegramCard t={t} />
-      <EmailCard t={t} />
-      <WhatsAppCard t={t} />
-      <MetaChatCard
-        t={t}
-        kind="messenger"
-        words={{
-          title: t.ms_title,
-          note: t.ms_note,
-          accountId: t.ms_account_id,
-          knownAs: t.ms_known_as,
-        }}
-      />
-      <MetaChatCard
-        t={t}
-        kind="instagram"
-        words={{
-          title: t.ig_title,
-          note: t.ig_note,
-          accountId: t.ig_account_id,
-          knownAs: t.ig_known_as,
-        }}
-      />
-      <DiscordCard t={t} />
-      <SlackCard t={t} />
-      {GENERIC_CHANNELS.map((kind) => (
-        <ChannelCard key={kind} kind={kind} t={t} />
-      ))}
     </div>
   );
 }

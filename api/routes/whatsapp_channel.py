@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 from api.channels import whatsapp as transport
 from api.dependencies import CurrentUser
 from api.errors import envelope_response
+from api.extensions import installs
 from api.models import Channel
 from api.security import audit
 from api.security.crypto import key_available, mask
@@ -261,6 +262,12 @@ async def write_settings(
             )
 
     if "enabled" in sent and sent["enabled"] is not None:
+        if sent["enabled"]:
+            # Off under Apps means off: a card cannot switch on what the workspace
+            # switched off one level up.
+            app_refusal = await installs.admit_channel(db, context.id, "whatsapp")
+            if app_refusal is not None:
+                return app_refusal
         if sent["enabled"] and not transport.is_ready(row):
             return envelope_response(
                 status_code=status.HTTP_400_BAD_REQUEST,

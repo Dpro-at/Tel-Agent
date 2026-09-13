@@ -112,6 +112,10 @@ EVENTS = (
     # same fact, and a list that grows with the channel count is a list that goes
     # stale. Field *names* are recorded, never their values.
     "channel_changed",
+    # Apps. Installing or switching one off in a workspace decides what runs there -
+    # and for a channel app, whether customers on that channel reach the agent at all,
+    # since switching the app off switches its channels off with it.
+    "app_changed",
     # Machine tokens — §B9.1. Each one is a credential that opens a path the
     # dashboard session cannot, so minting, rotating and removing one all need a
     # name attached afterwards. The token itself never appears in `details`.

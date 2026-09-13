@@ -1,12 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { BrandMark, brandSlug } from "@/components/brands/brand-mark";
 import { Sidebar } from "@/components/shell/sidebar";
 import { StatePreview, type ScreenState } from "@/components/state-preview";
-import { appsOverview, type AppsOverview, type InstalledApp } from "@/lib/api";
+import {
+  ApiError,
+  appsOverview,
+  setAppEnabled,
+  type AppsOverview,
+  type InstalledApp,
+} from "@/lib/api";
 import { CATALOGUE, CATEGORIES, tintFor, type App } from "@/lib/apps/data";
 import { interpolate } from "@/lib/i18n";
 import { EXTERNAL } from "@/lib/links";
@@ -67,26 +73,48 @@ function Mark({
   );
 }
 
+/** The tab the address bar names - `?tab=store` is where "Add a channel" links to. */
+function tabFromAddress(): "store" | null {
+  return new URLSearchParams(window.location.search).get("tab") === "store" ? "store" : null;
+}
+
+// The address bar does not change under this screen, so there is nothing to subscribe to.
+const noSubscription = () => () => {};
+
 export function Apps({ locale, t }: { locale: Locale; t: AppsDictionary }) {
   const [state, setState] = useState<ScreenState>("default");
-  const [tab, setTab] = useState<"installed" | "store">("installed");
+  // Read through `useSyncExternalStore` rather than the initial state: the server has
+  // no address bar, so the first render must match it, and React re-renders with the
+  // client's answer straight after hydration - no effect, and no mismatch.
+  const asked = useSyncExternalStore(noSubscription, tabFromAddress, () => null);
+  const [picked, setTab] = useState<"installed" | "store" | null>(null);
+  const tab = picked ?? asked ?? "installed";
   const [category, setCategory] = useState("all");
   const [packageFile, setPackageFile] = useState<string | null>(null);
 
-  // The installed tab is real: the manifests the registry loaded, and what it
-  // refused. The store below stays a drawing — there is nothing to download yet,
-  // and its cards say "Planned" rather than pretending otherwise.
+  // The installed tab is real: the manifests the registry loaded, what this workspace
+  // has switched on, and what the process refused. Most of the store below is still a
+  // drawing - there is nothing to download yet, and its cards say "Planned" rather
+  // than pretending otherwise - except its channels, which ship with the installation.
   const overview = useResource<AppsOverview>(() => appsOverview());
 
   const offline = state === "offline";
   const empty = state === "empty";
   const showBody = state === "default" || empty || offline;
 
+  const mine = overview.data?.installed.filter((entry) => entry.installed) ?? [];
+  const addable =
+    overview.data?.installed.filter(
+      (entry) => !entry.installed && entry.category === "channels",
+    ) ?? [];
+  const known = new Set(overview.data?.installed.map((entry) => entry.slug) ?? []);
   const installedCount =
-    overview.data === null
-      ? null
-      : overview.data.installed.length + overview.data.refused.length;
-  const storeApps = CATALOGUE.filter((entry) => entry.install !== "installed");
+    overview.data === null ? null : mine.length + overview.data.refused.length;
+  // A drawn channel card the installation actually ships is replaced by the real one.
+  const storeApps = CATALOGUE.filter(
+    (entry) =>
+      entry.install !== "installed" && !(entry.category === "channels" && known.has(entry.id)),
+  );
   const shown = storeApps.filter((entry) => category === "all" || entry.category === category);
   const sections = CATEGORIES.filter((entry) => category === "all" || category === entry.id)
     .map((entry) => ({
@@ -190,7 +218,7 @@ export function Apps({ locale, t }: { locale: Locale; t: AppsDictionary }) {
               {(
                 [
                   ["installed", "tab_installed", installedCount ?? "…"],
-                  ["store", "tab_store", storeApps.length],
+                  ["store", "tab_store", storeApps.length + addable.length],
                 ] as const
               ).map(([id, label, count]) => {
                 const on = tab === id;
@@ -223,11 +251,27 @@ export function Apps({ locale, t }: { locale: Locale; t: AppsDictionary }) {
             </div>
 
             {tab === "installed" ? (
-              <InstalledTab t={t} overview={overview} onBrowse={() => setTab("store")} />
+              <InstalledTab
+                locale={locale}
+                t={t}
+                overview={overview}
+                onBrowse={() => setTab("store")}
+              />
             ) : null}
 
             {tab === "store" ? (
               <section className="mt-[22px]">
+                {(category === "all" || category === "channels") && addable.length > 0 ? (
+                  <StoreChannels
+                    t={t}
+                    apps={addable}
+                    onAdded={() => {
+                      overview.reload();
+                      setTab("installed");
+                    }}
+                  />
+                ) : null}
+
                 <div className="mb-[14px] flex flex-wrap items-baseline justify-between gap-x-4 gap-y-[10px]">
                   <p className="text-od-muted-4 m-0 max-w-[62ch] text-[13px] text-pretty">{t.store_note}</p>
                   <span className="text-od-faint text-[12.5px]">
@@ -321,20 +365,21 @@ export function Apps({ locale, t }: { locale: Locale; t: AppsDictionary }) {
 }
 
 /**
- * The installed tab, wired to `/api/apps` — the manifests the registry actually
- * loaded, and what it refused at start.
+ * The installed tab, wired to `/api/apps` — what this workspace has installed, and
+ * what the process refused at start.
  *
- * What went, and why: the fixture rows claiming WhatsApp and Telegram were installed
- * were drawings of extensions that do not exist, and their Settings / Deactivate /
- * Delete links had no endpoint behind them. A control with no endpoint is removed,
- * not drawn — the write half arrives when the runtime consults per-workspace
- * enablement, which nothing does yet.
+ * Each app that is not part of the core has a switch, and a channel app a link to its
+ * card. The switch is real: a channel app that is off keeps its channel off, and the
+ * card refuses to switch it back on (#241). There is still no Delete - uninstalling
+ * is a separate decision, and a control with no endpoint is removed, not drawn.
  */
 function InstalledTab({
+  locale,
   t,
   overview,
   onBrowse,
 }: {
+  locale: Locale;
   t: AppsDictionary;
   overview: Resource<AppsOverview>;
   onBrowse: () => void;
@@ -375,7 +420,8 @@ function InstalledTab({
     );
   }
 
-  const { installed, refused } = overview.data;
+  const installed = overview.data.installed.filter((entry) => entry.installed);
+  const { refused } = overview.data;
 
   if (installed.length === 0 && refused.length === 0) {
     return (
@@ -396,7 +442,13 @@ function InstalledTab({
   return (
     <section className="mt-[22px] flex flex-col gap-3">
       {installed.map((entry) => (
-        <InstalledRow key={entry.slug} t={t} entry={entry} />
+        <InstalledRow
+          key={entry.slug}
+          locale={locale}
+          t={t}
+          entry={entry}
+          onChanged={overview.reload}
+        />
       ))}
 
       {refused.length > 0 ? (
@@ -438,7 +490,34 @@ function InstalledTab({
   );
 }
 
-function InstalledRow({ t, entry }: { t: AppsDictionary; entry: InstalledApp }) {
+function InstalledRow({
+  locale,
+  t,
+  entry,
+  onChanged,
+}: {
+  locale: Locale;
+  t: AppsDictionary;
+  entry: InstalledApp;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const flip = async () => {
+    if (busy) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      await setAppEnabled(entry.slug, !entry.enabled);
+      onChanged();
+    } catch (thrown) {
+      setProblem(thrown instanceof ApiError ? thrown.message : t.app_switch_failed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // The catalogue's presentation for the same slug: the drawn mark and, for our own
   // applications, the name and description as copy in the reader's language. A slug
   // the catalogue does not know keeps its manifest's own words verbatim - a community
@@ -475,6 +554,15 @@ function InstalledRow({ t, entry }: { t: AppsDictionary; entry: InstalledApp }) 
           >
             {entry.running ? t.active : t.inactive}
           </span>
+          {entry.system ? (
+            <span className="border-od-border-7 bg-od-raise-5 text-od-faint rounded-md border p-[2px_9px] text-[12px] whitespace-nowrap">
+              {t.app_core}
+            </span>
+          ) : !entry.enabled ? (
+            <span className="border-od-amber-border rounded-md border p-[2px_9px] text-[12px] whitespace-nowrap text-[color:var(--od-amber-text)]">
+              {t.app_off}
+            </span>
+          ) : null}
         </div>
         <div className="text-od-faint mt-1 text-[12.5px]">
           {categoryLabel ? <span>{t[categoryLabel]}</span> : null}
@@ -505,6 +593,133 @@ function InstalledRow({ t, entry }: { t: AppsDictionary; entry: InstalledApp }) 
             </span>
           </div>
         ) : null}
+        {problem !== null ? (
+          <div className="mt-[6px] text-[12.5px] text-pretty text-[color:var(--od-red-text)]">
+            {problem}
+          </div>
+        ) : null}
+      </div>
+      {entry.system ? null : (
+        <div className="flex flex-wrap items-center gap-2">
+          {entry.category === "channels" && entry.enabled ? (
+            <Link
+              href={`/${locale}/settings?tab=channels`}
+              className="border-od-border-2 text-od-muted hover:text-od-text-2 rounded-[7px] border p-[7px_13px] text-[12.5px] whitespace-nowrap"
+            >
+              {t.app_settings}
+            </Link>
+          ) : null}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={entry.enabled}
+            disabled={busy}
+            onClick={flip}
+            title={entry.enabled && entry.category === "channels" ? t.app_off_note_channel : undefined}
+            className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 cursor-pointer rounded-[7px] border p-[7px_13px] text-[12.5px] font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {entry.enabled ? t.app_turn_off : t.app_turn_on}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The store's real section: the channel apps this installation ships and this
+ * workspace has not added. Adding one installs it switched on; the channel itself
+ * stays off until its card has what it needs.
+ */
+function StoreChannels({
+  t,
+  apps,
+  onAdded,
+}: {
+  t: AppsDictionary;
+  apps: InstalledApp[];
+  onAdded: () => void;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const add = async (slug: string) => {
+    if (busy !== null) return;
+    setBusy(slug);
+    setProblem(null);
+    try {
+      await setAppEnabled(slug, true);
+      onAdded();
+    } catch (thrown) {
+      setProblem(thrown instanceof ApiError ? thrown.message : t.app_switch_failed);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="mb-[26px]">
+      <div className="border-od-border mb-[14px] flex flex-wrap items-baseline justify-between gap-x-4 gap-y-[10px] border-b pb-[10px]">
+        <h2 className="text-od-text m-0 text-[16px] font-semibold">{t.store_channels_title}</h2>
+        <span className="text-od-faint text-[12.5px] text-pretty">{t.store_channels_note}</span>
+      </div>
+      {problem !== null ? (
+        <p className="mt-0 mb-3 text-[13px] text-pretty text-[color:var(--od-red-text)]">{problem}</p>
+      ) : null}
+      <div
+        className="grid items-stretch gap-[14px]"
+        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(268px, 1fr))" }}
+      >
+        {apps.map((entry) => {
+          const drawn = CATALOGUE.find((app) => app.id === entry.slug);
+          return (
+            <div
+              key={entry.slug}
+              className="border-od-line bg-od-panel-deep-3 flex min-w-0 flex-col gap-[10px] rounded-[10px] border p-4"
+            >
+              <div className="flex flex-wrap items-start gap-3">
+                <Mark id={entry.slug} glyph={drawn?.mark ?? entry.slug.slice(0, 2)} />
+                <div className="min-w-[140px] flex-[1_1_160px]">
+                  {drawn?.name ? (
+                    <div className="text-od-text text-[15px] font-semibold">{t[drawn.name]}</div>
+                  ) : (
+                    <div dir="ltr" className="text-od-text text-start text-[15px] font-semibold">
+                      {entry.name}
+                    </div>
+                  )}
+                  <div className="text-od-faint mt-[3px] text-[11.5px]">
+                    {`${t.cat_channels} · ${t.origin_official}`}
+                    {entry.version ? (
+                      <>
+                        {" · "}
+                        <span dir="ltr" className="mono ltr-data">
+                          {entry.version}
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <div className="text-od-muted-2 text-[13px] text-pretty">
+                {drawn?.desc ? (
+                  t[drawn.desc]
+                ) : (
+                  <span dir="ltr" className="block text-start">
+                    {entry.description}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => add(entry.slug)}
+                className="border-od-stroke bg-od-raise-10 text-od-text-2 hover:bg-od-border-3 mt-auto w-full cursor-pointer rounded-[7px] border p-[9px_13px] text-[13px] font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {busy === entry.slug ? t.app_adding : t.app_add}
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -753,9 +753,8 @@ GET    /api/workspaces/{id}/members
 POST   /api/workspaces/{id}/invites
 
 # Extensions — D-031
-GET    /api/apps                      # the catalogue, with install state
-POST   /api/apps/{slug}/install
-POST   /api/apps/{slug}/enable        # and /disable
+GET    /api/apps                      # the catalogue, with this workspace's install state
+PUT    /api/apps/{slug}               # {enabled}: installs on the way; off takes its channels off
 
 GET    /api/home                      # the two counts §A6.2 opens with
 GET    /api/catalogue                 # services and the workspace's currency

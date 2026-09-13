@@ -181,5 +181,16 @@
   "app_fireflies_ai_warn": "Transcripts leave your network.",
   "app_gong_desc": "Sales call intelligence. Aimed at large sales teams.",
   "app_gong_eta": "2027",
-  "app_grafana_desc": "Exports call counts, latency and tool failures as Prometheus metrics for a dashboard you already have."
+  "app_grafana_desc": "Exports call counts, latency and tool failures as Prometheus metrics for a dashboard you already have.",
+  "app_core": "Part of the core",
+  "app_off": "Off in this workspace",
+  "app_turn_on": "Turn on",
+  "app_turn_off": "Turn off",
+  "app_off_note_channel": "Turning this off switches its channel off as well.",
+  "app_settings": "Settings",
+  "app_add": "Add",
+  "app_adding": "Adding…",
+  "app_switch_failed": "This app could not be changed. Try again.",
+  "store_channels_title": "Channels for this workspace",
+  "store_channels_note": "They ship with this installation. Add one, then set it up under Settings."
 }

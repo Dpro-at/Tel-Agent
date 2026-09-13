@@ -181,5 +181,16 @@
   "app_fireflies_ai_warn": "Mitschriften verlassen Ihr Netz.",
   "app_gong_desc": "Auswertung von Verkaufsgesprächen. Auf große Vertriebsteams ausgelegt.",
   "app_gong_eta": "2027",
-  "app_grafana_desc": "Exportiert Anrufzahlen, Latenz und Werkzeugfehler als Prometheus-Metriken für ein Dashboard, das Sie schon haben."
+  "app_grafana_desc": "Exportiert Anrufzahlen, Latenz und Werkzeugfehler als Prometheus-Metriken für ein Dashboard, das Sie schon haben.",
+  "app_core": "Teil des Kerns",
+  "app_off": "In diesem Arbeitsbereich aus",
+  "app_turn_on": "Einschalten",
+  "app_turn_off": "Ausschalten",
+  "app_off_note_channel": "Beim Ausschalten wird auch der zugehörige Kanal ausgeschaltet.",
+  "app_settings": "Einstellungen",
+  "app_add": "Hinzufügen",
+  "app_adding": "Wird hinzugefügt…",
+  "app_switch_failed": "Diese App konnte nicht geändert werden. Bitte erneut versuchen.",
+  "store_channels_title": "Kanäle für diesen Arbeitsbereich",
+  "store_channels_note": "Sie sind in dieser Installation enthalten. Fügen Sie einen hinzu und richten Sie ihn unter Einstellungen ein."
 }

@@ -181,5 +181,16 @@
   "app_fireflies_ai_warn": "Transcripts verlaten jouw netwerk.",
   "app_gong_desc": "Sales call intelligence. Gericht op grote salesteams.",
   "app_gong_eta": "2027",
-  "app_grafana_desc": "Exporteert oproepantallen, latentie en toolfouten als Prometheus-metrics voor een dashboard dat je al hebt."
+  "app_grafana_desc": "Exporteert oproepantallen, latentie en toolfouten als Prometheus-metrics voor een dashboard dat je al hebt.",
+  "app_core": "Onderdeel van de kern",
+  "app_off": "Uit in deze werkruimte",
+  "app_turn_on": "Inschakelen",
+  "app_turn_off": "Uitschakelen",
+  "app_off_note_channel": "Uitschakelen zet ook het bijbehorende kanaal uit.",
+  "app_settings": "Instellingen",
+  "app_add": "Toevoegen",
+  "app_adding": "Bezig met toevoegen…",
+  "app_switch_failed": "Deze app kon niet worden gewijzigd. Probeer het opnieuw.",
+  "store_channels_title": "Kanalen voor deze werkruimte",
+  "store_channels_note": "Ze worden met deze installatie meegeleverd. Voeg er een toe en stel het in onder Instellingen."
 }

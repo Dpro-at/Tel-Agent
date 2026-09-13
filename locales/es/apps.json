@@ -181,5 +181,16 @@
   "app_fireflies_ai_warn": "Las transcripciones salen de tu red.",
   "app_gong_desc": "Inteligencia de llamadas de ventas. Pensado para equipos comerciales grandes.",
   "app_gong_eta": "2027",
-  "app_grafana_desc": "Exporta recuentos de llamadas, latencia y fallos de herramientas como métricas Prometheus para un panel que ya tienes."
+  "app_grafana_desc": "Exporta recuentos de llamadas, latencia y fallos de herramientas como métricas Prometheus para un panel que ya tienes.",
+  "app_core": "Parte del núcleo",
+  "app_off": "Desactivada en este espacio de trabajo",
+  "app_turn_on": "Activar",
+  "app_turn_off": "Desactivar",
+  "app_off_note_channel": "Al desactivarla, también se desactiva su canal.",
+  "app_settings": "Ajustes",
+  "app_add": "Añadir",
+  "app_adding": "Añadiendo…",
+  "app_switch_failed": "No se pudo cambiar esta app. Inténtalo de nuevo.",
+  "store_channels_title": "Canales para este espacio de trabajo",
+  "store_channels_note": "Vienen con esta instalación. Añade uno y configúralo en Ajustes."
 }

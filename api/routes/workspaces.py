@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
 from api.dependencies import CurrentUser
 from api.errors import envelope_response
+from api.extensions import installs
 from api.models import (
     INVITE_LIFETIME,
     INVITE_ROLES,
@@ -557,6 +558,7 @@ async def create_workspace(
 
     db.add(Membership(user_id=user.id, workspace_id=workspace.id, role="owner"))
     db.add(Channel(workspace_id=workspace.id, kind="web", name="Web chat"))
+    await installs.install_defaults(db, workspace.id)
 
     copied = 0
     if payload.include_team:

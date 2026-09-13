@@ -42,6 +42,7 @@ from api.channels import generic
 from api.channels import teams as transport
 from api.channels.jwt import reset_jwks_cache, sign_rs256
 from api.config import Settings
+from api.extensions import installs
 from api.main import create_app
 from api.models import Channel, Conversation, Membership, Message, User, Workspace
 from api.security.password import hash_password
@@ -266,6 +267,8 @@ async def stage(migrated: AsyncSession, settings: Settings, database_url: str, m
         migrated.add(user)
         await migrated.flush()
         migrated.add(Membership(user_id=user.id, workspace_id=mine.id, role=role))
+    # The channel's app is installed, as in every workspace that uses the channel.
+    await installs.install(migrated, mine.id, "teams")
     await migrated.commit()
 
     ids = {"channel": channel.id, "workspace": mine.id}

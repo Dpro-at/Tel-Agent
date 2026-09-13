@@ -445,5 +445,8 @@
   "ch_test": "Verbindung testen",
   "ch_unverified": "Nach der veröffentlichten Schnittstelle gebaut, noch nicht mit einem echten Konto geprüft.",
   "ch_webhook_help": "Diese Adresse in die Webhook-Einstellungen der Plattform eintragen. Sie gehört allein zu diesem Kanal — wie ein Geheimnis behandeln.",
-  "ch_webhook_url": "Rückrufadresse"
+  "ch_webhook_url": "Rückrufadresse",
+  "ch_add_title": "Kanal hinzufügen",
+  "ch_add_body": "Hier stehen nur die Kanäle, die diesem Arbeitsbereich hinzugefügt wurden. Weitere fügen Sie im Katalog unter Apps hinzu.",
+  "ch_add_link": "Katalog öffnen"
 }

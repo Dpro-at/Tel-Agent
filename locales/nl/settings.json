@@ -445,5 +445,8 @@
   "ch_test": "Verbinding testen",
   "ch_unverified": "Gebouwd op de gepubliceerde API, nog niet geverifieerd met een echt account.",
   "ch_webhook_help": "Plak dit adres in de webhookinstellingen van het platform. Het hoort alleen bij dit kanaal — behandel het als een geheim.",
-  "ch_webhook_url": "Terugbeladres"
+  "ch_webhook_url": "Terugbeladres",
+  "ch_add_title": "Een kanaal toevoegen",
+  "ch_add_body": "Hier staan alleen de kanalen die aan deze werkruimte zijn toegevoegd. Voeg er meer toe via de store onder Apps.",
+  "ch_add_link": "Store openen"
 }

@@ -671,6 +671,12 @@ export type InstalledApp = {
   hooks: string[];
   /** Live in this process right now. In the table and not running is a real state. */
   running: boolean;
+  /** Installed in the current workspace. Installed and switched off keeps its settings. */
+  installed: boolean;
+  /** Switched on in the current workspace. A channel app that is off keeps its channel off. */
+  enabled: boolean;
+  /** Part of the core: always installed, always on, never switchable. */
+  system: boolean;
 };
 
 export type RefusedApp = { slug: string; reason: string };
@@ -682,6 +688,17 @@ export type AppsOverview = {
 
 export function appsOverview(): Promise<AppsOverview> {
   return api<AppsOverview>("/api/apps");
+}
+
+/**
+ * Install an app in the current workspace, or flip the switch on its installation.
+ * Switching a channel app off switches that workspace's channels of its kind off too.
+ */
+export function setAppEnabled(slug: string, enabled: boolean): Promise<InstalledApp> {
+  return api<InstalledApp>(`/api/apps/${encodeURIComponent(slug)}`, {
+    method: "PUT",
+    json: { enabled },
+  });
 }
 
 // --- Conversations: the transcript archive, read ------------------------------
