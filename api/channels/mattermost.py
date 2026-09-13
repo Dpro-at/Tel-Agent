@@ -231,11 +231,19 @@ def message_text(event: Any, identity: Any) -> str | None:
         # Public or private channels require @mention
         if not bot_username:
             return None
-        pattern = re.compile(rf"(?<![\w.-])@{re.escape(bot_username)}(?![\w.-])", re.IGNORECASE)
+        pattern = re.compile(
+            rf"(?<![\w.-])@{re.escape(bot_username)}(?![\w.-])\s*[:,]?", re.IGNORECASE
+        )
         if not pattern.search(raw_text):
             return None
-        cleaned = pattern.sub("", raw_text).strip()
-        return cleaned or None
+        cleaned = pattern.sub("", raw_text)
+        cleaned = re.sub(r",\s*([.?!])", r"\1", cleaned)
+        cleaned = re.sub(r"\s+([,.:?!])", r"\1", cleaned)
+        cleaned = re.sub(r"^[,\s:]+", "", cleaned)
+        cleaned = " ".join(cleaned.split()).strip()
+        if not cleaned or not cleaned.strip("?!.,:; "):
+            return None
+        return cleaned
 
     return None
 
@@ -377,7 +385,11 @@ async def _report_state(
 
 
 async def _run_gateway(
-    sessionmaker: async_sessionmaker, channel_id: int, credentials: dict[str, str]
+    sessionmaker: async_sessionmaker,
+    channel_id: int,
+    credentials: dict[str, str],
+    *,
+    auth_timeout: float = 10.0,
 ) -> None:
     server_url = credentials.get("server_url", "").rstrip("/")
     bot_token = credentials.get("bot_token", "")
@@ -424,13 +436,26 @@ async def _run_gateway(
             )
         )
 
-        raw_auth = await connection.recv()
-        try:
-            auth_frame = json.loads(raw_auth)
-        except ValueError as exc:
-            raise ChannelRefused("Mattermost returned invalid JSON on authentication") from exc
+        auth_frame: dict[str, Any] = {}
+        while True:
+            try:
+                raw_auth = await asyncio.wait_for(connection.recv(), timeout=auth_timeout)
+            except TimeoutError as exc:
+                raise TimeoutError(
+                    "Timed out waiting for Mattermost authentication challenge reply"
+                ) from exc
+            try:
+                frame = json.loads(raw_auth)
+            except ValueError as exc:
+                raise ChannelRefused(
+                    "Mattermost returned invalid JSON on authentication"
+                ) from exc
 
-        if auth_frame.get("status") != "OK" or auth_frame.get("seq_reply") != 1:
+            if frame.get("seq_reply") == 1:
+                auth_frame = frame
+                break
+
+        if auth_frame.get("status") != "OK":
             raise ChannelRefused(f"Mattermost WebSocket authentication failed: {auth_frame}")
 
         logger.info("mattermost gateway ready", extra={"channel_id": channel_id})

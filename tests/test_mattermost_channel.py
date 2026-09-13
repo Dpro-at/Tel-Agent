@@ -321,7 +321,22 @@ def test_channel_talk_answers_only_when_mentioned_and_mention_is_stripped() -> N
     punct_asked = _channel_post(
         f"hello @{BOT_USERNAME}, can you help?", mentions_bot=True, channel_type="O"
     )
-    assert transport.message_text(punct_asked, bot_identity) == "hello , can you help?"
+    assert transport.message_text(punct_asked, bot_identity) == "hello can you help?"
+
+    colon_asked = _channel_post(
+        f"@{BOT_USERNAME}: can you help?", mentions_bot=True, channel_type="O"
+    )
+    assert transport.message_text(colon_asked, bot_identity) == "can you help?"
+
+    trailing_punct_asked = _channel_post(
+        f"can you help, @{BOT_USERNAME}?", mentions_bot=True, channel_type="O"
+    )
+    assert transport.message_text(trailing_punct_asked, bot_identity) == "can you help?"
+
+    multi_space_asked = _channel_post(
+        f"hello   @{BOT_USERNAME}   can you help?", mentions_bot=True, channel_type="O"
+    )
+    assert transport.message_text(multi_space_asked, bot_identity) == "hello can you help?"
 
 
 def test_irrelevant_or_malformed_events_are_ignored() -> None:
@@ -696,3 +711,65 @@ async def test_run_gateway_raises_on_rejected_credentials(stage) -> None:
     fake.refuse = True
     with pytest.raises(ChannelRefused, match="Mattermost rejected bot access token"):
         await transport._run_gateway(app.state.sessionmaker, ids["channel"], creds)
+
+
+async def test_run_gateway_skips_early_events_before_auth_reply(
+    stage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, ids, _, _, app = stage
+    creds = {"server_url": SERVER_URL, "bot_token": BOT_TOKEN}
+
+    early_event1 = json.dumps({"event": "hello"})
+    early_event2 = json.dumps({"event": "status_change", "data": {"status": "online"}})
+    auth_ok_reply = json.dumps({"status": "OK", "seq_reply": 1})
+    mock_ws = _MockWS([early_event1, early_event2, auth_ok_reply])
+
+    monkeypatch.setattr(
+        "websockets.connect",
+        lambda *args, **kwargs: mock_ws,
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await transport._run_gateway(app.state.sessionmaker, ids["channel"], creds)
+
+    report = health.snapshot().get(("mattermost", ids["channel"]))
+    assert report is not None
+    assert report.state == "ok"
+
+
+async def test_run_gateway_times_out_waiting_for_auth_reply(
+    stage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, ids, _, _, app = stage
+    creds = {"server_url": SERVER_URL, "bot_token": BOT_TOKEN}
+
+    class _HangingWS:
+        def __init__(self) -> None:
+            self.sent: list[str] = []
+
+        async def __aenter__(self) -> _HangingWS:
+            return self
+
+        async def __aexit__(self, *args: Any) -> None:
+            pass
+
+        async def send(self, data: str) -> None:
+            self.sent.append(data)
+
+        async def recv(self) -> str:
+            await asyncio.sleep(10)
+            return ""
+
+    mock_ws = _HangingWS()
+    monkeypatch.setattr(
+        "websockets.connect",
+        lambda *args, **kwargs: mock_ws,
+    )
+
+    with pytest.raises(
+        TimeoutError,
+        match="Timed out waiting for Mattermost authentication challenge reply",
+    ):
+        await transport._run_gateway(
+            app.state.sessionmaker, ids["channel"], creds, auth_timeout=0.01
+        )
