@@ -18,4 +18,5 @@ BUILTIN = (
     "api.extensions.builtin.teams",
     "api.extensions.builtin.mattermost",
     "api.extensions.builtin.irc",
+    "api.extensions.builtin.matrix",
 )

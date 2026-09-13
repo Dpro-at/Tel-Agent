@@ -27,7 +27,8 @@
     "discord": "ديسكورد",
     "teams": "مايكروسوفت تيمز",
     "mattermost": "ماترموست",
-    "irc": "IRC"
+    "irc": "IRC",
+    "matrix": "ماتريكس"
   },
   "handling": {
     "ai": "عالجه الوكيل",
