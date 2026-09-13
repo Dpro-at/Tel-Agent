@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.config import llm_settings
 from alembic import command
+from api.channels import health
 from api.config import Settings, get_settings
 from api.db import create_engine, create_sessionmaker, session_scope
 from api.main import create_app
@@ -58,9 +59,17 @@ def _isolate_environment(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         monkeypatch.delenv(name, raising=False)
     get_settings.cache_clear()
     llm_settings.cache_clear()
+    # The channel health registry is one dict for the life of the process, keyed by
+    # (kind, channel id) - and every test's fresh database hands out the same ids. A
+    # test whose transport reported channel 1 down would otherwise make the next
+    # test's channel 1 "recover" on its first poll, raising a tray alert that test
+    # never caused. Which test ran before which is up to the xdist scheduler, so the
+    # failure came and went between runs.
+    health.reset()
     yield
     get_settings.cache_clear()
     llm_settings.cache_clear()
+    health.reset()
 
 
 @pytest.fixture
