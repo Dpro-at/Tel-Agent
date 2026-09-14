@@ -309,9 +309,13 @@ async def write_settings(
     # Only when something actually changed: re-announcing an untouched channel to the
     # platform on every read-modify-write would be a call nobody asked for.
     changed = bool(written) or "enabled" in sent
-    refused = (
-        await _activate(request, module, row) if changed and row.status == "active" else None
-    )
+    refused = None
+    if changed and row.status == "active" and hasattr(module, "activate"):
+        # Committed before the platform is told: some platforms call the door back
+        # while they are being told, and the door only opens for a channel that is
+        # already switched on. A refusal switches it off again in the commit below.
+        await db.commit()
+        refused = await _activate(request, module, row)
 
     await db.commit()
     await db.refresh(row)
@@ -335,9 +339,10 @@ async def write_settings(
 async def _activate(request: Request, module: ModuleType, row: Channel) -> object | None:
     """Tell the platform where to reach us, for the channels that have to be told.
 
-    Only when the module declares it, and only for a channel that is switched on. A
-    refusal switches the channel back off before anything is committed: a channel the
-    platform has never heard of is not a working channel.
+    Only when the module declares it, and only for a channel that is switched on. The
+    switch is committed first, because a platform may verify the door while it is being
+    told; a refusal switches the channel back off, since a channel the platform has
+    never heard of is not a working channel.
     """
     activate = getattr(module, "activate", None)
     if activate is None:

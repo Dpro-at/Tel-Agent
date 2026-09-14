@@ -134,6 +134,7 @@ _DECLARED: tuple[str, ...] = (
     "api.channels.matrix",
     "api.channels.line",
     "api.channels.signal",
+    "api.channels.viber",
 )
 
 

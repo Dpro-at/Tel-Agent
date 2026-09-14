@@ -30,7 +30,8 @@
     "irc": "IRC",
     "matrix": "ماتريكس",
     "line": "LINE",
-    "signal": "سيجنال"
+    "signal": "سيجنال",
+    "viber": "فايبر"
   },
   "handling": {
     "ai": "عالجه الوكيل",

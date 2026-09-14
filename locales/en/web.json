@@ -30,7 +30,8 @@
     "irc": "IRC",
     "matrix": "Matrix",
     "line": "LINE",
-    "signal": "Signal"
+    "signal": "Signal",
+    "viber": "Viber"
   },
   "handling": {
     "ai": "AI handled",
