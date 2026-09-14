@@ -8,12 +8,12 @@ workspace has installed and switched on. The overview reads all three, so the sc
 shows what is running and what is allowed to run here rather than what was installed
 at some point in the past.
 
-**The switch is per workspace, and governs both channels and the hook bus.** Switching
-a channel app off switches that workspace's channels of its kind off in the same
-transaction, and a channel card cannot switch its channel back on while the app is off
-(see `api/extensions/installs.py`). The hook bus cache is updated in the same request
-via `HookBus.set_workspace_enabled` so disabled apps receive no events for that
-workspace without a database query on the message path (#242).
+**The switch is per workspace, and for now it governs channels.** Switching a channel
+app off switches that workspace's channels of its kind off in the same transaction,
+and a channel card cannot switch its channel back on while the app is off (see
+`api/extensions/installs.py`). It governs the event bus too: an app switched off here
+no longer has its listeners run for this workspace's events, and this endpoint is what
+tells the bus to forget the switches it remembered (#242).
 """
 
 from __future__ import annotations
@@ -157,16 +157,11 @@ async def switch(
         channels_disabled = result.rowcount or 0
 
     await db.commit()
+    # After the commit, never before: see `HookBus.forget`.
+    request.app.state.extensions.bus.forget(context.id)
     if install is not None:
         await db.refresh(install)
     await db.refresh(row)
-
-    # Keep the hook bus cache in step with the database so disabled apps receive no
-    # events for this workspace on the next emit — without a query on the hot path.
-    if not installs.is_system(slug):
-        request.app.state.extensions.bus.set_workspace_enabled(
-            context.id, slug, enabled=payload.enabled
-        )
 
     await audit.record(
         db,

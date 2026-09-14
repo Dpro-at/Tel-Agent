@@ -12,6 +12,11 @@ does not switch any channel on: the channel still needs its credentials, and a
 channel that starts answering customers because somebody flipped a different switch
 is a surprise nobody asked for.
 
+**The same switch silences an app's hooks in that workspace (#242).** The bus reads
+`enabled_slugs` once per workspace and remembers it, so whatever changes an existing
+workspace's installations has to call `HookBus.forget` after committing. Today that is
+the Apps switch alone; a new workspace has nothing remembered to forget.
+
 **The system apps are not optional.** `agent_core` and `database` are the core
 registering itself through the same contract (D-031); there is no workspace without
 them, so they read as installed and enabled and cannot be switched.
@@ -19,10 +24,13 @@ them, so they read as installed and enabled and cannot be switched.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+
 from fastapi import status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from api.errors import envelope_response
 from api.models import App, AppInstall
@@ -83,6 +91,32 @@ async def is_enabled(db: DbSession, workspace_id: int, slug: str) -> bool:
         return True
     row = await install_row(db, workspace_id, slug)
     return row is not None and row.enabled
+
+
+async def enabled_slugs(db: DbSession, workspace_id: int) -> frozenset[str]:
+    """Every app `is_enabled` would say yes to in this workspace, in one query."""
+    rows = await db.scalars(
+        select(App.slug)
+        .join(AppInstall, AppInstall.app_id == App.id)
+        .where(AppInstall.workspace_id == workspace_id, AppInstall.enabled.is_(True))
+    )
+    return frozenset(rows.all()) | frozenset(SYSTEM_APPS)
+
+
+def enabled_apps_reader(
+    sessionmaker: async_sessionmaker[DbSession],
+) -> Callable[[int], Awaitable[frozenset[str]]]:
+    """What the hook bus asks to learn a workspace's switches - see `HookBus.forget`.
+
+    Its own session rather than one from the event's payload: the emitter's session may
+    be mid-transaction, and a read of the switches has no business being part of it.
+    """
+
+    async def read(workspace_id: int) -> frozenset[str]:
+        async with sessionmaker() as db:
+            return await enabled_slugs(db, workspace_id)
+
+    return read
 
 
 async def install(
