@@ -28,7 +28,8 @@
     "teams": "Microsoft Teams",
     "mattermost": "Mattermost",
     "irc": "IRC",
-    "matrix": "Matrix"
+    "matrix": "Matrix",
+    "line": "LINE"
   },
   "handling": {
     "ai": "AI handled",

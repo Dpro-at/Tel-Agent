@@ -19,4 +19,5 @@ BUILTIN = (
     "api.extensions.builtin.mattermost",
     "api.extensions.builtin.irc",
     "api.extensions.builtin.matrix",
+    "api.extensions.builtin.line",
 )

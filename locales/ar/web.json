@@ -28,7 +28,8 @@
     "teams": "مايكروسوفت تيمز",
     "mattermost": "ماترموست",
     "irc": "IRC",
-    "matrix": "ماتريكس"
+    "matrix": "ماتريكس",
+    "line": "LINE"
   },
   "handling": {
     "ai": "عالجه الوكيل",
