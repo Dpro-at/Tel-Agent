@@ -29,7 +29,8 @@
     "mattermost": "ماترموست",
     "irc": "IRC",
     "matrix": "ماتريكس",
-    "line": "LINE"
+    "line": "LINE",
+    "signal": "سيجنال"
   },
   "handling": {
     "ai": "عالجه الوكيل",

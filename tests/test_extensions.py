@@ -282,6 +282,7 @@ def test_the_built_in_extensions_all_load() -> None:
         "matrix",
         "mattermost",
         "messenger",
+        "signal",
         "slack",
         "sms",
         "teams",
@@ -314,6 +315,7 @@ def test_web_chat_subscribes_to_incoming_messages() -> None:
         "irc",
         "matrix",
         "line",
+        "signal",
     ]
 
 
@@ -340,7 +342,7 @@ async def test_the_catalogue_records_what_is_loaded(migrated: AsyncSession) -> N
 
     written = await sync_catalogue(migrated, registry)
 
-    assert written == 16
+    assert written == 17
     rows = {row.slug: row for row in (await migrated.execute(select(App))).scalars()}
     assert sorted(rows) == [
         "agent_core",
@@ -353,6 +355,7 @@ async def test_the_catalogue_records_what_is_loaded(migrated: AsyncSession) -> N
         "matrix",
         "mattermost",
         "messenger",
+        "signal",
         "slack",
         "sms",
         "teams",
@@ -377,4 +380,4 @@ async def test_syncing_twice_updates_rather_than_duplicates(
     await sync_catalogue(migrated, registry)
 
     rows = (await migrated.execute(select(App))).scalars().all()
-    assert len(rows) == 16
+    assert len(rows) == 17

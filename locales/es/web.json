@@ -29,7 +29,8 @@
     "mattermost": "Mattermost",
     "irc": "IRC",
     "matrix": "Matrix",
-    "line": "LINE"
+    "line": "LINE",
+    "signal": "Signal"
   },
   "handling": {
     "ai": "Gestionado por IA",

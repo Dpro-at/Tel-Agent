@@ -20,4 +20,5 @@ BUILTIN = (
     "api.extensions.builtin.irc",
     "api.extensions.builtin.matrix",
     "api.extensions.builtin.line",
+    "api.extensions.builtin.signal",
 )
