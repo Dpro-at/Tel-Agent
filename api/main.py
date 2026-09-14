@@ -34,6 +34,7 @@ from api.config import Settings, get_settings
 from api.db import check_database, create_engine, create_sessionmaker
 from api.docs import describe
 from api.errors import ErrorResponse, install_error_handlers
+from api.extensions import installs
 from api.extensions.builtin import BUILTIN
 from api.extensions.registry import Registry, sync_catalogue
 from api.jobs import builtin as builtin_jobs
@@ -390,6 +391,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     registry = Registry()
     for module_path in BUILTIN:
         registry.load(module_path)
+    # A listener runs only in the workspaces where its app is switched on (#242).
+    registry.bus.enabled_apps = installs.enabled_apps_reader(app.state.sessionmaker)
     app.state.extensions = registry
 
     try:

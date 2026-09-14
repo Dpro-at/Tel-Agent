@@ -222,6 +222,37 @@ async def test_switching_a_channel_app_off_switches_its_channels_off(
     assert statuses == {mine: "disabled", theirs: "active"}
 
 
+async def test_switching_an_app_off_silences_its_hooks_in_that_workspace_only(
+    stage, migrated: AsyncSession
+) -> None:
+    """#242: the bus is process-wide, the switch is not. The events are emitted once
+    before the switch so the bus has remembered both workspaces - the switch has to
+    make it forget, not merely be read on a cold cache."""
+    app, clients = stage
+    mine, theirs = app.state.ids["workspace"], app.state.ids["other"]
+    for workspace_id in (mine, theirs):
+        await installs.install(migrated, workspace_id, "telegram")
+    await migrated.commit()
+
+    bus = app.state.extensions.bus
+    heard: list[int] = []
+    bus.subscribe(
+        "telegram", "message.received", lambda workspace_id, **_: heard.append(workspace_id)
+    )
+
+    for workspace_id in (mine, theirs):
+        await bus.emit("message.received", workspace_id=workspace_id)
+    assert heard == [mine, theirs]
+
+    answer = await clients["mohamed"].put("/api/apps/telegram", json={"enabled": False})
+    assert answer.status_code == 200, answer.text
+
+    heard.clear()
+    for workspace_id in (mine, theirs):
+        await bus.emit("message.received", workspace_id=workspace_id)
+    assert heard == [theirs]
+
+
 async def test_a_channel_card_cannot_switch_on_what_apps_switched_off(stage) -> None:
     _app, clients = stage
     web_on = {"enabled": True, "allowed_origins": ["https://shop.test"]}
