@@ -11,6 +11,12 @@ code. When `docs/SPEC.md` and any other document disagree, the specification win
 For the human contributor path (fork → claim → branch → PR), follow
 [`.claude/skills/contributing/SKILL.md`](.claude/skills/contributing/SKILL.md).
 
+Adding or changing a messaging channel? Read
+[`.claude/skills/channel-extension/SKILL.md`](.claude/skills/channel-extension/SKILL.md)
+first — it is the contract for every channel: the file checklist, the module surface,
+the credential and signature rules, and the tests each one ships with. Agents other
+than Claude Code do not load it on their own.
+
 ---
 
 ## Non-negotiable
