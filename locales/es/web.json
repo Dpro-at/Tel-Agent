@@ -31,7 +31,8 @@
     "matrix": "Matrix",
     "line": "LINE",
     "signal": "Signal",
-    "viber": "Viber"
+    "viber": "Viber",
+    "imessage": "iMessage"
   },
   "handling": {
     "ai": "Gestionado por IA",

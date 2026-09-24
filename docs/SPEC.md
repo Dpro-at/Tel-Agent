@@ -1086,6 +1086,7 @@ the same file.
 | **Web chat** | A script tag on the customer's own site. No account, no review, no approval by anyone. The easiest channel in the product — and the only one with a public endpoint, which §B14 is about. |
 | **SMS** | Nothing new — it arrives with the telephony account the phone number already uses. |
 | **Email** | An IMAP/SMTP mailbox the customer already owns. |
+| **iMessage** | A Mac signed in to Messages, running the REST bridge server on the customer's own network. Tel-Agent polls it and exposes nothing; no Apple developer account is involved. |
 
 Every other channel requires an application in the customer's own developer account on
 that platform, and several require review before they can message the public. That

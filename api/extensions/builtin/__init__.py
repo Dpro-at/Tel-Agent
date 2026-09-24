@@ -22,4 +22,5 @@ BUILTIN = (
     "api.extensions.builtin.line",
     "api.extensions.builtin.signal",
     "api.extensions.builtin.viber",
+    "api.extensions.builtin.imessage",
 )

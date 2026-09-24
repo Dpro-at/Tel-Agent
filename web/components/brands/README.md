@@ -20,6 +20,7 @@ noted below — swap the hard-coded fill for `currentColor`.
 | `mattermost` | Mattermost | mono | CC0-1.0 | mono |
 | `line` | LINE | mono | CC0-1.0 | mono |
 | `viber` | Viber | mono | CC0-1.0 | mono |
+| `imessage` | iMessage | mono | CC0-1.0 | mono |
 | `anthropic` | Anthropic | mono | CC0-1.0 | mono |
 | `mistral` | Mistral | mono | MIT | mono |
 | `openai` | OpenAI | default | MIT | mono, `#fff` → `currentColor` |

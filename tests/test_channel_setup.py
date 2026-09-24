@@ -206,8 +206,8 @@ def test_the_registry_lists_the_channel_whichever_was_imported_first(first: str)
     )
     assert done.returncode == 0, done.stderr
     assert (
-        done.stdout.strip()
-        == "['irc', 'line', 'matrix', 'mattermost', 'signal', 'sms', 'teams', 'viber']"
+        done.stdout.strip() == "['imessage', 'irc', 'line', 'matrix', 'mattermost', "
+        "'signal', 'sms', 'teams', 'viber']"
     )
 
 
