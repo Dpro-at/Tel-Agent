@@ -1,0 +1,10 @@
+{
+  "title": "Chat",
+  "open": "Buka chat",
+  "close": "Tutup chat",
+  "placeholder": "Ketik pesan",
+  "send": "Kirim",
+  "not_sent": "Pesan ini tidak dapat dikirim.",
+  "no_reply": "Belum ada balasan saat ini.",
+  "cut_off": "Balasan terpotong."
+}
