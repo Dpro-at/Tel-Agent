@@ -1,0 +1,18 @@
+{
+  "title": "Masukkan kode",
+  "sent_to": "Kode enam digit telah dikirim ke {address}. Kode ini berlaku selama 10 menit.",
+  "digit_label": "Digit {position} dari {total}",
+  "submit": "Lanjutkan",
+  "submit_offline": "Server tidak dapat dijangkau",
+  "wrong_code": "Kode tersebut tidak cocok. Tersisa {attempts} percobaan sebelum kode baru diperlukan.",
+  "expired_title": "Kode ini telah kedaluwarsa",
+  "expired_body": "Kode berlaku selama 10 menit. Minta kode baru — kode lama tidak akan berfungsi meskipun Anda menemukannya.",
+  "expires_in": "Kedaluwarsa dalam {time}",
+  "resend": "Kirim kode baru",
+  "resend_prompt_expired": "Tidak perlu menunggu lagi",
+  "back": "Kembali ke halaman masuk",
+  "self_hosted": "Dihosting sendiri · tidak ada data yang keluar dari mesin ini",
+  "offline_title": "Browser ini tidak dapat menjangkau server Tel-Agent Anda",
+  "offline_body": "Tidak ada respons dari {host}. Panggilan Anda tidak terpengaruh selama mesin masih berjalan — ini adalah masalah jaringan antara Anda dan mesin tersebut. Pastikan Anda terhubung ke jaringan bisnis atau VPN.",
+  "offline_retry": "Coba hubungkan kembali"
+}
