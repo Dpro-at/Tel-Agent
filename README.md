@@ -291,6 +291,18 @@ Found a security problem? **Do not open a public issue** — see
 
 ---
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=dpro-at%2Ftel-agent&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=dpro-at/tel-agent&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=dpro-at/tel-agent&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=dpro-at/tel-agent&type=date&legend=top-left" />
+ </picture>
+</a>
+
+---
+
 ## License
 
 [AGPL-3.0](LICENSE). Copyright © Dpro GmbH.
