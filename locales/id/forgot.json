@@ -1,0 +1,21 @@
+{
+  "title": "Atur ulang kata sandi Anda",
+  "body": "Masukkan nama pengguna Anda. Jika akun dengan nama tersebut ada, kode enam digit akan dikirim ke alamat email yang terdaftar pada akun tersebut.",
+  "username": "Nama pengguna",
+  "send": "Kirim kode",
+  "send_offline": "Server tidak dapat dijangkau",
+  "privacy_note": "Layar menampilkan pesan yang sama, baik akun tersebut ada maupun tidak. Memberi tahu Anda berarti juga memberi tahu siapa pun yang menanyakannya.",
+  "back": "Kembali ke halaman masuk",
+  "self_hosted": "Dihosting sendiri · tidak ada data yang keluar dari mesin ini",
+  "limit_label": "Terlalu banyak permintaan",
+  "limit_title": "Akun ini telah meminta kode sebanyak lima kali",
+  "limit_body": "Kode tidak akan dikirim selama 15 menit. Kode yang sudah dikirim tetap dapat digunakan hingga kedaluwarsa.",
+  "limit_retry_at": "Anda dapat meminta kode lagi pada {time}",
+  "no_mail_title": "Instalasi ini tidak dapat mengirim email",
+  "no_mail_body": "Tidak ada server email yang dikonfigurasi, sehingga kode tidak dapat dikirim. Administrator dapat mengatur ulang kata sandi langsung pada mesin:",
+  "no_mail_hint": "Perintah tersebut menampilkan kata sandi baru satu kali. Kata sandi tersebut tidak disimpan dan tidak dapat ditampilkan kembali.",
+  "no_mail_settings": "Konfigurasikan server email di Pengaturan",
+  "offline_title": "Browser ini tidak dapat menjangkau server Tel-Agent Anda",
+  "offline_body": "Tidak ada respons dari {host}. Panggilan Anda tidak terpengaruh selama mesin masih berjalan — ini adalah masalah jaringan antara Anda dan mesin tersebut. Pastikan Anda terhubung ke jaringan bisnis atau VPN.",
+  "offline_retry": "Coba hubungkan kembali"
+}
