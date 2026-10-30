@@ -1,0 +1,18 @@
+{
+  "title": "Saisissez le code",
+  "sent_to": "Un code à 6 chiffres a été envoyé à {address}. Il restera valable 10 minutes",
+  "digit_label": "Chiffre {position} sur {total}",
+  "submit": "Continuer",
+  "submit_offline": "Impossible de communiquer avec le serveur",
+  "wrong_code": "Ce code ne correspond pas. {attempts} essais restants avant qu'un nouveau code ne soit nécessaire.",
+  "expired_title": "Ce code a expiré",
+  "expired_body": "Le code est valable dix minutes. Demandez-en un nouveau - L'ancien ne marchera pas même si vous le trouvez.",
+  "expires_in": "Expire dans {time}",
+  "resend": "Envoyer un nouveau code",
+  "resend_prompt_expired": "Plus rien à attendre maintenant",
+  "back": "Retour à la connexion",
+  "self_hosted": "Auto-hébergé · rien ne quitte cette machine",
+  "offline_title": "Ce serveur ne parvient pas à communiquer avec votre serveur Tel-Agent",
+  "offline_body": "Aucune réponse de {host}. Vos appels ne sont pas affectés si la machine est toujours en cours d’exécution — il s’agit d’un problème réseau entre vous et elle. Vérifiez que vous êtes sur le réseau professionnel ou connecté au VPN.",
+  "offline_retry": "Retenter la connexion"
+}
