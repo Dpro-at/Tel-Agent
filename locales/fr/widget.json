@@ -1,0 +1,10 @@
+{
+  "title": "Discussion",
+  "open": "Ouvrir la discussion",
+  "close": "Fermer la discussion",
+  "placeholder": "Saisissez un message",
+  "send": "Envoyer",
+  "not_sent": "Ce message n’a pas pu être envoyé.",
+  "no_reply": "Aucune réponse pour le moment.",
+  "cut_off": "Cette réponse a été interrompue."
+}
