@@ -1,0 +1,109 @@
+{
+  "app": {
+    "name": "Tel-Agent"
+  },
+  "nav": {
+    "home": "首页",
+    "conversations": "会话",
+    "contacts": "联系人",
+    "rules": "规则",
+    "agent": "助手",
+    "settings": "设置"
+  },
+  "status": {
+    "connected": "已连接",
+    "degraded": "服务降级",
+    "offline": "离线"
+  },
+  "channel": {
+    "web_chat": "网页聊天",
+    "phone": "电话",
+    "email": "电子邮件",
+    "sms": "短信",
+    "whatsapp": "WhatsApp",
+    "telegram": "Telegram",
+    "messenger": "Messenger",
+    "instagram": "Instagram",
+    "discord": "Discord",
+    "teams": "Microsoft Teams",
+    "mattermost": "Mattermost",
+    "irc": "IRC",
+    "matrix": "Matrix",
+    "line": "LINE",
+    "signal": "Signal",
+    "viber": "Viber"
+  },
+  "handling": {
+    "ai": "AI 已处理",
+    "passed": "已转人工",
+    "blocked": "已拦截",
+    "attention": "需要关注"
+  },
+  "speaker": {
+    "visitor": "访客",
+    "agent": "助手",
+    "human": "坐席"
+  },
+  "conversations": {
+    "title": "会话",
+    "search_placeholder": "搜索所有说过的话",
+    "search_hint": "跨全部会话的全文检索",
+    "column_who": "对象",
+    "column_channel": "渠道",
+    "column_started": "开始时间",
+    "column_duration": "时长",
+    "column_handling": "处理方式",
+    "column_summary": "摘要",
+    "empty_title": "还没有会话",
+    "empty_body": "有人开始聊天时，会话会连同完整记录出现在这里。",
+    "count": "{count} 个会话"
+  },
+  "detail": {
+    "back": "返回会话列表",
+    "summary": "摘要",
+    "intent": "识别到的意图",
+    "tools": "调用的工具",
+    "whisper": "耳语通道",
+    "whisper_note": "坐席指令。访客从未看到这些内容。",
+    "transcript": "会话记录",
+    "human_joined": "人工加入：{name}",
+    "agent_resumed": "助手已恢复",
+    "empty_title": "无会话记录",
+    "empty_body": "此会话没有记录任何内容。",
+    "tool_ok": "成功",
+    "tool_failed": "失败",
+    "language": "语言",
+    "confidence": "置信度"
+  },
+  "common": {
+    "loading": "加载中",
+    "retry": "重试"
+  },
+  "auth": {
+    "title": "登录",
+    "subtitle": "账号只存在于这台服务器上。没有云端登录，重置密码也不会离开你自己的邮件服务器。",
+    "username": "用户名",
+    "password": "密码",
+    "forgot": "忘记了？",
+    "submit": "登录",
+    "submit_offline": "服务器无法连接",
+    "submit_locked": "暂时锁定",
+    "wrong_password": "该密码与此用户名不匹配。",
+    "server_error": "服务器无法响应，因此密码未被校验。账号没有被锁定，也没有任何问题——请稍后重试。",
+    "key_prompt": "改用密钥登录？",
+    "key_link": "使用 SSH 证书",
+    "blocked_label": "登录已阻止",
+    "blocked_title": "该账号失败次数过多",
+    "blocked_body": "连续五次密码错误，该账号已被锁定。如果不是你本人，说明有人在猜测——管理员可以在用户标签页解锁并强制更改密码。",
+    "blocked_unlocks": "将在 {time} 解锁",
+    "empty_title": "此部署尚不存在任何账号",
+    "empty_body": "这是全新安装，还没有人注册。你创建的第一个账号将成为管理员——之后可以添加其他人。",
+    "empty_action": "创建第一个账号",
+    "offline_title": "此浏览器无法连接到你的 Tel-Agent 服务器",
+    "offline_body": "未收到来自 {host} 的响应。如果机器仍在运行，你的通话不受影响——这是你与它之间的网络问题。请确认已连接公司网络或 VPN。",
+    "offline_retry": "重试连接",
+    "self_hosted": "自托管 · 数据不离开本机",
+    "continue": "继续进入仪表盘",
+    "language": "语言"
+  }
+}

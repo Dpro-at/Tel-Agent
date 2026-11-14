@@ -1,0 +1,18 @@
+{
+  "title": "输入验证码",
+  "sent_to": "六位数验证码已发送至 {address}，十分钟内有效。",
+  "digit_label": "第 {position} 位，共 {total} 位",
+  "submit": "继续",
+  "submit_offline": "服务器无法连接",
+  "wrong_code": "验证码不正确。还可尝试 {attempts} 次，之后需要重新获取。",
+  "expired_title": "验证码已过期",
+  "expired_body": "验证码有效期为十分钟。请重新获取——旧验证码即使找到也无法使用。",
+  "expires_in": "{time} 后过期",
+  "resend": "发送新验证码",
+  "resend_prompt_expired": "现在无需等待",
+  "back": "返回登录",
+  "self_hosted": "自托管 · 数据不离开本机",
+  "offline_title": "此浏览器无法连接到你的 Tel-Agent 服务器",
+  "offline_body": "未收到来自 {host} 的响应。如果机器仍在运行，你的通话不受影响——这是你与它之间的网络问题。请确认已连接公司网络或 VPN。",
+  "offline_retry": "重试连接"
+}
