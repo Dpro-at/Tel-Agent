@@ -4,7 +4,7 @@
   "close": "关闭聊天",
   "placeholder": "输入消息",
   "send": "发送",
-  "not_sent": "这条消息未能发送。",
+  "not_sent": "消息发送失败。",
   "no_reply": "暂时没有回复。",
-  "cut_off": "该回复被中断了。"
+  "cut_off": "回复被截断。"
 }
