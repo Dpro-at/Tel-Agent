@@ -1,0 +1,16 @@
+# Keep the Python and web dependencies up to date.
+#
+# Tel-Agent tracks two ecosystems today: the Python backend (pyproject.toml at
+# the repository root) and the Next.js web client (web/package.json). A weekly
+# cadence keeps the noise low while still landing security fixes promptly.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
