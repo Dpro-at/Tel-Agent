@@ -14,7 +14,7 @@ dependencies = [
     # right, not left to arrive through FastAPI: api/errors.py and four middlewares
     # import it directly, and FastAPI asks only for `starlette>=0.46.0`, so capping
     # FastAPI alone would leave the same door open.
-    "fastapi>=0.118,<0.142",
+    "fastapi>=0.118,<0.166",
     "starlette>=0.46,<2",
     # Upper bounds on runtime dependencies prevent unreviewed breaking releases from
     # turning main red on self-hosters and CI (#65).
