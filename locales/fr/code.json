@@ -12,7 +12,7 @@
   "resend_prompt_expired": "Plus rien à attendre maintenant",
   "back": "Retour à la connexion",
   "self_hosted": "Auto-hébergé · rien ne quitte cette machine",
-  "offline_title": "Ce serveur ne parvient pas à communiquer avec votre serveur Tel-Agent",
+  "offline_title": "Ce navigateur ne parvient pas à communiquer avec votre serveur Tel-Agent",
   "offline_body": "Aucune réponse de {host}. Vos appels ne sont pas affectés si la machine est toujours en cours d’exécution — il s’agit d’un problème réseau entre vous et elle. Vérifiez que vous êtes sur le réseau professionnel ou connecté au VPN.",
   "offline_retry": "Retenter la connexion"
 }
