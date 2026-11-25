@@ -16,31 +16,36 @@ dependencies = [
     # FastAPI alone would leave the same door open.
     "fastapi>=0.118,<0.142",
     "starlette>=0.46,<2",
-    "pydantic>=2.9",
-    "pydantic-settings>=2.6",
-    "uvicorn[standard]>=0.32",
-    "sqlalchemy[asyncio]>=2.0.36",
-    "alembic>=1.14",
+    # Upper bounds on runtime dependencies prevent unreviewed breaking releases from
+    # turning main red on self-hosters and CI (#65).
+    # Post-1.0 packages are bounded at their next major; pre-1.0 packages are bounded at <1.0.
+    "pydantic>=2.9,<3",
+    "pydantic-settings>=2.6,<3",
+    "uvicorn[standard]>=0.32,<1.0",
+    "sqlalchemy[asyncio]>=2.0.36,<3",
+    "alembic>=1.14,<2",
     # Both dialects ship by default (D-029): the file-based one is what the install
     # wizard offers first, and Postgres is what an existing server already runs.
-    "aiosqlite>=0.20",
-    "asyncpg>=0.30",
+    # Pre-1.0 packages: capped before 1.0.
+    "aiosqlite>=0.20,<1.0",
+    "asyncpg>=0.30,<1.0",
     # Argon2id. `argon2-cffi` directly rather than through passlib: passlib has not had
     # a release since 2020, and this is the one choice that cannot be corrected later
     # without every user resetting their password.
-    "argon2-cffi>=23.1",
+    "argon2-cffi>=23.1,<26",
     # AES-GCM for credentials at rest (B9.2). The `cryptography` wheel carries the
     # audited primitives; nothing in this repository implements a cipher.
-    "cryptography>=43.0",
+    # Capped at <51 to prevent unattended major upgrades from silently changing primitives.
+    "cryptography>=43.0,<51",
     # The Discord gateway and Slack Socket Mode are WebSocket clients (Milestone 3).
     # Already present through `uvicorn[standard]`, but an import this repository
     # makes is a dependency this repository declares - a transitive extra is one
     # uvicorn release away from disappearing.
-    "websockets>=13",
+    "websockets>=13,<15",
     # A runtime dependency since Milestone 3, not just the test client: every
     # channel transport and the webhook sender speak HTTP through it. It used to
     # sit only in [dev], which the Docker image was first to notice.
-    "httpx>=0.28",
+    "httpx>=0.28,<1.0",
     # The IANA time-zone database as a package, because the OS one cannot be assumed:
     # Windows ships none, and a slim container drops it. Without this `zoneinfo` cannot
     # read `Europe/Vienna`, and Milestone 4's business hours fall back to the server
