@@ -243,7 +243,8 @@ async def seed(reset: bool) -> None:
                 external_id="+436641234567",
                 direction="inbound",
                 started_at=started,
-                ended_at=started + dt.timedelta(seconds=158),
+                # ended_at stores naive UTC, matching the conversation close paths.
+                ended_at=(started + dt.timedelta(seconds=158)).replace(tzinfo=None),
                 summary=(
                     "Moved the Tuesday 14:00 appointment to Thursday 10:00 and asked "
                     "whether the quote is still valid. It runs until 30 September."
