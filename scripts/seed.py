@@ -11,8 +11,8 @@ one account per role, so that authorisation can be exercised rather than assumed
     python scripts/seed.py            # create, refusing to touch an existing database
     python scripts/seed.py --reset    # drop everything first
 
-Every account uses the same password, printed at the end. It is long enough to satisfy
-the minimum and obvious enough that nobody could mistake it for a real one.
+Every account uses the same development-only password, defined by SEED_PASSWORD below.
+It is long enough to satisfy the minimum and never included in terminal output.
 """
 
 from __future__ import annotations
@@ -221,14 +221,14 @@ async def seed(reset: bool) -> None:
                 [
                     Rule(
                         workspace_id=workspace.id,
-                        e164_or_pattern="+436641234567",
+                        pattern="+436641234567",
                         action="pass",
                         note="Staff",
                     ),
-                    Rule(workspace_id=workspace.id, e164_or_pattern="+43720*", action="block"),
+                    Rule(workspace_id=workspace.id, pattern="+43720*", action="block"),
                     Rule(
                         workspace_id=workspace.id,
-                        e164_or_pattern="+4314028811",
+                        pattern="+4314028811",
                         action="ai",
                         note="Regular customer",
                     ),
@@ -243,7 +243,8 @@ async def seed(reset: bool) -> None:
                 external_id="+436641234567",
                 direction="inbound",
                 started_at=started,
-                ended_at=started + dt.timedelta(seconds=158),
+                # ended_at stores naive UTC, matching the conversation close paths.
+                ended_at=(started + dt.timedelta(seconds=158)).replace(tzinfo=None),
                 summary=(
                     "Moved the Tuesday 14:00 appointment to Thursday 10:00 and asked "
                     "whether the quote is still valid. It runs until 30 September."
@@ -351,7 +352,8 @@ async def seed(reset: bool) -> None:
     print(f"{'username':<12} {'role':<12} email")
     for username, email, role, _display in PEOPLE:
         print(f"{username:<12} {role:<12} {email}")
-    print(f"\nPassword for every account: {SEED_PASSWORD}")
+    # Terminal output is often retained in CI logs; keep credentials out of it.
+    print("\nDevelopment credentials are defined in scripts/seed.py (SEED_PASSWORD).")
     print("Development only. Delete this database before anybody relies on it.")
 
 
